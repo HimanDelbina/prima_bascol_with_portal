@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-slate-900"><i class="bi bi-speedometer text-primary me-2"></i>{{ title }}</h4>
+        <p class="text-muted small mb-0">پایش توان عملیاتی باسکول، زمان معطلی خودروها و ارزیابی فرآیند ثبت</p>
+    </div>
+</div>
+
+{% include 'management/filter_bar.html' %}
+
+<!-- Turnaround Time Summary -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-primary border-4">
+            <div class="text-muted small fw-bold">میانگین زمان توقف خودرو</div>
+            <div class="fs-4 fw-bold text-primary mt-1">{{ data.avg_turnaround }} <span class="fs-6 fw-normal text-muted">دقیقه</span></div>
+            <div class="small text-muted mt-2">میانه (Median): {{ data.median_turnaround }} دقیقه</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-success border-4">
+            <div class="text-muted small fw-bold">سریع‌ترین توزین کامل</div>
+            <div class="fs-4 fw-bold text-success mt-1">{{ data.min_turnaround }} <span class="fs-6 fw-normal text-muted">دقیقه</span></div>
+            <div class="small text-muted mt-2">کمترین فاصله بین دو وزن</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-danger border-4">
+            <div class="text-muted small fw-bold">بیشترین زمان توقف</div>
+            <div class="fs-4 fw-bold text-danger mt-1">{{ data.max_turnaround }} <span class="fs-6 fw-normal text-muted">دقیقه</span></div>
+            <div class="small text-muted mt-2">طولانی‌ترین معطلی</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-warning border-4">
+            <div class="text-muted small fw-bold">معطلی بیش از ۱ ساعت</div>
+            <div class="fs-4 fw-bold text-warning mt-1">{{ data.slow_operations|length }} <span class="fs-6 fw-normal text-muted">خودرو</span></div>
+            <div class="small text-muted mt-2">توقف غیرعادی در محوطه</div>
+        </div>
+    </div>
+</div>
+
+<!-- Slow Operations Table -->
+<div class="card border-0 shadow-sm bg-white rounded-3 mb-4">
+    <div class="card-header bg-transparent py-3 border-bottom">
+        <h6 class="fw-bold mb-0 text-warning"><i class="bi bi-hourglass-bottom me-2"></i>عملیات‌های با زمان توقف بالا (بیش از ۱ ساعت)</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>شماره قبض</th>
+                    <th>پلاک خودرو</th>
+                    <th>راننده</th>
+                    <th>محصول</th>
+                    <th>طرف حساب</th>
+                    <th>ساعت وزن اول</th>
+                    <th>ساعت وزن دوم</th>
+                    <th class="text-end">مدت زمان معطلی</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in data.slow_operations %}
+                <tr>
+                    <td class="fw-bold text-primary">{{ s.ticket.serial_number }}</td>
+                    <td style="direction: ltr;">{{ s.ticket.license_plate_display }}</td>
+                    <td>{{ s.ticket.driver_display }}</td>
+                    <td>{{ s.ticket.product.name|default:"-" }}</td>
+                    <td>{{ s.ticket.party.name|default:"-" }}</td>
+                    <td>{{ s.ticket.first_time_str }}</td>
+                    <td>{{ s.ticket.second_time_str }}</td>
+                    <td class="text-end text-danger fw-bold">{{ s.duration_str }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="8" class="text-center py-3 text-muted">عملیات با توقف طولانی ثبت نشده است.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Operator Process Activity Table -->
+<div class="card border-0 shadow-sm bg-white rounded-3">
+    <div class="card-header bg-transparent py-3 border-bottom">
+        <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-person-gear text-primary me-2"></i>کنترل فرآیند اپراتورهای شیفت</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>نام کاربری اپراتور</th>
+                    <th>نام و نام خانوادگی</th>
+                    <th>تعداد ثبت وزن اول</th>
+                    <th>تعداد تکمیل‌شده</th>
+                    <th>تعداد ویرایش / اصلاح</th>
+                    <th>تعداد ابطال / لغو</th>
+                    <th>رکوردهای دارای مغایرت</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for op in data.operators %}
+                <tr>
+                    <td class="fw-bold">{{ op.first_weight_operator__username|default:"سیستم" }}</td>
+                    <td>{{ op.first_weight_operator__first_name }} {{ op.first_weight_operator__last_name }}</td>
+                    <td>{{ op.first_weights }} بار</td>
+                    <td class="fw-bold text-success">{{ op.completed }} بار</td>
+                    <td>{{ op.edited }}</td>
+                    <td>{{ op.cancelled }}</td>
+                    <td><span class="badge {% if op.discrepancies > 0 %}bg-danger{% else %}bg-light text-muted{% endif %}">{{ op.discrepancies }}</span></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="text-center py-3 text-muted">داده‌ای یافت نشد.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

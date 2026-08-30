@@ -1,0 +1,216 @@
+import csv
+import io
+from decimal import Decimal
+from django.http import HttpResponse
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
+from core.jalali import format_jalali_date, get_today_jalali
+from core.models import SystemSetting
+
+def export_excel(queryset, summaries=None, title="گزارش باسکول"):
+    """
+    Generate a beautifully formatted Excel (.xlsx) file in Persian RTL with styling.
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "گزارش باسکول"
+    ws.sheet_view.rightToLeft = True
+
+    # Styling definitions
+    font_family = "Tahoma"
+    title_font = Font(name=font_family, size=14, bold=True, color="1E293B")
+    subtitle_font = Font(name=font_family, size=10, italic=True, color="64748B")
+    header_font = Font(name=font_family, size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    
+    data_font = Font(name=font_family, size=10)
+    summary_font = Font(name=font_family, size=11, bold=True, color="0F172A")
+    summary_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    
+    thin_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1")
+    )
+    align_center = Alignment(horizontal="center", vertical="center")
+    align_right = Alignment(horizontal="right", vertical="center")
+    align_left = Alignment(horizontal="left", vertical="center")
+
+    # Header title
+    settings_obj = SystemSetting.get_settings()
+    ws.merge_cells("A1:N1")
+    ws["A1"] = f"{settings_obj.company_name} - {title}"
+    ws["A1"].font = title_font
+    ws["A1"].alignment = align_center
+
+    ws.merge_cells("A2:N2")
+    ws["A2"] = f"تاریخ تهیه گزارش: {get_today_jalali()} | تعداد رکورد: {queryset.count()}"
+    ws["A2"].font = subtitle_font
+    ws["A2"].alignment = align_center
+
+    # Column Headers
+    headers = [
+        "ردیف",
+        "شماره قبض",
+        "تاریخ",
+        "نوع عملیات",
+        "طرف حساب",
+        "نام محصول",
+        "شماره پلاک",
+        "نام راننده",
+        "وزن پر (Kg)",
+        "وزن خالی (Kg)",
+        "وزن خالص (Kg)",
+        "وزن ارسالی (Kg)",
+        "افت (Kg)",
+        "وزن نهایی (Kg)",
+        "وضعیت",
+    ]
+
+    header_row_idx = 4
+    for col_idx, header_text in enumerate(headers, 1):
+        cell = ws.cell(row=header_row_idx, column=col_idx, value=header_text)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = align_center
+        cell.border = thin_border
+    
+    ws.freeze_panes = "A5"
+
+    # Data Rows
+    current_row = header_row_idx + 1
+    num_fmt = "#,##0"
+
+    for idx, ticket in enumerate(queryset, 1):
+        date_str = format_jalali_date(ticket.first_weight_date or ticket.created_at.date())
+        op_name = ticket.operation_type.name if ticket.operation_type else "-"
+        party_name = ticket.party.name if ticket.party else "-"
+        prod_name = ticket.product.name if ticket.product else "-"
+        driver_name = ticket.driver_display
+        status_name = ticket.get_status_display()
+
+        row_values = [
+            idx,
+            ticket.serial_number,
+            date_str,
+            op_name,
+            party_name,
+            prod_name,
+            ticket.license_plate_display,
+            driver_name,
+            float(ticket.gross_weight or 0),
+            float(ticket.tare_weight or 0),
+            float(ticket.net_weight or 0),
+            float(ticket.sent_weight or 0),
+            float(ticket.loss_weight or 0),
+            float(ticket.final_weight or 0),
+            status_name,
+        ]
+
+        for col_idx, val in enumerate(row_values, 1):
+            cell = ws.cell(row=current_row, column=col_idx, value=val)
+            cell.font = data_font
+            cell.border = thin_border
+
+            # Alignments and number formats
+            if col_idx in [1, 2, 3, 7, 15]:
+                cell.alignment = align_center
+            elif col_idx in [9, 10, 11, 12, 13, 14]:
+                cell.alignment = align_left
+                cell.number_format = num_fmt
+            else:
+                cell.alignment = align_right
+
+        current_row += 1
+
+    # Summary Row
+    if summaries:
+        summary_row_values = [
+            "مجموع کل",
+            f"{summaries['total_tickets']} قبض",
+            "-",
+            "-",
+            "-",
+            "-",
+            "-",
+            f"{summaries['total_loads']} بار",
+            float(summaries["sum_gross"]),
+            float(summaries["sum_tare"]),
+            float(summaries["sum_net"]),
+            float(summaries["sum_sent"]),
+            float(summaries["sum_loss"]),
+            float(summaries["sum_final"]),
+            "-",
+        ]
+        for col_idx, val in enumerate(summary_row_values, 1):
+            cell = ws.cell(row=current_row, column=col_idx, value=val)
+            cell.font = summary_font
+            cell.fill = summary_fill
+            cell.border = thin_border
+            if col_idx in [9, 10, 11, 12, 13, 14]:
+                cell.number_format = num_fmt
+                cell.alignment = align_left
+            else:
+                cell.alignment = align_center
+
+    # Auto Column Width
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            if cell.row in [1, 2]:
+                continue
+            if cell.value:
+                val_str = str(cell.value)
+                max_len = max(max_len, len(val_str))
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = f'attachment; filename="weighbridge_report.xlsx"'
+    return response
+
+def export_csv(queryset, title="گزارش باسکول"):
+    """
+    Generate CSV file with UTF-8 BOM encoding for perfect Excel Persian support.
+    """
+    response = HttpResponse(content_type="text/csv; charset=utf-8-sig")
+    response["Content-Disposition"] = 'attachment; filename="weighbridge_report.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow([
+        "ردیف", "شماره قبض", "تاریخ", "نوع عملیات", "طرف حساب", "محصول", 
+        "پلاک", "راننده", "وزن پر", "وزن خالی", "وزن خالص", "وزن ارسالی", 
+        "افت", "وزن نهایی", "وضعیت"
+    ])
+
+    for idx, ticket in enumerate(queryset, 1):
+        date_str = format_jalali_date(ticket.first_weight_date or ticket.created_at.date())
+        writer.writerow([
+            idx,
+            ticket.serial_number,
+            date_str,
+            ticket.operation_type.name if ticket.operation_type else "-",
+            ticket.party.name if ticket.party else "-",
+            ticket.product.name if ticket.product else "-",
+            ticket.license_plate_display,
+            ticket.driver_display,
+            ticket.gross_weight,
+            ticket.tare_weight,
+            ticket.net_weight,
+            ticket.sent_weight,
+            ticket.loss_weight,
+            ticket.final_weight,
+            ticket.get_status_display()
+        ])
+
+    return response

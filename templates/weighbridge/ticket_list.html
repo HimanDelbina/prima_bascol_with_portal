@@ -1,0 +1,246 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<!-- Header and Top Actions -->
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-slate-900" style="color: #0f172a;">
+            <i class="bi bi-card-checklist text-primary me-2"></i>مدیریت و بایگانی قبوض باسکول
+        </h4>
+        <p class="text-muted small mb-0">جستجوی جامع، فیلترهای پیشرفته، چاپ مجدد، ویرایش مدیریتی و پایش تلورانس</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-toggle="offcanvas" data-bs-target="#filterDrawer">
+            <i class="bi bi-funnel-fill text-primary me-1"></i> فیلتر پیشرفته
+        </button>
+        <a href="{% url 'weighbridge:ticket_create' %}" class="btn btn-success fw-bold shadow-sm">
+            <i class="bi bi-plus-circle me-1"></i> ثبت قبض جدید [F2]
+        </a>
+    </div>
+</div>
+
+<!-- Search & Quick Filter Pills -->
+<div class="industrial-card p-3 mb-3">
+    <form method="get" class="row g-2 align-items-center mb-2">
+        <div class="col-md-9">
+            <div class="input-group">
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" name="q" class="form-control border-start-0" placeholder="جستجو در شماره قبض، پلاک، نام راننده، طرف حساب، شماره بارنامه یا توضیحات..." value="{{ request.GET.q }}">
+                <button type="submit" class="btn btn-primary px-4 fw-bold">جستجو</button>
+            </div>
+        </div>
+        <div class="col-md-3 text-end d-flex gap-2 justify-content-end align-items-center">
+            <span class="small text-muted d-none d-md-inline">تراکم جدول:</span>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary" onclick="setTableDensity('normal')">عادی</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="setTableDensity('compact')">فشرده</button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Quick Filter Pills -->
+    <div class="d-flex flex-wrap align-items-center pt-2 border-top">
+        <span class="small text-muted me-2">فیلترهای سریع:</span>
+        <a href="{% url 'weighbridge:ticket_list' %}" class="quick-filter-pill {% if not request.GET.status and not request.GET.q and not request.GET.tolerance_exceeded %}active{% endif %}">همه قبوض</a>
+        <a href="{% url 'weighbridge:ticket_list' %}?status=waiting_second" class="quick-filter-pill {% if request.GET.status == 'waiting_second' %}active{% endif %}">
+            <i class="bi bi-clock-history me-1 text-warning"></i>در انتظار وزن دوم
+        </a>
+        <a href="{% url 'weighbridge:ticket_list' %}?status=completed" class="quick-filter-pill {% if request.GET.status == 'completed' %}active{% endif %}">
+            <i class="bi bi-check2-all me-1 text-success"></i>تکمیل شده
+        </a>
+        <a href="{% url 'weighbridge:ticket_list' %}?tolerance_exceeded=yes" class="quick-filter-pill {% if request.GET.tolerance_exceeded == 'yes' %}active{% endif %}">
+            <i class="bi bi-exclamation-triangle me-1 text-danger"></i>دارای مغایرت وزن
+        </a>
+        <a href="{% url 'weighbridge:ticket_list' %}?status=cancelled" class="quick-filter-pill {% if request.GET.status == 'cancelled' %}active{% endif %}">
+            <i class="bi bi-x-circle me-1 text-secondary"></i>ابطال شده
+        </a>
+    </div>
+</div>
+
+<!-- Main Table Card -->
+<div class="industrial-card">
+    <div class="industrial-card-header bg-light d-flex justify-content-between align-items-center">
+        <span class="fw-bold text-dark">مجموع رکوردها: {{ total_count }} قبض</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="small text-muted">تعداد در صفحه:</span>
+            <form method="get" class="d-inline">
+                <input type="hidden" name="q" value="{{ request.GET.q }}">
+                <input type="hidden" name="status" value="{{ request.GET.status }}">
+                <input type="hidden" name="tolerance_exceeded" value="{{ request.GET.tolerance_exceeded }}">
+                <select name="per_page" class="form-select form-select-sm d-inline-block w-auto" onchange="this.form.submit()">
+                    <option value="20" {% if request.GET.per_page == '20' or not request.GET.per_page %}selected{% endif %}>20</option>
+                    <option value="50" {% if request.GET.per_page == '50' %}selected{% endif %}>50</option>
+                    <option value="100" {% if request.GET.per_page == '100' %}selected{% endif %}>100</option>
+                </select>
+            </form>
+        </div>
+    </div>
+    <div class="p-0">
+        <div class="table-responsive">
+            <table class="table industrial-table align-middle">
+                <thead>
+                    <tr>
+                        <th>شماره قبض</th>
+                        <th>تاریخ</th>
+                        <th>طرف حساب</th>
+                        <th>محصول</th>
+                        <th>پلاک ملی خودرو</th>
+                        <th>راننده</th>
+                        <th class="text-end">وزن پر (Kg)</th>
+                        <th class="text-end">وزن خالی (Kg)</th>
+                        <th class="text-end">وزن خالص (Kg)</th>
+                        <th class="text-end">وزن نهایی (Kg)</th>
+                        <th>وضعیت</th>
+                        <th class="text-center" style="min-width: 130px;">عملیات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ticket in page_obj %}
+                    <tr>
+                        <td class="fw-bold font-monospace fs-6">
+                            <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="text-primary text-decoration-none">
+                                {{ ticket.serial_number }}
+                            </a>
+                        </td>
+                        <td class="small">{{ ticket.jalali_first_date }}</td>
+                        <td>{{ ticket.party.name|default:"-" }}</td>
+                        <td><span class="fw-bold text-dark">{{ ticket.product.name|default:"-" }}</span></td>
+                        <td>
+                            <span class="badge bg-white text-dark border border-dark font-monospace" style="direction: ltr;">
+                                {{ ticket.license_plate_display }}
+                            </span>
+                        </td>
+                        <td>{{ ticket.driver_display }}</td>
+                        <td class="text-end font-monospace text-muted">{{ ticket.gross_weight|weight_fmt }}</td>
+                        <td class="text-end font-monospace text-muted">{{ ticket.tare_weight|weight_fmt }}</td>
+                        <td class="text-end font-monospace fw-bold text-success">{{ ticket.net_weight|weight_fmt }}</td>
+                        <td class="text-end font-monospace fw-bold text-primary">{{ ticket.final_weight|weight_fmt }}</td>
+                        <td>{{ ticket.status|status_badge }}</td>
+                        <td class="text-center">
+                            <div class="btn-group btn-group-sm">
+                                {% if ticket.status == 'waiting_second' %}
+                                <a href="{% url 'weighbridge:ticket_second_weight' ticket.id %}" class="btn btn-warning" title="ثبت وزن دوم">
+                                    <i class="bi bi-speedometer2"></i>
+                                </a>
+                                {% endif %}
+                                <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-outline-secondary" title="مشاهده قبض">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'weighbridge:ticket_print' ticket.id %}" class="btn btn-outline-dark" target="_blank" title="چاپ">
+                                    <i class="bi bi-printer"></i>
+                                </a>
+                                <a href="{% url 'weighbridge:ticket_create' %}?duplicate_from={{ ticket.id }}" class="btn btn-outline-info" title="کپی به قبض جدید">
+                                    <i class="bi bi-copy"></i>
+                                </a>
+                                {% if user.profile.is_admin_or_manager or user.is_superuser %}
+                                <a href="{% url 'weighbridge:ticket_edit' ticket.id %}" class="btn btn-outline-primary" title="ویرایش مدیریتی">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if ticket.status != 'cancelled' %}
+                                <a href="{% url 'weighbridge:ticket_cancel' ticket.id %}" class="btn btn-outline-danger" title="ابطال">
+                                    <i class="bi bi-x-circle"></i>
+                                </a>
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="12" class="text-center py-5 text-muted">
+                            <i class="bi bi-search fs-1 d-block mb-2 text-secondary"></i>
+                            هیچ قبضی منطبق با فیلترهای انتخابی یافت نشد.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="industrial-card-footer p-3 border-top d-flex justify-content-center bg-light">
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ request.GET.q }}&status={{ request.GET.status }}&product={{ request.GET.product }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}&tolerance_exceeded={{ request.GET.tolerance_exceeded }}">قبلی</a></li>
+                {% endif %}
+                
+                {% for p in page_obj.paginator.page_range %}
+                    {% if page_obj.number == p %}
+                    <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                    {% elif p > page_obj.number|add:'-3' and p < page_obj.number|add:'3' %}
+                    <li class="page-item"><a class="page-link" href="?page={{ p }}&q={{ request.GET.q }}&status={{ request.GET.status }}&product={{ request.GET.product }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}&tolerance_exceeded={{ request.GET.tolerance_exceeded }}">{{ p }}</a></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ request.GET.q }}&status={{ request.GET.status }}&product={{ request.GET.product }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}&tolerance_exceeded={{ request.GET.tolerance_exceeded }}">بعدی</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Advanced Filter Offcanvas Drawer -->
+<div class="offcanvas offcanvas-start" tabindex="-1" id="filterDrawer" aria-labelledby="filterDrawerLabel" style="width: 380px;">
+    <div class="offcanvas-header bg-slate-900 text-white" style="background: #0f172a;">
+        <h6 class="offcanvas-title fw-bold" id="filterDrawerLabel"><i class="bi bi-funnel me-2"></i>فیلترهای پیشرفته قبوض</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body p-3">
+        <form method="get">
+            <input type="hidden" name="q" value="{{ request.GET.q }}">
+            
+            <div class="mb-3">
+                <label class="form-label fw-bold small text-secondary">وضعیت سند</label>
+                <select name="status" class="form-select">
+                    <option value="">همه وضعیت‌ها</option>
+                    <option value="waiting_second" {% if request.GET.status == 'waiting_second' %}selected{% endif %}>در انتظار وزن دوم (داخل محوطه)</option>
+                    <option value="completed" {% if request.GET.status == 'completed' %}selected{% endif %}>تکمیل شده</option>
+                    <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>ابطال شده</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold small text-secondary">محصول (کالا)</label>
+                <select name="product" class="form-select">
+                    <option value="">همه محصولات</option>
+                    {% for p in products %}
+                    <option value="{{ p.id }}" {% if request.GET.product == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <label class="form-label fw-bold small text-secondary">از تاریخ شمسی</label>
+                    <input type="text" name="start_date" class="form-control pdate-picker" placeholder="1405/01/01" value="{{ request.GET.start_date }}">
+                </div>
+                <div class="col-6">
+                    <label class="form-label fw-bold small text-secondary">تا تاریخ شمسی</label>
+                    <input type="text" name="end_date" class="form-control pdate-picker" placeholder="1405/12/29" value="{{ request.GET.end_date }}">
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold small text-secondary">مغایرت انحراف وزن</label>
+                <select name="tolerance_exceeded" class="form-select">
+                    <option value="">همه موارد</option>
+                    <option value="yes" {% if request.GET.tolerance_exceeded == 'yes' %}selected{% endif %}>فقط موارد دارای انحراف غیرمجاز</option>
+                    <option value="no" {% if request.GET.tolerance_exceeded == 'no' %}selected{% endif %}>فقط موارد استاندارد</option>
+                </select>
+            </div>
+
+            <div class="d-grid gap-2 mt-4 pt-3 border-top">
+                <button type="submit" class="btn btn-primary fw-bold">اعمال فیلترها</button>
+                <a href="{% url 'weighbridge:ticket_list' %}" class="btn btn-outline-secondary">پاک کردن همه فیلترها</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

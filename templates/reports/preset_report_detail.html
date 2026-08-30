@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-primary d-flex align-items-center gap-2">
+            <i class="bi {{ report_meta.icon }} text-success"></i>
+            <span>{{ report_meta.title }}</span>
+            <span class="badge bg-light text-dark border small fs-6">گزارش تخصصی {{ report_meta.id }}</span>
+        </h4>
+        <p class="text-muted small mb-0">{{ report_meta.description }}</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'reports:preset_reports_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-right me-1"></i> لیست گزارشات
+        </a>
+    </div>
+</div>
+
+<!-- Refine Date Range & Export Box -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-3">
+        <form method="get" class="row g-2 align-items-center">
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-muted">از تاریخ (شمسی):</label>
+                <input type="text" name="start_date" class="form-control pdate-picker" value="{{ params.start_date }}" placeholder="1405/01/01">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-muted">تا تاریخ (شمسی):</label>
+                <input type="text" name="end_date" class="form-control pdate-picker" value="{{ params.end_date }}" placeholder="1405/12/29">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-muted">تجمیع بر اساس (Group By):</label>
+                <select name="group_by" class="form-select">
+                    <option value="none" {% if group_by == 'none' %}selected{% endif %}>ریز قبوض (بدون گروه‌بندی)</option>
+                    <option value="day" {% if group_by == 'day' %}selected{% endif %}>روز</option>
+                    <option value="product" {% if group_by == 'product' %}selected{% endif %}>محصول</option>
+                    <option value="party" {% if group_by == 'party' %}selected{% endif %}>طرف حساب</option>
+                    <option value="driver" {% if group_by == 'driver' %}selected{% endif %}>راننده</option>
+                    <option value="plate" {% if group_by == 'plate' %}selected{% endif %}>پلاک خودرو</option>
+                    <option value="origin" {% if group_by == 'origin' %}selected{% endif %}>مبدأ</option>
+                    <option value="destination" {% if group_by == 'destination' %}selected{% endif %}>مقصد</option>
+                    <option value="operation_type" {% if group_by == 'operation_type' %}selected{% endif %}>نوع عملیات</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary fw-bold shadow-sm">
+                    <i class="bi bi-filter me-1"></i> بازخوانی
+                </button>
+                <button type="submit" name="export" value="excel" class="btn btn-success fw-bold shadow-sm" title="اکسل">
+                    <i class="bi bi-file-earmark-excel"></i>
+                </button>
+                <button type="submit" name="export" value="csv" class="btn btn-outline-success fw-bold shadow-sm" title="CSV">
+                    <i class="bi bi-filetype-csv"></i>
+                </button>
+                <button type="submit" name="export" value="print" class="btn btn-outline-dark fw-bold shadow-sm" formtarget="_blank" title="چاپ">
+                    <i class="bi bi-printer"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Summaries Cards -->
+<div class="row g-2 mb-4">
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="weight-card highlight-gross">
+            <div class="weight-card-title">تعداد قبوض</div>
+            <div class="weight-card-value">{{ summaries.total_tickets }}</div>
+            <div class="small text-muted">{{ summaries.total_loads }} بار</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="weight-card highlight-gross">
+            <div class="weight-card-title">مجموع وزن پر</div>
+            <div class="weight-card-value">{{ summaries.sum_gross|weight_fmt }}</div>
+            <div class="small text-muted">Kg</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="weight-card highlight-tare">
+            <div class="weight-card-title">مجموع وزن خالی</div>
+            <div class="weight-card-value">{{ summaries.sum_tare|weight_fmt }}</div>
+            <div class="small text-muted">Kg</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="weight-card highlight-net">
+            <div class="weight-card-title">مجموع خالص</div>
+            <div class="weight-card-value text-success">{{ summaries.sum_net|weight_fmt }}</div>
+            <div class="small text-muted">میانگین: {{ summaries.avg_net|weight_fmt }} Kg</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="weight-card highlight-loss">
+            <div class="weight-card-title">مجموع افت</div>
+            <div class="weight-card-value text-danger">{{ summaries.sum_loss|weight_fmt }}</div>
+            <div class="small text-muted">{{ summaries.avg_loss_percent }}%</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="weight-card highlight-final">
+            <div class="weight-card-title">مجموع نهایی</div>
+            <div class="weight-card-value text-primary">{{ summaries.sum_final|weight_fmt }}</div>
+            <div class="small text-muted">Kg</div>
+        </div>
+    </div>
+</div>
+
+<!-- Results: Group By OR Detailed Table -->
+{% if group_data %}
+<div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+        <h6 class="fw-bold mb-0 text-primary">نتایج تجمیعی گروه‌بندی ({{ group_data|length }} ردیف)</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table custom-table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>عنوان گروه</th>
+                        <th class="text-center">تعداد قبض</th>
+                        <th class="text-center">تعداد سرویس</th>
+                        <th class="text-end">مجموع وزن خالص (Kg)</th>
+                        <th class="text-end">مجموع افت (Kg)</th>
+                        <th class="text-end">مجموع وزن نهایی (Kg)</th>
+                        <th class="text-end">میانگین وزن</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for g in group_data %}
+                    <tr>
+                        <td class="fw-bold text-primary">{{ g.group_title }}</td>
+                        <td class="text-center">{{ g.item.count }}</td>
+                        <td class="text-center">{{ g.item.total_loads }}</td>
+                        <td class="text-end fw-bold text-success">{{ g.item.sum_net|weight_fmt }}</td>
+                        <td class="text-end text-danger">{{ g.item.sum_loss|weight_fmt }}</td>
+                        <td class="text-end fw-bold text-primary">{{ g.item.sum_final|weight_fmt }}</td>
+                        <td class="text-end">{{ g.item.avg_net|weight_fmt }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-header bg-white py-3 border-bottom">
+        <span class="fw-bold text-secondary">ریز قبوض ({{ total_count }} رکورد)</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table custom-table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>شماره قبض</th>
+                        <th>تاریخ</th>
+                        <th>طرف حساب</th>
+                        <th>محصول</th>
+                        <th>پلاک</th>
+                        <th>راننده</th>
+                        <th>وزن پر (Kg)</th>
+                        <th>وزن خالی (Kg)</th>
+                        <th>خالص (Kg)</th>
+                        <th>افت (Kg)</th>
+                        <th>نهایی (Kg)</th>
+                        <th>وضعیت</th>
+                        <th class="text-center">مشاهده</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ticket in page_obj %}
+                    <tr>
+                        <td class="fw-bold text-primary">{{ ticket.serial_number }}</td>
+                        <td class="small">{{ ticket.jalali_first_date }}</td>
+                        <td>{{ ticket.party.name|default:"-" }}</td>
+                        <td><span class="fw-bold">{{ ticket.product.name|default:"-" }}</span></td>
+                        <td>
+                            <span class="plate-badge">
+                                <span class="plate-badge-blue">ایران</span>
+                                {{ ticket.license_plate_display }}
+                            </span>
+                        </td>
+                        <td>{{ ticket.driver_display }}</td>
+                        <td class="text-end fw-bold">{{ ticket.gross_weight|weight_fmt }}</td>
+                        <td class="text-end fw-bold text-muted">{{ ticket.tare_weight|weight_fmt }}</td>
+                        <td class="text-end fw-bold text-success">{{ ticket.net_weight|weight_fmt }}</td>
+                        <td class="text-end text-danger">{{ ticket.loss_weight|weight_fmt }}</td>
+                        <td class="text-end fw-bold text-primary">{{ ticket.final_weight|weight_fmt }}</td>
+                        <td>{{ ticket.status|status_badge }}</td>
+                        <td class="text-center">
+                            <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-sm btn-outline-primary" title="مشاهده">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="13" class="text-center py-5 text-muted">هیچ رکوردی یافت نشد.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    {% if page_obj.has_other_pages %}
+    <div class="card-footer bg-white py-3 border-top d-flex justify-content-center">
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&{{ params.urlencode }}">قبلی</a></li>
+                {% endif %}
+                <li class="page-item active"><span class="page-link">{{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span></li>
+                {% if page_obj.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&{{ params.urlencode }}">بعدی</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

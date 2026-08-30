@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-truck-front-fill me-2"></i>{{ title }}</h5>
+                <a href="{% url 'masterdata:vehicle_list' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-right me-1"></i> بازگشت
+                </a>
+            </div>
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <!-- Iranian License Plate Visual Entry -->
+                    <div class="mb-4 text-center">
+                        <label class="form-label fw-bold d-block text-secondary mb-2">شماره پلاک ملی خودرو</label>
+                        <div class="iran-plate-container shadow-sm">
+                            <div class="iran-plate-blue">
+                                <span>I.R.</span>
+                                <span>IRAN</span>
+                            </div>
+                            <div class="iran-plate-input-group">
+                                {{ form.plate_part1 }}
+                                {{ form.plate_letter }}
+                                {{ form.plate_part2 }}
+                            </div>
+                            <div class="iran-plate-divider"></div>
+                            <div class="iran-plate-zone">
+                                <span class="fw-bold text-muted">ایران</span>
+                                {{ form.plate_iran }}
+                            </div>
+                        </div>
+                        <div class="mt-2 text-muted small">دو رقم - حرف - سه رقم - کد ایران (مثال: ۱۲ ج ۳۴۵ ایران ۶۷)</div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">متن کامل پلاک (جهت نمایش در سیستم)</label>
+                            {{ form.plate_display }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">نوع خودرو</label>
+                            {{ form.vehicle_type }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">راننده پیش‌فرض</label>
+                            {{ form.default_driver }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">وزن خالی استاندارد خودرو (Kg)</label>
+                            {{ form.empty_weight }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold">توضیحات</label>
+                            {{ form.description }}
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check form-switch mt-2">
+                                {{ form.is_active }}
+                                <label class="form-check-label fw-bold" for="id_is_active">خودرو فعال باشد</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 pt-3 border-top text-end">
+                        <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">
+                            <i class="bi bi-check2-circle me-1"></i> ذخیره خودرو
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

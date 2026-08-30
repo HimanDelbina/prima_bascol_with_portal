@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-slate-900"><i class="bi bi-exclamation-octagon-fill text-danger me-2"></i>{{ title }}</h4>
+        <p class="text-muted small mb-0">سامانه رادار پایش مغایرت وزنی بین بارنامه و باسکول، کشف انحرافات و رتبه‌بندی ریسک</p>
+    </div>
+    <div class="d-flex gap-2">
+        <div class="btn-group btn-group-sm">
+            <a href="?{{ request.GET.urlencode }}&threshold_kg=10" class="btn {% if threshold == 10 %}btn-danger{% else %}btn-outline-danger{% endif %}">> ۱۰ Kg</a>
+            <a href="?{{ request.GET.urlencode }}&threshold_kg=50" class="btn {% if threshold == 50 %}btn-danger{% else %}btn-outline-danger{% endif %}">> ۵۰ Kg</a>
+            <a href="?{{ request.GET.urlencode }}&threshold_kg=100" class="btn {% if threshold == 100 %}btn-danger{% else %}btn-outline-danger{% endif %}">> ۱۰۰ Kg (بحرانی)</a>
+        </div>
+        <a href="?{{ request.GET.urlencode }}&export=excel" class="btn btn-success btn-sm fw-bold">
+            <i class="bi bi-file-earmark-excel-fill me-1"></i> خروجی اکسل
+        </a>
+    </div>
+</div>
+
+{% include 'management/filter_bar.html' %}
+
+<!-- Discrepancy Aggregate Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm bg-white rounded-3 h-100">
+            <div class="card-header bg-transparent py-3 border-bottom">
+                <h6 class="fw-bold mb-0 text-danger"><i class="bi bi-buildings me-2"></i>طرف‌های حساب با بیشترین تعداد مغایرت</h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>طرف حساب</th>
+                            <th>تعداد بار</th>
+                            <th class="text-end">مجموع اختلاف (Kg)</th>
+                            <th class="text-end">میانگین اختلاف</th>
+                            <th class="text-center">تعداد مغایرت</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pt in data.party_aggr %}
+                        <tr>
+                            <td class="fw-bold">{{ pt.party__name }}</td>
+                            <td>{{ pt.trips }}</td>
+                            <td class="text-end text-danger font-monospace fw-bold">{{ pt.diff_kg|floatformat:0 }}</td>
+                            <td class="text-end font-monospace">{{ pt.avg_diff|floatformat:1 }}</td>
+                            <td class="text-center"><span class="badge bg-danger">{{ pt.discrepancies }}</span></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center py-3 text-muted">مغایرتی ثبت نشده است.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm bg-white rounded-3 h-100">
+            <div class="card-header bg-transparent py-3 border-bottom">
+                <h6 class="fw-bold mb-0 text-danger"><i class="bi bi-boxes me-2"></i>محصولات با بیشترین تکرار مغایرت</h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>محصول</th>
+                            <th>تعداد بار</th>
+                            <th class="text-end">مجموع اختلاف (Kg)</th>
+                            <th class="text-end">میانگین اختلاف</th>
+                            <th class="text-center">تعداد مغایرت</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pr in data.prod_aggr %}
+                        <tr>
+                            <td class="fw-bold">{{ pr.product__name }}</td>
+                            <td>{{ pr.trips }}</td>
+                            <td class="text-end text-danger font-monospace fw-bold">{{ pr.diff_kg|floatformat:0 }}</td>
+                            <td class="text-end font-monospace">{{ pr.avg_diff|floatformat:1 }}</td>
+                            <td class="text-center"><span class="badge bg-danger">{{ pr.discrepancies }}</span></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center py-3 text-muted">مغایرتی ثبت نشده است.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Tickets Table -->
+<div class="card border-0 shadow-sm bg-white rounded-3">
+    <div class="card-header bg-transparent py-3 border-bottom d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-list-check text-danger me-2"></i>فهرست قبوض دارای انحراف وزنی (آستانه: بیش از {{ threshold }} کیلوگرم)</h6>
+        <span class="badge bg-danger">تعداد: {{ data.count }} مورد</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>شماره قبض</th>
+                    <th>تاریخ</th>
+                    <th>طرف حساب</th>
+                    <th>محصول</th>
+                    <th>پلاک خودرو</th>
+                    <th>راننده</th>
+                    <th class="text-end">وزن ارسالی (Kg)</th>
+                    <th class="text-end">وزن باسکول (Kg)</th>
+                    <th class="text-end">اختلاف (Kg)</th>
+                    <th class="text-center">درصد</th>
+                    <th class="text-center">سطح هشدار</th>
+                    <th class="text-center">اقدام</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in data.tickets %}
+                <tr>
+                    <td class="fw-bold text-primary">{{ t.serial_number }}</td>
+                    <td>{{ t.first_weight_date_jalali }}</td>
+                    <td>{{ t.party.name|default:"-" }}</td>
+                    <td>{{ t.product.name|default:"-" }}</td>
+                    <td style="direction: ltr;">{{ t.license_plate_display }}</td>
+                    <td>{{ t.driver_display }}</td>
+                    <td class="text-end font-monospace">{{ t.sent_weight|floatformat:0 }}</td>
+                    <td class="text-end font-monospace">{{ t.net_weight|floatformat:0 }}</td>
+                    <td class="text-end font-monospace text-danger fw-bold">{{ t.weight_difference|floatformat:0 }}</td>
+                    <td class="text-center font-monospace">{{ t.weight_difference_percent }}%</td>
+                    <td class="text-center">
+                        {% if t.is_tolerance_exceeded or t.weight_difference > 100 or t.weight_difference < -100 %}
+                        <span class="badge bg-danger">بحرانی</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">هشدار</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <a href="{% url 'weighbridge:ticket_detail' t.id %}" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2">مشاهده</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="12" class="text-center py-4 text-muted">مغایرتی بالاتر از حد آستانه انتخابی یافت نشد.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

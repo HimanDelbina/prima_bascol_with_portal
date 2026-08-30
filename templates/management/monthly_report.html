@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-slate-900"><i class="bi bi-calendar2-month text-primary me-2"></i>{{ title }}</h4>
+        <p class="text-muted small mb-0">گزارش جامع ماهانه باسکول و مقایسه تفصیلی با ماه قبل</p>
+    </div>
+    <!-- Month / Year Selector -->
+    <form method="get" class="d-flex gap-2">
+        <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+            {% for y in years_list %}
+            <option value="{{ y }}" {% if data.year == y %}selected{% endif %}>سال {{ y }}</option>
+            {% endfor %}
+        </select>
+        <select name="month" class="form-select form-select-sm" onchange="this.form.submit()">
+            {% for m, name in months_list %}
+            <option value="{{ m }}" {% if data.month == m %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-primary border-4">
+            <div class="text-muted small fw-bold">تناژ کل این ماه</div>
+            <div class="fs-4 fw-bold text-primary mt-1 font-monospace">{{ data.kpis.net_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2 d-flex justify-content-between">
+                <span>تغییر نسبت به {{ data.prev_month_title }}:</span>
+                <span class="fw-bold {% if data.comparison.net_ton.pct_change >= 0 %}text-success{% else %}text-danger{% endif %}">{{ data.comparison.net_ton.pct_change|stringformat:"+.1f" }}%</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-info border-4">
+            <div class="text-muted small fw-bold">ورودی (خرید) ماه</div>
+            <div class="fs-4 fw-bold text-info mt-1 font-monospace">{{ data.kpis.inbound_net_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2">تغییر: {{ data.comparison.inbound_net_ton.pct_change|stringformat:"+.1f" }}%</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-success border-4">
+            <div class="text-muted small fw-bold">خروجی (فروش) ماه</div>
+            <div class="fs-4 fw-bold text-success mt-1 font-monospace">{{ data.kpis.outbound_net_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2">تغییر: {{ data.comparison.outbound_net_ton.pct_change|stringformat:"+.1f" }}%</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-danger border-4">
+            <div class="text-muted small fw-bold">افت و کسورات ماه</div>
+            <div class="fs-4 fw-bold text-danger mt-1 font-monospace">{{ data.kpis.loss_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2">میانگین: {{ data.kpis.avg_loss_pct }}%</div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Products in Month -->
+<div class="card border-0 shadow-sm bg-white rounded-3">
+    <div class="card-header bg-transparent py-3 border-bottom">
+        <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-trophy-fill text-warning me-2"></i>محصولات برتر در {{ data.month_title }}</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>رتبه</th>
+                    <th>نام محصول</th>
+                    <th>تعداد سرویس</th>
+                    <th class="text-end">تناژ خالص (Ton)</th>
+                    <th class="text-center">سهم از کل ماه</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in data.top10.top_products %}
+                <tr>
+                    <td class="fw-bold">{{ forloop.counter }}</td>
+                    <td class="fw-bold text-primary">{{ p.name }}</td>
+                    <td>{{ p.trips }} بار</td>
+                    <td class="text-end font-monospace fw-bold">{{ p.net_ton|floatformat:2 }}</td>
+                    <td class="text-center font-monospace">{{ p.share_pct }}%</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center py-3 text-muted">داده‌ای برای این ماه ثبت نشده است.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

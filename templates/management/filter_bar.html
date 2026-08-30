@@ -1,0 +1,94 @@
+{% load bascol_tags %}
+<div class="card shadow-sm border-0 mb-4 bg-white rounded-3">
+    <div class="card-body p-3">
+        <form method="get" id="managementFilterForm" class="row g-2 align-items-center">
+            <!-- Hidden inputs to preserve certain parameters -->
+            <input type="hidden" name="quick_period" id="quick_period_input" value="{{ period_label|default:'this_month' }}">
+            <input type="hidden" name="granularity" id="granularity_input" value="{{ granularity|default:'daily' }}">
+
+            <!-- Quick Filter Buttons Row -->
+            <div class="col-12 mb-2 pb-2 border-bottom">
+                <div class="d-flex flex-wrap gap-1 align-items-center">
+                    <span class="text-muted small fw-bold me-1"><i class="bi bi-lightning-charge-fill text-warning me-1"></i>بازه سریع:</span>
+                    <button type="button" class="btn btn-sm {% if period_label == 'today' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}" onclick="setQuickPeriod('today')">امروز</button>
+                    <button type="button" class="btn btn-sm {% if period_label == 'yesterday' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}" onclick="setQuickPeriod('yesterday')">دیروز</button>
+                    <button type="button" class="btn btn-sm {% if period_label == 'last_7_days' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}" onclick="setQuickPeriod('last_7_days')">۷ روز اخیر</button>
+                    <button type="button" class="btn btn-sm {% if period_label == 'this_week' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}" onclick="setQuickPeriod('this_week')">هفته جاری</button>
+                    <button type="button" class="btn btn-sm {% if period_label == 'last_week' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}" onclick="setQuickPeriod('last_week')">هفته قبل</button>
+                    <button type="button" class="btn btn-sm {% if period_label == 'this_month' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}" onclick="setQuickPeriod('this_month')">ماه جاری</button>
+                    <button type="button" class="btn btn-sm {% if period_label == 'last_month' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}" onclick="setQuickPeriod('last_month')">ماه قبل</button>
+                    <button type="button" class="btn btn-sm {% if period_label == 'last_3_months' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}" onclick="setQuickPeriod('last_3_months')">۳ ماه اخیر</button>
+                    <button type="button" class="btn btn-sm {% if period_label == 'last_6_months' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}" onclick="setQuickPeriod('last_6_months')">۶ ماه اخیر</button>
+                    <button type="button" class="btn btn-sm {% if period_label == 'this_year' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}" onclick="setQuickPeriod('this_year')">سال جاری</button>
+                    <button type="button" class="btn btn-sm {% if period_label == 'last_year' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}" onclick="setQuickPeriod('last_year')">سال قبل</button>
+                </div>
+            </div>
+
+            <!-- Date Range Inputs -->
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label small text-muted mb-1 fw-bold">از تاریخ (شمسی):</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
+                    <input type="text" name="start_date_jalali" class="form-control" placeholder="1405/01/01" value="{{ start_date_jalali }}" onchange="document.getElementById('quick_period_input').value='custom';">
+                </div>
+            </div>
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label small text-muted mb-1 fw-bold">تا تاریخ (شمسی):</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
+                    <input type="text" name="end_date_jalali" class="form-control" placeholder="1405/12/29" value="{{ end_date_jalali }}" onchange="document.getElementById('quick_period_input').value='custom';">
+                </div>
+            </div>
+
+            <!-- Direction -->
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label small text-muted mb-1 fw-bold">جهت تردد:</label>
+                <select name="direction" class="form-select form-select-sm">
+                    <option value="">همه جهات</option>
+                    <option value="inbound" {% if params.direction == 'inbound' %}selected{% endif %}>ورودی (خرید)</option>
+                    <option value="outbound" {% if params.direction == 'outbound' %}selected{% endif %}>خروجی (فروش)</option>
+                    <option value="internal" {% if params.direction == 'internal' %}selected{% endif %}>داخلی</option>
+                </select>
+            </div>
+
+            <!-- Product -->
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label small text-muted mb-1 fw-bold">محصول:</label>
+                <select name="product" class="form-select form-select-sm">
+                    <option value="">همه محصولات</option>
+                    {% for p in products %}
+                    <option value="{{ p.id }}" {% if params.product == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Party -->
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label small text-muted mb-1 fw-bold">طرف حساب:</label>
+                <select name="party" class="form-select form-select-sm">
+                    <option value="">همه طرف‌های حساب</option>
+                    {% for pt in parties %}
+                    <option value="{{ pt.id }}" {% if params.party == pt.id|stringformat:"s" %}selected{% endif %}>{{ pt.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="col-6 col-md-3 col-lg-2 d-flex align-items-end gap-1">
+                <button type="submit" class="btn btn-primary btn-sm fw-bold flex-grow-1">
+                    <i class="bi bi-filter me-1"></i>اعمال
+                </button>
+                <a href="{{ request.path }}" class="btn btn-outline-secondary btn-sm" title="پاک‌سازی فیلترها">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function setQuickPeriod(period) {
+    document.getElementById('quick_period_input').value = period;
+    document.getElementById('managementFilterForm').submit();
+}
+</script>

@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-shield-check me-2"></i>{{ title }}</h5>
+                <a href="{% url 'audit:audit_list' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-right me-1"></i> بازگشت به لاگ‌ها
+                </a>
+            </div>
+            <div class="card-body p-4">
+                <!-- Meta Table -->
+                <table class="table table-bordered mb-4">
+                    <tr>
+                        <th class="bg-light" style="width: 25%;">نوع عملیات:</th>
+                        <td>{{ log_entry.action|audit_action_badge }}</td>
+                        <th class="bg-light" style="width: 25%;">زمان دقیق:</th>
+                        <td>{{ log_entry.jalali_timestamp }}</td>
+                    </tr>
+                    <tr>
+                        <th class="bg-light">کاربر:</th>
+                        <td class="fw-bold">{{ log_entry.user.get_full_name|default:log_entry.user.username|default:"سیستم" }}</td>
+                        <th class="bg-light">آدرس IP:</th>
+                        <td class="font-monospace">{{ log_entry.ip_address|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th class="bg-light">بخش / مدل:</th>
+                        <td>{{ log_entry.model_name }} (شناسه: {{ log_entry.record_id }})</td>
+                        <th class="bg-light">عنوان رکورد:</th>
+                        <td class="fw-bold text-primary">{{ log_entry.record_repr }}</td>
+                    </tr>
+                    {% if log_entry.reason %}
+                    <tr class="bg-warning-subtle">
+                        <th class="text-danger">دلیل ثبت شده:</th>
+                        <td colspan="3" class="fw-bold text-danger">{{ log_entry.reason }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+
+                <!-- Diff Comparison Table -->
+                <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-arrow-left-right me-1"></i>مقایسه تغییرات (مقادیر قدیم در مقابل جدید)</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle">
+                        <thead class="bg-light">
+                            <tr>
+                                <th>فیلد / مشخصه</th>
+                                <th class="text-danger">مقدار قبلی (Old Value)</th>
+                                <th class="text-success">مقدار جدید (New Value)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in diff_table %}
+                            <tr {% if d.is_changed %}class="table-warning"{% endif %}>
+                                <td class="fw-bold">{{ d.key }}</td>
+                                <td class="text-danger font-monospace">{{ d.old_val }}</td>
+                                <td class="text-success font-monospace fw-bold">{{ d.new_val }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted py-3">هیچ تفاوت مقداری ثبت نشده است.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

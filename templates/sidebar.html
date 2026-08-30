@@ -1,0 +1,168 @@
+{% load bascol_tags %}
+<aside class="sidebar">
+    <!-- Brand Header -->
+    <div class="sidebar-header">
+        <a href="{% url 'dashboard:index' %}" class="sidebar-brand">
+            <i class="bi bi-speedometer2 text-info fs-4"></i>
+            <div>
+                <div class="fw-bold fs-6">سامانه باسکول پریما</div>
+                <div class="text-muted" style="font-size: 0.7rem;">Prima Weighbridge v2.0</div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Navigation Menu -->
+    <ul class="sidebar-menu">
+        <!-- Dashboard -->
+        <li>
+            <a href="{% url 'dashboard:index' %}" class="sidebar-link {% if request.resolver_match.app_name == 'dashboard' %}active{% endif %}">
+                <i class="bi bi-grid-1x2-fill"></i>
+                <span>داشبورد مدیریتی</span>
+            </a>
+        </li>
+
+        <div class="sidebar-heading">عملیات توزین</div>
+
+        <!-- New Ticket -->
+        <li>
+            <a href="{% url 'weighbridge:ticket_create' %}" class="sidebar-link {% if request.resolver_match.url_name == 'ticket_create' %}active{% endif %}">
+                <i class="bi bi-plus-square-fill text-success"></i>
+                <span>ثبت باسکول جدید</span>
+            </a>
+        </li>
+
+        <!-- Waiting Trucks (In Yard) -->
+        <li>
+            <a href="{% url 'weighbridge:trucks_in_yard' %}" class="sidebar-link {% if request.resolver_match.url_name == 'trucks_in_yard' %}active{% endif %}">
+                <i class="bi bi-hourglass-split text-warning"></i>
+                <span>خودروهای در انتظار (داخل محوطه)</span>
+            </a>
+        </li>
+
+        <!-- All Tickets List -->
+        <li>
+            <a href="{% url 'weighbridge:ticket_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'ticket_list' %}active{% endif %}">
+                <i class="bi bi-card-checklist text-primary"></i>
+                <span>لیست قبوض باسکول</span>
+            </a>
+        </li>
+
+        <div class="sidebar-heading">گزارشات و آمار</div>
+
+        <!-- Report Builder -->
+        <li>
+            <a href="{% url 'reports:report_builder' %}" class="sidebar-link {% if request.resolver_match.url_name == 'report_builder' %}active{% endif %}">
+                <i class="bi bi-sliders text-info"></i>
+                <span>گزارش‌ساز پیشرفته</span>
+            </a>
+        </li>
+
+        <!-- Preset 30 Reports -->
+        <li>
+            <a href="{% url 'reports:preset_reports_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'preset_reports_list' or request.resolver_match.url_name == 'preset_report_view' %}active{% endif %}">
+                <i class="bi bi-file-earmark-bar-graph-fill text-info"></i>
+                <span>۳۰ گزارش آماده تخصصی</span>
+                <span class="badge bg-info-subtle text-info sidebar-badge">30</span>
+            </a>
+        </li>
+
+        <div class="sidebar-heading">اطلاعات پایه (Master Data)</div>
+
+        <li>
+            <a href="{% url 'masterdata:product_list' %}" class="sidebar-link {% if 'product' in request.path %}active{% endif %}">
+                <i class="bi bi-box-seam"></i>
+                <span>محصولات</span>
+            </a>
+        </li>
+
+        <li>
+            <a href="{% url 'masterdata:party_list' %}" class="sidebar-link {% if 'part' in request.path %}active{% endif %}">
+                <i class="bi bi-people-fill"></i>
+                <span>طرف‌های حساب (مشتریان)</span>
+            </a>
+        </li>
+
+        <li>
+            <a href="{% url 'masterdata:driver_list' %}" class="sidebar-link {% if 'driver' in request.path %}active{% endif %}">
+                <i class="bi bi-person-badge-fill"></i>
+                <span>رانندگان</span>
+            </a>
+        </li>
+
+        <li>
+            <a href="{% url 'masterdata:vehicle_list' %}" class="sidebar-link {% if 'vehicle' in request.path and 'type' not in request.path %}active{% endif %}">
+                <i class="bi bi-truck-front-fill"></i>
+                <span>خودروها و پلاک‌ها</span>
+            </a>
+        </li>
+
+        <li>
+            <a href="{% url 'masterdata:vehicle_type_list' %}" class="sidebar-link {% if 'vehicle-type' in request.path %}active{% endif %}">
+                <i class="bi bi-truck"></i>
+                <span>انواع خودرو</span>
+            </a>
+        </li>
+
+        <li>
+            <a href="{% url 'masterdata:location_list' %}" class="sidebar-link {% if 'location' in request.path and 'unload' not in request.path %}active{% endif %}">
+                <i class="bi bi-geo-alt-fill"></i>
+                <span>مبادی و مقاصد بار</span>
+            </a>
+        </li>
+
+        <li>
+            <a href="{% url 'masterdata:unload_location_list' %}" class="sidebar-link {% if 'unload-location' in request.path %}active{% endif %}">
+                <i class="bi bi-building-down"></i>
+                <span>جایگاه‌های تخلیه</span>
+            </a>
+        </li>
+
+        <li>
+            <a href="{% url 'masterdata:operation_type_list' %}" class="sidebar-link {% if 'operation-type' in request.path %}active{% endif %}">
+                <i class="bi bi-arrow-left-right"></i>
+                <span>انواع عملیات و محموله</span>
+            </a>
+        </li>
+
+        <li>
+            <a href="{% url 'masterdata:loss_type_list' %}" class="sidebar-link {% if 'loss-type' in request.path %}active{% endif %}">
+                <i class="bi bi-percent"></i>
+                <span>انواع افت بار</span>
+            </a>
+        </li>
+
+        {% if user.is_superuser or user.profile.is_admin_or_manager %}
+        <div class="sidebar-heading">مدیریت و نظارت</div>
+
+        <li>
+            <a href="{% url 'audit:audit_list' %}" class="sidebar-link {% if request.resolver_match.app_name == 'audit' %}active{% endif %}">
+                <i class="bi bi-shield-check text-warning"></i>
+                <span>گزارش تغییرات (Audit Log)</span>
+            </a>
+        </li>
+
+        {% if user.is_superuser or user.profile.can_manage_settings %}
+        <li>
+            <a href="{% url 'accounts:user_list' %}" class="sidebar-link {% if 'users' in request.path %}active{% endif %}">
+                <i class="bi bi-person-gear"></i>
+                <span>کاربران و سطوح دسترسی</span>
+            </a>
+        </li>
+
+        <li>
+            <a href="{% url 'core:settings' %}" class="sidebar-link {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
+                <i class="bi bi-gear-fill"></i>
+                <span>تنظیمات عمومی سامانه</span>
+            </a>
+        </li>
+
+        <li>
+            <a href="{% url 'core:backup' %}" class="sidebar-link {% if request.resolver_match.url_name == 'backup' %}active{% endif %}">
+                <i class="bi bi-database-down"></i>
+                <span>پشتیبان‌گیری دیتابیس</span>
+            </a>
+        </li>
+        {% endif %}
+        {% endif %}
+    </ul>
+</aside>

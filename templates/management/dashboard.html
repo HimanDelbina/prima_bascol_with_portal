@@ -1,0 +1,634 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<!-- Executive Top Header & Actions -->
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-slate-900" style="color: #0f172a;">
+            <i class="bi bi-graph-up-arrow text-primary me-2"></i>داشبورد و گزارشات جامع مدیریتی
+        </h4>
+        <p class="text-muted small mb-0">تحلیل آماری عملیات توزین، جریان کالا، مقایسه با دوره قبل و پایش شاخص‌های کلیدی</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'management:tv_monitor' %}" target="_blank" class="btn btn-dark btn-sm fw-bold shadow-sm">
+            <i class="bi bi-tv me-1"></i> حالت مانیتورینگ TV
+        </a>
+        <a href="{% url 'management:print' %}?{{ request.GET.urlencode }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-printer me-1"></i> چاپ رسمی / PDF
+        </a>
+        <a href="?{{ request.GET.urlencode }}&export=excel" class="btn btn-success btn-sm fw-bold shadow-sm">
+            <i class="bi bi-file-earmark-excel-fill me-1"></i> خروجی جامع اکسل
+        </a>
+    </div>
+</div>
+
+<!-- Global Filter Bar -->
+{% include 'management/filter_bar.html' %}
+
+<!-- Executive Narrative Summary Card -->
+<div class="card border-0 shadow-sm mb-4 bg-gradient text-white rounded-3" style="background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);">
+    <div class="card-body p-4">
+        <div class="d-flex align-items-start gap-3">
+            <div class="rounded-circle bg-white text-primary p-3 d-flex align-items-center justify-content-center shadow-sm" style="width: 50px; height: 50px; flex-shrink: 0;">
+                <i class="bi bi-lightbulb-fill fs-4"></i>
+            </div>
+            <div>
+                <h6 class="fw-bold text-white mb-2"><i class="bi bi-chat-quote-fill me-1"></i>خلاصه وضعیت هوشمند دوره مدیریتی</h6>
+                <p class="mb-0 text-white-50 leading-relaxed fs-6" style="line-height: 1.8;">{{ narrative_summary }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Management Critical Alerts (if any) -->
+{% if alerts %}
+<div class="row g-2 mb-4">
+    {% for a in alerts %}
+    <div class="col-md-6 col-lg-4">
+        <div class="alert alert-{{ a.level }} d-flex align-items-center gap-2 mb-0 shadow-sm py-2 px-3 rounded-3">
+            <i class="bi {{ a.icon }} fs-4"></i>
+            <div class="flex-grow-1">
+                <div class="fw-bold small">{{ a.title }}</div>
+                <div class="small opacity-75" style="font-size: 0.78rem;">{{ a.message }}</div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Smart Monitoring Quick Banner -->
+{% if monitoring_open_count > 0 %}
+<div class="alert alert-danger shadow-sm d-flex flex-wrap align-items-center justify-content-between mb-4 py-2 px-3 rounded-3 border-2 border-danger">
+    <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-shield-exclamation fs-4 text-danger"></i>
+        <div>
+            <strong class="text-danger">مرکز پایش هوشمند و مغایرت‌ها:</strong>
+            <span class="small text-dark">{{ monitoring_open_count }} هشدار فعال در سامانه نیازمند بازبینی است ({{ monitoring_critical_count }} هشدار با سطح ریسک بالا/بحرانی).</span>
+        </div>
+    </div>
+    <a href="{% url 'monitoring:alert_list' %}" class="btn btn-sm btn-danger fw-bold shadow-sm">
+        <i class="bi bi-search me-1"></i> ورود به مرکز پایش هوشمند
+    </a>
+</div>
+{% endif %}
+
+<!-- Row 1: High-Impact 16 KPI Metric Cards with Period Comparison -->
+<div class="row g-3 mb-4">
+    <!-- Card 1: Total Trips -->
+    <div class="col-6 col-md-4 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 h-100 border-start border-primary border-4 bg-white rounded-3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="text-muted small fw-bold">تعداد کل سرویس‌ها</div>
+                <span class="badge {% if comparison.trips.pct_change > 0 %}bg-success-subtle text-success{% elif comparison.trips.pct_change < 0 %}bg-danger-subtle text-danger{% else %}bg-secondary-subtle text-secondary{% endif %} small">
+                    {{ comparison.trips.pct_change|stringformat:"+.1f" }}%
+                </span>
+            </div>
+            <div class="fs-4 fw-bold text-dark mt-1">{{ kpis.trips }} <span class="fs-6 fw-normal text-muted">بار</span></div>
+            <div class="small text-muted mt-2 d-flex justify-content-between">
+                <span>دوره قبل: {{ prev_kpis.trips }}</span>
+                <span class="{% if comparison.trips.diff >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">{{ comparison.trips.diff|stringformat:"+d" }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 2: Total Net Tonnage -->
+    <div class="col-6 col-md-4 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 h-100 border-start border-success border-4 bg-white rounded-3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="text-muted small fw-bold">مجموع وزن خالص</div>
+                <span class="badge {% if comparison.net_ton.pct_change > 0 %}bg-success-subtle text-success{% elif comparison.net_ton.pct_change < 0 %}bg-danger-subtle text-danger{% else %}bg-secondary-subtle text-secondary{% endif %} small">
+                    {{ comparison.net_ton.pct_change|stringformat:"+.1f" }}%
+                </span>
+            </div>
+            <div class="fs-4 fw-bold text-success mt-1 font-monospace">{{ kpis.net_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2 d-flex justify-content-between">
+                <span>معادل: {{ kpis.net_kg|floatformat:0 }} Kg</span>
+                <span class="text-dark fw-bold">قبل: {{ prev_kpis.net_ton|floatformat:1 }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 3: Inbound (Purchase) Tonnage -->
+    <div class="col-6 col-md-4 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 h-100 border-start border-info border-4 bg-white rounded-3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="text-muted small fw-bold">ورودی / خرید</div>
+                <span class="badge {% if comparison.inbound_net_ton.pct_change > 0 %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %} small">
+                    {{ comparison.inbound_net_ton.pct_change|stringformat:"+.1f" }}%
+                </span>
+            </div>
+            <div class="fs-4 fw-bold text-info mt-1 font-monospace">{{ kpis.inbound_net_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2 d-flex justify-content-between">
+                <span>تامین مواد اولیه</span>
+                <span class="text-muted">قبل: {{ prev_kpis.inbound_net_ton|floatformat:1 }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 4: Outbound (Sales) Tonnage -->
+    <div class="col-6 col-md-4 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 h-100 border-start border-warning border-4 bg-white rounded-3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="text-muted small fw-bold">خروجی / فروش</div>
+                <span class="badge {% if comparison.outbound_net_ton.pct_change > 0 %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %} small">
+                    {{ comparison.outbound_net_ton.pct_change|stringformat:"+.1f" }}%
+                </span>
+            </div>
+            <div class="fs-4 fw-bold text-warning mt-1 font-monospace">{{ kpis.outbound_net_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2 d-flex justify-content-between">
+                <span>تحویل محصول نهایی</span>
+                <span class="text-muted">قبل: {{ prev_kpis.outbound_net_ton|floatformat:1 }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 5: Total Loss Weight -->
+    <div class="col-6 col-md-4 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 h-100 border-start border-danger border-4 bg-white rounded-3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="text-muted small fw-bold">مجموع افت کالا</div>
+                <span class="badge bg-danger-subtle text-danger small">میانگین: {{ kpis.avg_loss_pct }}%</span>
+            </div>
+            <div class="fs-4 fw-bold text-danger mt-1 font-monospace">{{ kpis.loss_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2 d-flex justify-content-between">
+                <span>معادل {{ kpis.loss_kg|floatformat:0 }} Kg</span>
+                <span>قبل: {{ prev_kpis.loss_ton|floatformat:1 }} Ton</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 6: Active Parties -->
+    <div class="col-6 col-md-4 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 h-100 border-start border-secondary border-4 bg-white rounded-3">
+            <div class="text-muted small fw-bold">طرف‌های حساب فعال</div>
+            <div class="fs-4 fw-bold text-dark mt-1">{{ kpis.parties_count }} <span class="fs-6 fw-normal text-muted">شرکت / شخص</span></div>
+            <div class="small text-muted mt-2 d-flex justify-content-between">
+                <span>تعداد محصولات: {{ kpis.products_count }}</span>
+                <span>قبل: {{ prev_kpis.parties_count }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 7: Active Fleet -->
+    <div class="col-6 col-md-4 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 h-100 border-start border-dark border-4 bg-white rounded-3">
+            <div class="text-muted small fw-bold">تردد ناوگان و رانندگان</div>
+            <div class="fs-4 fw-bold text-dark mt-1">{{ kpis.trucks_count }} <span class="fs-6 fw-normal text-muted">کامیون</span></div>
+            <div class="small text-muted mt-2 d-flex justify-content-between">
+                <span>رانندگان فعال: {{ kpis.drivers_count }} نفر</span>
+                <span>قبل: {{ prev_kpis.trucks_count }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 8: Discrepancies Count -->
+    <div class="col-6 col-md-4 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 h-100 border-start {% if kpis.discrepancies_count > 0 %}border-danger{% else %}border-success{% endif %} border-4 bg-white rounded-3">
+            <div class="text-muted small fw-bold">مغایرت‌های وزن با بارنامه</div>
+            <div class="fs-4 fw-bold {% if kpis.discrepancies_count > 0 %}text-danger{% else %}text-success{% endif %} mt-1">
+                {{ kpis.discrepancies_count }} <span class="fs-6 fw-normal text-muted">مورد</span>
+            </div>
+            <div class="small text-muted mt-2 d-flex justify-content-between">
+                <span>قبوض لغو شده: {{ kpis.cancelled_count }}</span>
+                <span>اصلاح شده: {{ kpis.edited_count }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 2: Analytical Charts Grid -->
+<div class="row g-3 mb-4">
+    <!-- Chart 1: Multi-Granularity Tonnage Trend -->
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm h-100 bg-white rounded-3">
+            <div class="card-header bg-transparent py-3 d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom">
+                <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-graph-up text-primary me-2"></i>روند تناژ در طول زمان</h6>
+                <div class="btn-group btn-group-sm">
+                    <a href="?{{ request.GET.urlencode }}&granularity=daily" class="btn {% if granularity == 'daily' %}btn-primary{% else %}btn-outline-secondary{% endif %}">روزانه</a>
+                    <a href="?{{ request.GET.urlencode }}&granularity=weekly" class="btn {% if granularity == 'weekly' %}btn-primary{% else %}btn-outline-secondary{% endif %}">هفتگی</a>
+                    <a href="?{{ request.GET.urlencode }}&granularity=monthly" class="btn {% if granularity == 'monthly' %}btn-primary{% else %}btn-outline-secondary{% endif %}">ماهانه</a>
+                </div>
+            </div>
+            <div class="card-body p-3">
+                <div style="height: 300px;">
+                    <canvas id="chartTonnageTrend"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart 2: Product Share Doughnut -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm h-100 bg-white rounded-3">
+            <div class="card-header bg-transparent py-3 border-bottom">
+                <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-pie-chart-fill text-success me-2"></i>سهم تناژ محصولات</h6>
+            </div>
+            <div class="card-body p-3">
+                <div style="height: 300px;">
+                    <canvas id="chartProductShare"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart 3: Inbound vs Outbound Comparison -->
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100 bg-white rounded-3">
+            <div class="card-header bg-transparent py-3 border-bottom">
+                <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-arrow-left-right text-info me-2"></i>توازن ورودی (خرید) در مقابل خروجی (فروش)</h6>
+            </div>
+            <div class="card-body p-3">
+                <div style="height: 250px;">
+                    <canvas id="chartDirectionCompare"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart 4: 24x7 Traffic Heatmap Distribution -->
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100 bg-white rounded-3">
+            <div class="card-header bg-transparent py-3 border-bottom">
+                <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-grid-3x3-gap-fill text-warning me-2"></i>توزیع زمانی ترافیک باسکول (ساعت × روز هفته)</h6>
+            </div>
+            <div class="card-body p-3">
+                <div style="height: 250px;">
+                    <canvas id="chartTrafficHeatmap"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 3: Tabbed Top 10 Executive Ranking Tables -->
+<div class="card border-0 shadow-sm bg-white rounded-3 mb-4">
+    <div class="card-header bg-transparent py-3 border-bottom">
+        <ul class="nav nav-pills card-header-pills" id="top10Tabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active fw-bold btn-sm" data-bs-toggle="tab" data-bs-target="#tab-products">۱۰ محصول برتر</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-bold btn-sm" data-bs-toggle="tab" data-bs-target="#tab-parties">۱۰ طرف حساب برتر</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-bold btn-sm" data-bs-toggle="tab" data-bs-target="#tab-drivers">۱۰ راننده پرتردد</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-bold btn-sm" data-bs-toggle="tab" data-bs-target="#tab-vehicles">۱۰ خودروی پرترافیک</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-bold btn-sm text-danger" data-bs-toggle="tab" data-bs-target="#tab-discrepancies">۱۰ بیشترین مغایرت وزن</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-bold btn-sm text-warning" data-bs-toggle="tab" data-bs-target="#tab-losses">۱۰ بیشترین افت</button>
+            </li>
+        </ul>
+    </div>
+    <div class="card-body p-0">
+        <div class="tab-content" id="top10TabContent">
+            <!-- Products Tab -->
+            <div class="tab-pane fade show active" id="tab-products">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>رتبه</th>
+                                <th>نام محصول</th>
+                                <th>تعداد سرویس</th>
+                                <th class="text-end">تناژ خالص (Ton)</th>
+                                <th class="text-center">سهم از کل تناژ</th>
+                                <th class="text-end">مجموع افت (Ton)</th>
+                                <th class="text-center">اقدام</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in top10.top_products %}
+                            <tr>
+                                <td class="fw-bold">{{ forloop.counter }}</td>
+                                <td class="fw-bold text-primary">{{ p.name }}</td>
+                                <td>{{ p.trips }} بار</td>
+                                <td class="text-end fw-bold font-monospace">{{ p.net_ton|floatformat:2 }}</td>
+                                <td class="text-center">
+                                    <div class="d-flex align-items-center justify-content-center gap-2">
+                                        <div class="progress flex-grow-1" style="height: 6px; max-width: 100px;">
+                                            <div class="progress-bar bg-primary" style="width: {{ p.share_pct }}%;"></div>
+                                        </div>
+                                        <span class="small font-monospace">{{ p.share_pct }}%</span>
+                                    </div>
+                                </td>
+                                <td class="text-end text-danger font-monospace">{{ p.loss_ton|floatformat:2 }}</td>
+                                <td class="text-center">
+                                    <a href="{% url 'management:products' %}?product={{ p.id }}" class="btn btn-sm btn-outline-primary py-0 px-2">جزئیات</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center py-3 text-muted">داده‌ای یافت نشد.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Parties Tab -->
+            <div class="tab-pane fade" id="tab-parties">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>رتبه</th>
+                                <th>طرف حساب</th>
+                                <th>تعداد سرویس</th>
+                                <th class="text-end">تناژ کل (Ton)</th>
+                                <th class="text-end">افت کل (Ton)</th>
+                                <th class="text-center">مغایرت‌ها</th>
+                                <th class="text-center">اقدام</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pt in top10.top_parties %}
+                            <tr>
+                                <td class="fw-bold">{{ forloop.counter }}</td>
+                                <td class="fw-bold">{{ pt.name }}</td>
+                                <td>{{ pt.trips }} بار</td>
+                                <td class="text-end fw-bold text-success font-monospace">{{ pt.net_ton|floatformat:2 }}</td>
+                                <td class="text-end text-danger font-monospace">{{ pt.loss_ton|floatformat:2 }}</td>
+                                <td class="text-center">
+                                    {% if pt.discrepancies > 0 %}
+                                    <span class="badge bg-danger">{{ pt.discrepancies }}</span>
+                                    {% else %}
+                                    <span class="badge bg-light text-muted">۰</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <a href="{% url 'management:parties' %}?party={{ pt.id }}" class="btn btn-sm btn-outline-primary py-0 px-2">جزئیات</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center py-3 text-muted">داده‌ای یافت نشد.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Drivers Tab -->
+            <div class="tab-pane fade" id="tab-drivers">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>رتبه</th>
+                                <th>نام راننده</th>
+                                <th>تعداد سرویس</th>
+                                <th class="text-end">تناژ حمل‌شده (Ton)</th>
+                                <th class="text-center">اقدام</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in top10.top_drivers %}
+                            <tr>
+                                <td class="fw-bold">{{ forloop.counter }}</td>
+                                <td>{{ d.name }}</td>
+                                <td class="fw-bold">{{ d.trips }} سرویس</td>
+                                <td class="text-end font-monospace">{{ d.net_ton|floatformat:2 }}</td>
+                                <td class="text-center">
+                                    <a href="{% url 'management:drivers_vehicles' %}?driver={{ d.id }}" class="btn btn-sm btn-outline-primary py-0 px-2">مشاهده</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-center py-3 text-muted">داده‌ای یافت نشد.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Vehicles Tab -->
+            <div class="tab-pane fade" id="tab-vehicles">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>رتبه</th>
+                                <th>شماره پلاک</th>
+                                <th>تعداد سرویس</th>
+                                <th class="text-end">تناژ کل (Ton)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for v in top10.top_vehicles %}
+                            <tr>
+                                <td class="fw-bold">{{ forloop.counter }}</td>
+                                <td><span class="badge bg-white text-dark border font-monospace" style="direction: ltr;">{{ v.plate }}</span></td>
+                                <td class="fw-bold">{{ v.trips }} بار</td>
+                                <td class="text-end font-monospace">{{ v.net_ton|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center py-3 text-muted">داده‌ای یافت نشد.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Discrepancies Tab -->
+            <div class="tab-pane fade" id="tab-discrepancies">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>شماره قبض</th>
+                                <th>تاریخ</th>
+                                <th>طرف حساب</th>
+                                <th>محصول</th>
+                                <th>پلاک</th>
+                                <th class="text-end">وزن ارسالی (Kg)</th>
+                                <th class="text-end">وزن باسکول (Kg)</th>
+                                <th class="text-end">اختلاف وزن (Kg)</th>
+                                <th class="text-center">اقدام</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in top10.top_discrepancies %}
+                            <tr>
+                                <td class="fw-bold text-primary">{{ t.serial_number }}</td>
+                                <td>{{ t.first_weight_date_jalali }}</td>
+                                <td>{{ t.party.name|default:"-" }}</td>
+                                <td>{{ t.product.name|default:"-" }}</td>
+                                <td style="direction: ltr;">{{ t.license_plate_display }}</td>
+                                <td class="text-end font-monospace">{{ t.sent_weight|floatformat:0 }}</td>
+                                <td class="text-end font-monospace">{{ t.net_weight|floatformat:0 }}</td>
+                                <td class="text-end font-monospace text-danger fw-bold">{{ t.weight_difference|floatformat:0 }}</td>
+                                <td class="text-center">
+                                    <a href="{% url 'weighbridge:ticket_detail' t.id %}" class="btn btn-sm btn-outline-secondary py-0 px-2" target="_blank">قبض</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="9" class="text-center py-3 text-muted">مغایرتی در این دوره ثبت نشده است.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Losses Tab -->
+            <div class="tab-pane fade" id="tab-losses">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>شماره قبض</th>
+                                <th>طرف حساب</th>
+                                <th>محصول</th>
+                                <th>نوع افت</th>
+                                <th class="text-end">وزن خالص (Kg)</th>
+                                <th class="text-center">درصد افت</th>
+                                <th class="text-end">وزن افت (Kg)</th>
+                                <th class="text-end">وزن نهایی (Kg)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for l in top10.top_losses %}
+                            <tr>
+                                <td class="fw-bold text-primary">{{ l.serial_number }}</td>
+                                <td>{{ l.party.name|default:"-" }}</td>
+                                <td>{{ l.product.name|default:"-" }}</td>
+                                <td>{{ l.loss_type.name|default:"افت عمومی" }}</td>
+                                <td class="text-end font-monospace">{{ l.net_weight|floatformat:0 }}</td>
+                                <td class="text-center text-danger fw-bold">{{ l.loss_percent }}%</td>
+                                <td class="text-end font-monospace text-danger fw-bold">{{ l.loss_weight|floatformat:0 }}</td>
+                                <td class="text-end font-monospace text-success fw-bold">{{ l.final_weight|floatformat:0 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="8" class="text-center py-3 text-muted">افتی ثبت نشده است.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    Chart.defaults.font.family = 'Vazirmatn';
+    Chart.defaults.color = '#475569';
+
+    const trendsData = {{ trends_json|safe }};
+    const heatmapData = {{ heatmap_json|safe }};
+
+    // 1. Tonnage Trend Chart
+    new Chart(document.getElementById('chartTonnageTrend'), {
+        type: 'line',
+        data: {
+            labels: trendsData.labels,
+            datasets: [
+                {
+                    label: 'تناژ خالص (Ton)',
+                    data: trendsData.net,
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 2
+                },
+                {
+                    label: 'ورودی (خرید)',
+                    data: trendsData.inbound,
+                    borderColor: '#0284c7',
+                    borderDash: [5, 5],
+                    borderWidth: 2,
+                    fill: false,
+                    hidden: true
+                },
+                {
+                    label: 'خروجی (فروش)',
+                    data: trendsData.outbound,
+                    borderColor: '#059669',
+                    borderDash: [5, 5],
+                    borderWidth: 2,
+                    fill: false,
+                    hidden: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' }
+            }
+        }
+    });
+
+    // 2. Product Share Doughnut
+    const topProds = {{ top10.top_products|safe }};
+    new Chart(document.getElementById('chartProductShare'), {
+        type: 'doughnut',
+        data: {
+            labels: topProds.map(p => p.name),
+            datasets: [{
+                data: topProds.map(p => p.net_ton),
+                backgroundColor: ['#2563eb', '#059669', '#d97706', '#dc2626', '#0284c7', '#7c3aed', '#db2777', '#475569', '#14b8a6', '#f97316']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+
+    // 3. Inbound vs Outbound Bar
+    new Chart(document.getElementById('chartDirectionCompare'), {
+        type: 'bar',
+        data: {
+            labels: ['ورودی (خرید)', 'خروجی (فروش)'],
+            datasets: [{
+                label: 'تناژ (Ton)',
+                data: [{{ kpis.inbound_net_ton }}, {{ kpis.outbound_net_ton }}],
+                backgroundColor: ['#0284c7', '#059669'],
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+
+    // 4. Traffic Heatmap (Hourly summary)
+    const hourlyTotals = new Array(24).fill(0);
+    for (let d = 0; d < 7; d++) {
+        for (let h = 0; h < 24; h++) {
+            hourlyTotals[h] += heatmapData[d][h];
+        }
+    }
+    new Chart(document.getElementById('chartTrafficHeatmap'), {
+        type: 'bar',
+        data: {
+            labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+            datasets: [{
+                label: 'تعداد کل تردد در این ساعت',
+                data: hourlyTotals,
+                backgroundColor: '#f59e0b',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+});
+</script>
+{% endblock %}

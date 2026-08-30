@@ -1,0 +1,35 @@
+<div class="iran-plate-container">
+    <div class="iran-plate-blue-band">
+        <div class="flag-icon"></div>
+        <div>I.R.</div>
+        <div>IRAN</div>
+    </div>
+    <input type="text" id="plate_part1" name="plate_part1" class="iran-plate-input-part1" maxlength="2" placeholder="12" value="{{ initial_part1|default:'' }}" autofocus>
+    
+    <select id="plate_letter" name="plate_letter" class="iran-plate-letter-select">
+        <option value="ب" {% if initial_letter == 'ب' %}selected{% endif %}>ب</option>
+        <option value="ج" {% if initial_letter == 'ج' %}selected{% endif %}>ج</option>
+        <option value="د" {% if initial_letter == 'د' %}selected{% endif %}>د</option>
+        <option value="س" {% if initial_letter == 'س' %}selected{% endif %}>س</option>
+        <option value="ص" {% if initial_letter == 'ص' %}selected{% endif %}>ص</option>
+        <option value="ط" {% if initial_letter == 'ط' %}selected{% endif %}>ط</option>
+        <option value="ق" {% if initial_letter == 'ق' %}selected{% endif %}>ق</option>
+        <option value="ل" {% if initial_letter == 'ل' %}selected{% endif %}>ل</option>
+        <option value="م" {% if initial_letter == 'م' %}selected{% endif %}>م</option>
+        <option value="ن" {% if initial_letter == 'ن' %}selected{% endif %}>ن</option>
+        <option value="و" {% if initial_letter == 'و' %}selected{% endif %}>و</option>
+        <option value="ه" {% if initial_letter == 'ه' %}selected{% endif %}>ه</option>
+        <option value="ی" {% if initial_letter == 'ی' %}selected{% endif %}>ی</option>
+        <option value="ع" {% if initial_letter == 'ع' or not initial_letter %}selected{% endif %}>ع (عمومی)</option>
+        <option value="ت" {% if initial_letter == 'ت' %}selected{% endif %}>ت (تاکسی)</option>
+        <option value="ک" {% if initial_letter == 'ک' %}selected{% endif %}>ک (کشاورزی)</option>
+    </select>
+
+    <input type="text" id="plate_part2" name="plate_part2" class="iran-plate-input-part2" maxlength="3" placeholder="345" value="{{ initial_part2|default:'' }}">
+    
+    <div class="iran-plate-iran-code">
+        <span>ایـران</span>
+        <input type="text" id="plate_iran" name="plate_iran" maxlength="2" placeholder="64" value="{{ initial_iran|default:'' }}">
+    </div>
+</div>
+<input type="hidden" id="license_plate_display" name="license_plate_display" value="{{ initial_plate_display|default:'' }}">

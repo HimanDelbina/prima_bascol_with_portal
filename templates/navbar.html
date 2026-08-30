@@ -1,0 +1,51 @@
+{% load bascol_tags %}
+<header class="top-navbar">
+    <!-- Search Bar -->
+    <div class="d-flex align-items-center gap-3">
+        <form class="d-flex" action="{% url 'weighbridge:global_search' %}" method="get">
+            <div class="input-group">
+                <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" name="q" class="form-control bg-light border-start-0" placeholder="جستجوی سریع (قبض، پلاک، راننده، بارنامه...)" style="min-width: 280px;" value="{{ request.GET.q }}">
+                <button class="btn btn-primary" type="submit">جستجو</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Right Header Widgets (Time, User Profile, Quick Actions) -->
+    <div class="d-flex align-items-center gap-3">
+        <!-- Live Jalali Clock -->
+        <div class="header-clock shadow-sm">
+            <i class="bi bi-calendar-event text-primary"></i>
+            <span class="fw-bold">{{ today_jalali_persian_digits }}</span>
+            <span class="text-muted">|</span>
+            <i class="bi bi-clock text-primary"></i>
+            <span id="live-clock" class="fw-bold">{{ current_time_str }}</span>
+        </div>
+
+        <!-- Direct Fast Weigh Link -->
+        <a href="{% url 'weighbridge:ticket_create' %}" class="btn btn-success btn-sm d-flex align-items-center gap-1 shadow-sm">
+            <i class="bi bi-plus-circle-fill"></i>
+            <span>توزین سریع (F2)</span>
+        </a>
+
+        <!-- User Dropdown -->
+        <div class="dropdown">
+            <button class="btn btn-light dropdown-toggle d-flex align-items-center gap-2 border shadow-sm" type="button" data-bs-dismiss="dropdown" data-bs-toggle="dropdown">
+                <i class="bi bi-person-circle fs-5 text-primary"></i>
+                <div class="text-end d-none d-md-block">
+                    <div class="fw-bold small">{{ user.get_full_name|default:user.username }}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">{{ user_role_display }}</div>
+                </div>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-start shadow border-0">
+                <li><a class="dropdown-item py-2" href="{% url 'accounts:profile' %}"><i class="bi bi-person me-2 text-primary"></i>پروفایل کاربری</a></li>
+                {% if user.is_superuser or user.profile.can_manage_settings %}
+                <li><a class="dropdown-item py-2" href="{% url 'core:settings' %}"><i class="bi bi-gear me-2 text-secondary"></i>تنظیمات سیستم</a></li>
+                <li><a class="dropdown-item py-2" href="{% url 'core:backup' %}"><i class="bi bi-database-down me-2 text-success"></i>پشتیبان‌گیری دیتابیس</a></li>
+                {% endif %}
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item py-2 text-danger" href="{% url 'accounts:logout' %}"><i class="bi bi-box-arrow-right me-2"></i>خروج از حساب</a></li>
+            </ul>
+        </div>
+    </div>
+</header>

@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-slate-900"><i class="bi bi-box-seam-fill text-primary me-2"></i>{{ title }}</h4>
+        <p class="text-muted small mb-0">تحلیل جامع کالاها، سهم بازار، میانگین محموله و آمار افت</p>
+    </div>
+    <div>
+        <a href="?{{ request.GET.urlencode }}&export=excel" class="btn btn-success btn-sm fw-bold">
+            <i class="bi bi-file-earmark-excel-fill me-1"></i> خروجی اکسل
+        </a>
+    </div>
+</div>
+
+{% include 'management/filter_bar.html' %}
+
+<div class="card border-0 shadow-sm bg-white rounded-3">
+    <div class="card-header bg-transparent py-3 border-bottom d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-table text-primary me-2"></i>جدول جامع تحلیل محصولات</h6>
+        <span class="badge bg-light text-dark border">تعداد محصولات: {{ products_rows|length }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>کد</th>
+                    <th>نام محصول</th>
+                    <th>تعداد بار</th>
+                    <th class="text-end">تناژ خالص (Ton)</th>
+                    <th class="text-end">تناژ نهایی (Ton)</th>
+                    <th class="text-center">سهم از کل (%)</th>
+                    <th class="text-end">میانگین هر بار (Ton)</th>
+                    <th class="text-end">مجموع افت (Ton)</th>
+                    <th class="text-center">میانگین افت</th>
+                    <th class="text-center">مغایرت‌ها</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in products_rows %}
+                <tr>
+                    <td><span class="badge bg-light text-muted border font-monospace">{{ p.code|default:"-" }}</span></td>
+                    <td class="fw-bold text-primary">{{ p.name }}</td>
+                    <td>{{ p.trips }} بار</td>
+                    <td class="text-end fw-bold font-monospace">{{ p.net_ton|floatformat:2 }}</td>
+                    <td class="text-end fw-bold text-success font-monospace">{{ p.final_ton|floatformat:2 }}</td>
+                    <td class="text-center">
+                        <div class="d-flex align-items-center justify-content-center gap-1">
+                            <div class="progress flex-grow-1" style="height: 6px; max-width: 70px;">
+                                <div class="progress-bar bg-primary" style="width: {{ p.share_pct }}%;"></div>
+                            </div>
+                            <span class="small font-monospace">{{ p.share_pct }}%</span>
+                        </div>
+                    </td>
+                    <td class="text-end font-monospace">{{ p.avg_load_ton|floatformat:2 }}</td>
+                    <td class="text-end text-danger font-monospace">{{ p.loss_ton|floatformat:2 }}</td>
+                    <td class="text-center small">{{ p.avg_loss_pct }}%</td>
+                    <td class="text-center">
+                        {% if p.discrepancies > 0 %}
+                        <span class="badge bg-danger">{{ p.discrepancies }}</span>
+                        {% else %}
+                        <span class="badge bg-light text-muted">۰</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="10" class="text-center py-3 text-muted">محصولی در این بازه یافت نشد.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

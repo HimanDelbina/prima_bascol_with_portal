@@ -1,0 +1,117 @@
+{% load bascol_tags %}
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>فیش باسکول {{ ticket.serial_number }}</title>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+        body {
+            font-family: 'Vazirmatn', Tahoma, sans-serif;
+            background: #fff;
+            color: #000;
+            margin: 0;
+            padding: 5px;
+            font-size: 11px;
+            width: 78mm;
+        }
+        .pos-container {
+            width: 76mm;
+            margin: 0 auto;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 10px;
+        }
+        .text-center { text-align: center; }
+        .row-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+            border-bottom: 1px dotted #ccc;
+            padding-bottom: 2px;
+        }
+        .fw-bold { font-weight: bold; }
+        .big-val { font-size: 15px; font-weight: 900; }
+        @media print {
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="text-center no-print" style="margin-bottom: 10px;">
+    <button onclick="window.print()" style="padding: 5px 15px; font-weight: bold;">چاپ فیش حرارتی</button>
+</div>
+
+<div class="pos-container">
+    <div class="text-center">
+        <h3 style="margin: 2px 0;">{{ settings.company_name }}</h3>
+        <h4 style="margin: 2px 0;">{{ settings.receipt_header_title }}</h4>
+        <div style="font-size: 13px; font-weight: bold; margin: 4px 0;">قبض: {{ ticket.serial_number }}</div>
+    </div>
+    <hr style="border: 1px solid #000;">
+
+    <div class="row-item">
+        <span>طرف حساب:</span>
+        <span class="fw-bold">{{ ticket.party.name|default:"-" }}</span>
+    </div>
+    <div class="row-item">
+        <span>محصول:</span>
+        <span class="fw-bold">{{ ticket.product.name|default:"-" }}</span>
+    </div>
+    <div class="row-item">
+        <span>پلاک خودرو:</span>
+        <span class="fw-bold" style="direction: ltr;">{{ ticket.license_plate_display }}</span>
+    </div>
+    <div class="row-item">
+        <span>راننده:</span>
+        <span>{{ ticket.driver_display }}</span>
+    </div>
+    <div class="row-item">
+        <span>شماره بارنامه:</span>
+        <span>{{ ticket.waybill_number|default:"-" }}</span>
+    </div>
+    <div class="row-item">
+        <span>تاریخ و ساعت پر:</span>
+        <span>{{ ticket.jalali_gross_date }} {{ ticket.gross_time }}</span>
+    </div>
+    <div class="row-item">
+        <span>تاریخ و ساعت خالی:</span>
+        <span>{{ ticket.jalali_tare_date }} {{ ticket.tare_time }}</span>
+    </div>
+
+    <hr style="border: 1px dashed #000;">
+
+    <div class="row-item">
+        <span>وزن پر (ناخالص):</span>
+        <span class="fw-bold">{{ ticket.gross_weight|weight_fmt }} Kg</span>
+    </div>
+    <div class="row-item">
+        <span>وزن خالی (تارا):</span>
+        <span class="fw-bold">{{ ticket.tare_weight|weight_fmt }} Kg</span>
+    </div>
+    <div class="row-item">
+        <span>وزن خالص:</span>
+        <span class="fw-bold">{{ ticket.net_weight|weight_fmt }} Kg</span>
+    </div>
+    {% if ticket.loss_weight > 0 %}
+    <div class="row-item">
+        <span>افت کسر شده:</span>
+        <span class="fw-bold">{{ ticket.loss_weight|weight_fmt }} Kg</span>
+    </div>
+    {% endif %}
+    <div class="row-item" style="border: 2px solid #000; padding: 4px; margin-top: 5px;">
+        <span class="fw-bold">وزن نهایی:</span>
+        <span class="big-val">{{ ticket.final_weight|weight_fmt }} Kg</span>
+    </div>
+
+    <div class="text-center" style="margin-top: 15px; font-size: 9px;">
+        {{ settings.receipt_footer_note }}
+    </div>
+
+    <div class="text-center" style="margin-top: 20px;">
+        <div>امضای راننده / امضای اپراتور</div>
+    </div>
+</div>
+
+</body>
+</html>

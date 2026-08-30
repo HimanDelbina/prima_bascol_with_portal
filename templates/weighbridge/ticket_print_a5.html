@@ -1,0 +1,138 @@
+{% load bascol_tags %}
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>قبض باسکول {{ ticket.serial_number }} - A5</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css">
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+        body {
+            font-family: 'Vazirmatn', Tahoma, sans-serif;
+            background-color: #f8fafc;
+            color: #000;
+            margin: 0;
+            padding: 10px;
+            font-size: 11px;
+        }
+        .receipt-card {
+            background-color: #fff;
+            max-width: 148mm;
+            min-height: 200mm;
+            margin: 0 auto;
+            border: 2px solid #000;
+            padding: 10mm;
+            box-sizing: border-box;
+        }
+        .meta-table td, .meta-table th {
+            padding: 4px 6px;
+            border: 1px solid #94a3b8;
+            font-size: 11px;
+        }
+        .weights-table th, .weights-table td {
+            border: 2px solid #000;
+            padding: 6px;
+            text-align: center;
+        }
+        .weights-table td { font-size: 14px; font-weight: bold; }
+        .signature-box {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-between;
+            text-align: center;
+        }
+        .sig-item {
+            width: 30%;
+            border-top: 1px dotted #000;
+            padding-top: 5px;
+            font-weight: bold;
+            font-size: 11px;
+        }
+        @media print {
+            body { padding: 0; background: #fff; }
+            .receipt-card { border: 2px solid #000; box-shadow: none; width: 100%; height: auto; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="text-center mb-2 no-print">
+    <button onclick="window.print()" class="btn btn-primary btn-sm fw-bold">چاپ A5</button>
+    <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a4" class="btn btn-outline-secondary btn-sm ms-1">قالب A4</a>
+    <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=pos" class="btn btn-outline-secondary btn-sm ms-1">قالب POS</a>
+</div>
+
+<div class="receipt-card">
+    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+        <div>
+            <h6 class="fw-bold mb-0">{{ settings.company_name }}</h6>
+            <div class="text-muted small">{{ settings.receipt_header_title }}</div>
+        </div>
+        <div class="text-end small">
+            <div>قبض: <strong>{{ ticket.serial_number }}</strong></div>
+            <div>تاریخ: {{ print_date }}</div>
+        </div>
+    </div>
+
+    <table class="table meta-table mb-2">
+        <tr>
+            <th class="bg-light">طرف حساب:</th>
+            <td class="fw-bold">{{ ticket.party.name|default:"-" }}</td>
+            <th class="bg-light">محصول:</th>
+            <td class="fw-bold">{{ ticket.product.name|default:"-" }}</td>
+        </tr>
+        <tr>
+            <th class="bg-light">پلاک خودرو:</th>
+            <td class="fw-bold" style="direction: ltr;">{{ ticket.license_plate_display }}</td>
+            <th class="bg-light">نام راننده:</th>
+            <td>{{ ticket.driver_display }}</td>
+        </tr>
+        <tr>
+            <th class="bg-light">بارنامه:</th>
+            <td>{{ ticket.waybill_number|default:"-" }}</td>
+            <th class="bg-light">مبدأ / مقصد:</th>
+            <td>{{ ticket.origin.name|default:"-" }} به {{ ticket.destination.name|default:"-" }}</td>
+        </tr>
+        <tr>
+            <th class="bg-light">تاریخ پر:</th>
+            <td>{{ ticket.jalali_gross_date }} {{ ticket.gross_time }}</td>
+            <th class="bg-light">تاریخ خالی:</th>
+            <td>{{ ticket.jalali_tare_date }} {{ ticket.tare_time }}</td>
+        </tr>
+    </table>
+
+    <table class="table weights-table mb-2">
+        <thead>
+            <tr class="bg-light">
+                <th>وزن پر</th>
+                <th>وزن خالی</th>
+                <th>خالص</th>
+                <th>افت</th>
+                <th>نهایی (Kg)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>{{ ticket.gross_weight|weight_fmt }}</td>
+                <td>{{ ticket.tare_weight|weight_fmt }}</td>
+                <td>{{ ticket.net_weight|weight_fmt }}</td>
+                <td>{{ ticket.loss_weight|weight_fmt }}</td>
+                <td class="text-primary">{{ ticket.final_weight|weight_fmt }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="small text-muted text-center" style="font-size: 9px;">
+        {{ settings.receipt_footer_note }}
+    </div>
+
+    <div class="signature-box">
+        <div class="sig-item">امضای راننده</div>
+        <div class="sig-item">امضای باسکول</div>
+        <div class="sig-item">امضای انبار</div>
+    </div>
+</div>
+
+</body>
+</html>

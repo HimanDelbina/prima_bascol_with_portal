@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-slate-900"><i class="bi bi-percent text-danger me-2"></i>{{ title }}</h4>
+        <p class="text-muted small mb-0">تحلیل کسورات ناخالصی، رطوبت و افت کالا به تفکیک محصولات، طرف‌های حساب و انواع افت</p>
+    </div>
+    <div>
+        <a href="?{{ request.GET.urlencode }}&export=excel" class="btn btn-success btn-sm fw-bold">
+            <i class="bi bi-file-earmark-excel-fill me-1"></i> خروجی اکسل
+        </a>
+    </div>
+</div>
+
+{% include 'management/filter_bar.html' %}
+
+<!-- Loss KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-danger border-4">
+            <div class="text-muted small fw-bold">مجموع افت کالا</div>
+            <div class="fs-4 fw-bold text-danger mt-1 font-monospace">{{ data.loss_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2">بیشترین افت: {{ data.max_loss_kg|floatformat:0 }} Kg</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-warning border-4">
+            <div class="text-muted small fw-bold">میانگین درصد افت</div>
+            <div class="fs-4 fw-bold text-warning mt-1 font-monospace">{{ data.avg_loss_pct }}%</div>
+            <div class="small text-muted mt-2">روی محموله‌های دارای افت</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-primary border-4">
+            <div class="text-muted small fw-bold">سرویس‌های دارای افت</div>
+            <div class="fs-4 fw-bold text-primary mt-1">{{ data.loss_loads }} <span class="fs-6 fw-normal text-muted">بار</span></div>
+            <div class="small text-muted mt-2">بدون افت: {{ data.no_loss_loads }} بار</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-success border-4">
+            <div class="text-muted small fw-bold">مجموع وزن نهایی پس از کسر افت</div>
+            <div class="fs-4 fw-bold text-success mt-1 font-monospace">{{ data.final_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2">وزن خالص: {{ data.net_ton|floatformat:2 }} Ton</div>
+        </div>
+    </div>
+</div>
+
+<!-- Breakdown Tables -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm bg-white rounded-3">
+            <div class="card-header bg-transparent py-3 border-bottom">
+                <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-pie-chart text-danger me-2"></i>تفکیک بر اساس نوع افت</h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>نوع افت</th>
+                            <th>تعداد بار</th>
+                            <th class="text-end">مجموع افت (Kg)</th>
+                            <th class="text-end">افت (Ton)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lt in data.by_type %}
+                        <tr>
+                            <td class="fw-bold">{{ lt.loss_type__name }}</td>
+                            <td>{{ lt.trips }}</td>
+                            <td class="text-end text-danger font-monospace fw-bold">{{ lt.total_loss|floatformat:0 }}</td>
+                            <td class="text-end font-monospace">{{ lt.total_loss|weight_ton }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center py-3 text-muted">داده‌ای یافت نشد.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm bg-white rounded-3">
+            <div class="card-header bg-transparent py-3 border-bottom">
+                <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-boxes text-danger me-2"></i>بیشترین افت در محصولات</h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>محصول</th>
+                            <th>تعداد بار</th>
+                            <th class="text-end">افت کل (Kg)</th>
+                            <th class="text-center">میانگین افت</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lp in data.by_product %}
+                        <tr>
+                            <td class="fw-bold">{{ lp.product__name }}</td>
+                            <td>{{ lp.trips }}</td>
+                            <td class="text-end text-danger font-monospace fw-bold">{{ lp.total_loss|floatformat:0 }}</td>
+                            <td class="text-center font-monospace">{{ lp.avg_loss|floatformat:2 }}%</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center py-3 text-muted">داده‌ای یافت نشد.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Loss Tickets -->
+<div class="card border-0 shadow-sm bg-white rounded-3">
+    <div class="card-header bg-transparent py-3 border-bottom">
+        <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-list-ul text-danger me-2"></i>۲۵ قبض با بیشترین مقدار افت</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>شماره قبض</th>
+                    <th>تاریخ</th>
+                    <th>طرف حساب</th>
+                    <th>محصول</th>
+                    <th>نوع افت</th>
+                    <th class="text-end">وزن خالص (Kg)</th>
+                    <th class="text-center">درصد افت</th>
+                    <th class="text-end">وزن افت (Kg)</th>
+                    <th class="text-end">وزن نهایی (Kg)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in data.top_loss_tickets %}
+                <tr>
+                    <td class="fw-bold text-primary">{{ t.serial_number }}</td>
+                    <td>{{ t.first_weight_date_jalali }}</td>
+                    <td>{{ t.party.name|default:"-" }}</td>
+                    <td>{{ t.product.name|default:"-" }}</td>
+                    <td>{{ t.loss_type.name|default:"افت عمومی" }}</td>
+                    <td class="text-end font-monospace">{{ t.net_weight|floatformat:0 }}</td>
+                    <td class="text-center text-danger fw-bold">{{ t.loss_percent }}%</td>
+                    <td class="text-end font-monospace text-danger fw-bold">{{ t.loss_weight|floatformat:0 }}</td>
+                    <td class="text-end font-monospace text-success fw-bold">{{ t.final_weight|floatformat:0 }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" class="text-center py-3 text-muted">افتی ثبت نشده است.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

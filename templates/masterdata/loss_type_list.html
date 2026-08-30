@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}انواع افت بار{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="fw-bold mb-1 text-primary"><i class="bi bi-percent me-2"></i>مدیریت انواع افت بار</h4>
+        <p class="text-muted small mb-0">بدون افت، افت توافقی، رطوبت، ناخالصی، خاک، کسری وزن و...</p>
+    </div>
+    <a href="{% url 'masterdata:loss_type_create' %}" class="btn btn-primary shadow-sm fw-bold">
+        <i class="bi bi-plus-circle me-1"></i> افزودن نوع افت
+    </a>
+</div>
+
+<div class="card shadow-sm border-0 rounded-3">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table custom-table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>نام نوع افت</th>
+                        <th>کد</th>
+                        <th>درصد افت پیش‌فرض (%)</th>
+                        <th>توضیحات</th>
+                        <th>وضعیت</th>
+                        <th class="text-center">عملیات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lt in page_obj %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td class="fw-bold text-primary">{{ lt.name }}</td>
+                        <td>{{ lt.code|default:"-" }}</td>
+                        <td>{{ lt.default_percent }}%</td>
+                        <td>{{ lt.description|default:"-" }}</td>
+                        <td>
+                            {% if lt.is_active %}
+                            <span class="badge bg-success-subtle text-success">فعال</span>
+                            {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary">غیرفعال</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <a href="{% url 'masterdata:loss_type_edit' lt.id %}" class="btn btn-sm btn-outline-primary me-1" title="ویرایش">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'masterdata:loss_type_toggle' lt.id %}" class="btn btn-sm {% if lt.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}" title="تغییر وضعیت">
+                                {% if lt.is_active %}<i class="bi bi-toggle-on"></i>{% else %}<i class="bi bi-toggle-off"></i>{% endif %}
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">هیچ نوع افتی ثبت نشده است.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

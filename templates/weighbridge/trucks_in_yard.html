@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-slate-900" style="color: #0f172a;">
+            <i class="bi bi-hourglass-split text-warning me-2"></i>برد عملیاتی خودروهای داخل مجموعه (در انتظار وزن دوم)
+        </h4>
+        <p class="text-muted small mb-0">ناوگان ورودی با ثبت توزین اول که هم‌اکنون در حال بارگیری / تخلیه در کارخانه هستند.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <span class="badge bg-warning text-dark fs-6 px-3 py-2 d-flex align-items-center gap-1 shadow-sm">
+            <i class="bi bi-truck"></i>
+            <span>تعداد خودروهای حاضر: <strong>{{ count }}</strong> دستگاه</span>
+        </span>
+        <a href="{% url 'weighbridge:ticket_create' %}" class="btn btn-primary fw-bold shadow-sm">
+            <i class="bi bi-plus-circle me-1"></i> پذیرش خودرو جدید [F2]
+        </a>
+    </div>
+</div>
+
+<!-- Trucks In Yard Operational Board Table -->
+<div class="industrial-card">
+    <div class="industrial-card-header bg-light d-flex justify-content-between align-items-center">
+        <div class="fw-bold text-dark"><i class="bi bi-card-list me-1 text-primary"></i>فهرست بلادرنگ کامیون‌های در صف توزین خروج</div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-sm btn-outline-secondary" onclick="location.reload()" title="به‌روزرسانی صفحه">
+                <i class="bi bi-arrow-clockwise me-1"></i> بازخوانی
+            </button>
+        </div>
+    </div>
+    <div class="p-0">
+        <div class="table-responsive">
+            <table class="table industrial-table align-middle">
+                <thead>
+                    <tr>
+                        <th>شماره قبض</th>
+                        <th>پلاک ملی خودرو</th>
+                        <th>نام راننده</th>
+                        <th>طرف حساب</th>
+                        <th>نوع محموله (کالا)</th>
+                        <th>ساعت ورود</th>
+                        <th>وزن اول (Kg)</th>
+                        <th>مدت حضور در کارخانه</th>
+                        <th class="text-center" style="min-width: 140px;">عملیات توزین</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    {% with t=item.ticket %}
+                    <tr>
+                        <td class="fw-bold text-primary font-monospace fs-6">
+                            <a href="{% url 'weighbridge:ticket_detail' t.id %}" class="text-decoration-none">
+                                {{ t.serial_number }}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="badge bg-white text-dark border border-dark font-monospace fs-6" style="direction: ltr;">
+                                {{ t.license_plate_display }}
+                            </span>
+                        </td>
+                        <td>{{ t.driver_display }} <span class="text-muted small">({{ t.driver_mobile_display }})</span></td>
+                        <td>{{ t.party.name|default:"-" }}</td>
+                        <td><span class="fw-bold text-dark">{{ t.product.name|default:"-" }}</span></td>
+                        <td class="small">{{ t.first_time_str }} <span class="text-muted">({{ t.jalali_first_date }})</span></td>
+                        <td class="fw-bold text-primary font-monospace fs-6">{{ t.first_weight|weight_fmt }}</td>
+                        <td>
+                            {% if item.is_long_wait %}
+                            <span class="badge bg-danger text-white p-2">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ item.duration_str }} (توقف طولانی)
+                            </span>
+                            {% else %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning p-2">
+                                <i class="bi bi-clock-history me-1"></i>{{ item.duration_str }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <a href="{% url 'weighbridge:ticket_second_weight' t.id %}" class="btn btn-success fw-bold px-3 shadow-sm">
+                                <i class="bi bi-speedometer2 me-1"></i> ثبت وزن دوم
+                            </a>
+                        </td>
+                    </tr>
+                    {% endwith %}
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-5 text-muted">
+                            <i class="bi bi-check-circle-fill text-success fs-1 d-block mb-2"></i>
+                            در حال حاضر هیچ خودرویی در انتظار ثبت وزن دوم در محوطه مجتمع حضور ندارد.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

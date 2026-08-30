@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row g-4 justify-content-center">
+    <!-- Top Row: Database Diagnostic Status Card -->
+    <div class="col-12 col-xl-11">
+        <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+            <div class="card-header bg-slate-900 text-white py-3 d-flex flex-wrap align-items-center justify-content-between gap-2" style="background-color: #0f172a;">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-database-check text-info fs-5"></i>
+                    <h6 class="fw-bold mb-0 text-white">وضعیت و مشخصات پایگاه داده فعال</h6>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    {% if diagnostics.is_connected %}
+                    <span class="badge bg-success-subtle text-success border border-success px-3 py-1 fw-bold">
+                        <i class="bi bi-check-circle-fill me-1"></i> دیتابیس متصل و فعال
+                    </span>
+                    {% else %}
+                    <span class="badge bg-danger-subtle text-danger border border-danger px-3 py-1 fw-bold">
+                        <i class="bi bi-exclamation-octagon-fill me-1"></i> خطای اتصال
+                    </span>
+                    {% endif %}
+                    <span class="badge bg-primary px-3 py-1 font-monospace">{{ diagnostics.db_info.engine_name }}</span>
+                </div>
+            </div>
+            <div class="card-body bg-light p-3">
+                <div class="row g-3 text-center">
+                    <div class="col-6 col-md-3">
+                        <div class="bg-white p-3 rounded border shadow-xs">
+                            <div class="text-muted small">نام پایگاه داده</div>
+                            <div class="fw-bold text-dark font-monospace mt-1">{{ diagnostics.db_info.name }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="bg-white p-3 rounded border shadow-xs">
+                            <div class="text-muted small">سرور و پورت</div>
+                            <div class="fw-bold text-dark font-monospace mt-1">{{ diagnostics.db_info.host }}:{{ diagnostics.db_info.port }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="bg-white p-3 rounded border shadow-xs">
+                            <div class="text-muted small">کاربر دیتابیس</div>
+                            <div class="fw-bold text-dark font-monospace mt-1">{{ diagnostics.db_info.user|default:"-" }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="bg-white p-3 rounded border shadow-xs">
+                            <div class="text-muted small">آخرین پشتیبان‌گیری</div>
+                            <div class="fw-bold text-primary small mt-1">{{ diagnostics.last_backup_jalali }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Database Metrics Bar -->
+                <div class="d-flex flex-wrap align-items-center justify-content-around bg-white p-2 mt-3 rounded border text-muted small">
+                    <div><i class="bi bi-receipt text-primary me-1"></i>کل قبوض ثبت‌شده: <strong class="text-dark">{{ diagnostics.tickets_count }}</strong></div>
+                    <div class="border-end d-none d-md-block" style="height: 18px;"></div>
+                    <div><i class="bi bi-boxes text-success me-1"></i>تعداد کالاها: <strong class="text-dark">{{ diagnostics.products_count }}</strong></div>
+                    <div class="border-end d-none d-md-block" style="height: 18px;"></div>
+                    <div><i class="bi bi-buildings text-warning me-1"></i>تعداد طرف‌های حساب: <strong class="text-dark">{{ diagnostics.parties_count }}</strong></div>
+                    <div class="border-end d-none d-md-block" style="height: 18px;"></div>
+                    <div><i class="bi bi-people text-info me-1"></i>کاربران سیستم: <strong class="text-dark">{{ diagnostics.users_count }}</strong></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Left Column: Create Backup Card -->
+    <div class="col-12 col-xl-6 col-lg-6">
+        <div class="card shadow-sm border-0 rounded-3 h-100">
+            <div class="card-header bg-primary text-white py-3">
+                <h6 class="fw-bold mb-0"><i class="bi bi-database-down me-2"></i>تهیه نسخه پشتیبان جدید (Create Backup)</h6>
+            </div>
+            <div class="card-body p-4 d-flex flex-column justify-content-between">
+                <p class="text-muted small">
+                    شما می‌توانید از تمامی داده‌های سامانه (شامل قبوض، اطلاعات پایه، گزارشات، کاربران و تنظیمات) نسخه پشتیبان استاندارد تهیه نمایید.
+                </p>
+
+                <form method="post" class="mt-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="action_type" value="create_backup">
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-secondary">فرمت فایل پشتیبان</label>
+                        <div class="d-flex flex-column gap-2">
+                            <div class="form-check p-3 bg-light rounded border">
+                                <input class="form-check-input ms-2" type="radio" name="format_type" id="fmt_json" value="json" checked>
+                                <label class="form-check-label fw-bold text-dark cursor-pointer" for="fmt_json">
+                                    <i class="bi bi-file-earmark-code text-primary me-1"></i>
+                                    نسخه سازگار داده‌ها (JSON Dump) - <span class="badge bg-success-subtle text-success">توصیه شده</span>
+                                    <div class="text-muted fw-normal small mt-1">قابل انتقال و بازیابی در تمام سیستم‌ها با حفظ کامل ساختار UTF-8 فارسی و روابط داده‌ای.</div>
+                                </label>
+                            </div>
+                            <div class="form-check p-3 bg-light rounded border">
+                                <input class="form-check-input ms-2" type="radio" name="format_type" id="fmt_auto" value="auto">
+                                <label class="form-check-label fw-bold text-dark cursor-pointer" for="fmt_auto">
+                                    <i class="bi bi-file-earmark-binary text-info me-1"></i>
+                                    نسخه بومی دیتابیس (Native PostgreSQL .dump / SQLite)
+                                    <div class="text-muted fw-normal small mt-1">پشتیبان‌گیری کامل فیزیکی دیتابیس توسط ابزارهای اصلی موتور پایگاه‌داده.</div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold small text-secondary">نحوه دریافت</label>
+                        <select name="direct_download" class="form-select">
+                            <option value="1" selected>دانلود مستقیم فایل روی سیستم من</option>
+                            <option value="0">تنها در آرشیو سرور ذخیره شود</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">
+                        <i class="bi bi-cloud-arrow-down-fill me-2"></i> شروع و ساخت فایل پشتیبان
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Restore from Uploaded File Card -->
+    <div class="col-12 col-xl-5 col-lg-6">
+        <div class="card shadow-sm border-0 rounded-3 h-100">
+            <div class="card-header bg-danger text-white py-3">
+                <h6 class="fw-bold mb-0"><i class="bi bi-database-up me-2"></i>بازیابی نسخه پشتیبان (Restore)</h6>
+            </div>
+            <div class="card-body p-4 d-flex flex-column justify-content-between">
+                <div>
+                    <div class="alert alert-danger d-flex align-items-start mb-3 p-3 rounded-3 shadow-xs">
+                        <i class="bi bi-exclamation-octagon-fill fs-4 me-2 text-danger flex-shrink-0"></i>
+                        <div class="small">
+                            <strong>هشدار امنیتی بسیار مهم:</strong> بازیابی فایل پشتیبان، داده‌های فعلی را بازنویسی خواهد کرد. سامانه جهت امنیت، به طور خودکار قبل از بازیابی یک نسخه ایمنی از دیتابیس تهیه می‌نماید.
+                        </div>
+                    </div>
+
+                    <form method="post" enctype="multipart/form-data" id="restoreForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="action_type" value="restore_upload">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small text-secondary">انتخاب فایل پشتیبان جهت بازیابی</label>
+                            <input type="file" name="backup_file" class="form-control" accept=".json,.dump,.sql,.sqlite3,.db" required>
+                            <div class="form-text small">فرمت‌های مجاز: <code>.json</code>, <code>.dump</code>, <code>.sql</code>, <code>.sqlite3</code></div>
+                        </div>
+
+                        <div class="form-check mb-4 bg-light p-2 px-3 rounded border">
+                            <input class="form-check-input ms-2" type="checkbox" id="confirmRestoreCheck" required>
+                            <label class="form-check-label small fw-bold text-danger cursor-pointer" for="confirmRestoreCheck">
+                                تایید می‌کنم که از بازنویسی داده‌ها آگاهی دارم.
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn btn-danger w-100 py-2 fw-bold shadow-sm" onclick="return confirm('آیا از بازنویسی و بازیابی پایگاه داده اطمینان کامل دارید؟')">
+                            <i class="bi bi-arrow-clockwise me-2"></i> اجرای عملیات بازیابی دیتابیس
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Row: Server Backup Archive Table -->
+    <div class="col-12 col-xl-11">
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+                <h6 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-archive-fill text-primary me-2"></i>آرشیو نسخه‌های پشتیبان موجود در سرور ({{ backups|length }})
+                </h6>
+                <span class="badge bg-light text-muted border">پوشه /backups</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table industrial-table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 50px;">#</th>
+                                <th>نام فایل پشتیبان</th>
+                                <th>نوع / فرمت</th>
+                                <th>حجم فایل</th>
+                                <th>تاریخ و زمان ساخت (شمسی)</th>
+                                <th class="text-center" style="width: 220px;">عملیات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for b in backups %}
+                            <tr>
+                                <td class="text-muted">{{ forloop.counter }}</td>
+                                <td class="fw-bold font-monospace text-dark">
+                                    <i class="bi {% if b.ext == '.json' %}bi-file-earmark-code text-primary{% elif b.ext == '.dump' %}bi-file-earmark-binary text-info{% else %}bi-file-earmark-text text-secondary{% endif %} me-2"></i>
+                                    {{ b.filename }}
+                                </td>
+                                <td>
+                                    <span class="badge {% if b.ext == '.json' %}bg-primary-subtle text-primary border border-primary{% elif b.ext == '.dump' %}bg-info-subtle text-info border border-info{% else %}bg-secondary-subtle text-secondary border border-secondary{% endif %} small">
+                                        {{ b.type_label }}
+                                    </span>
+                                </td>
+                                <td class="font-monospace text-muted">{{ b.filesize }}</td>
+                                <td class="small">{{ b.created_at_jalali }}</td>
+                                <td class="text-center">
+                                    <div class="d-flex justify-content-center gap-1">
+                                        <!-- Download Button -->
+                                        <form method="post" class="d-inline">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action_type" value="download_file">
+                                            <input type="hidden" name="filename" value="{{ b.filename }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-primary" title="دانلود این فایل">
+                                                <i class="bi bi-download"></i> دانلود
+                                            </button>
+                                        </form>
+
+                                        <!-- Restore from Archive Button -->
+                                        <form method="post" class="d-inline" onsubmit="return confirm('آیا از بازیابی این نسخه پشتیبان ({{ b.filename }}) اطمینان دارید؟');">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action_type" value="restore_existing">
+                                            <input type="hidden" name="filename" value="{{ b.filename }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-warning fw-bold" title="بازیابی این نسخه">
+                                                <i class="bi bi-arrow-repeat"></i> بازیابی
+                                            </button>
+                                        </form>
+
+                                        <!-- Delete Button -->
+                                        <form method="post" class="d-inline" onsubmit="return confirm('آیا از حذف این فایل پشتیبان اطمینان دارید؟');">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action_type" value="delete_backup">
+                                            <input type="hidden" name="filename" value="{{ b.filename }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف فایل">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">
+                                    <i class="bi bi-inbox fs-3 d-block mb-2 text-muted opacity-50"></i>
+                                    هنوز فایل پشتیبانی در آرشیو سرور ثبت نشده است. از فرم بالا برای تهیه نسخه پشتیبان اقدام فرمایید.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

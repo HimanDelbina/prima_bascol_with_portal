@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-header bg-danger text-white py-3 d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0"><i class="bi bi-shield-exclamation me-2"></i>{{ title }}</h5>
+                <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-sm btn-light">
+                    انصراف و بازگشت
+                </a>
+            </div>
+            <div class="card-body p-4">
+                <div class="alert alert-warning d-flex align-items-center mb-4">
+                    <i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>
+                    <div>
+                        توجه: هرگونه تغییر در اوزان، طرف حساب، کالا یا پلاک در لاگ سیستم (Audit Log) با نام کاربری و آدرس IP شما ثبت خواهد شد و وارد کردن دلیل اصلاح اجباری است.
+                    </div>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="p-3 bg-danger-subtle rounded-3 border border-danger mb-4">
+                        <label class="form-label fw-bold text-danger">{{ form.manager_reason.label }} <span class="text-danger">*</span></label>
+                        {{ form.manager_reason }}
+                        {% if form.manager_reason.errors %}<div class="text-danger small">{{ form.manager_reason.errors }}</div>{% endif %}
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">نوع عملیات</label>
+                            {{ form.operation_type }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">طرف حساب</label>
+                            {{ form.party }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">نام محصول</label>
+                            {{ form.product }}
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">شماره پلاک</label>
+                            {{ form.license_plate_display }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">راننده</label>
+                            {{ form.driver }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">شماره بارنامه</label>
+                            {{ form.waybill_number }}
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-primary">وزن اول (Kg)</label>
+                            {{ form.first_weight }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-success">وزن دوم (Kg)</label>
+                            {{ form.second_weight }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">وزن ارسالی (Kg)</label>
+                            {{ form.sent_weight }}
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">نوع افت</label>
+                            {{ form.loss_type }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">درصد افت (%)</label>
+                            {{ form.loss_percent }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">وزن افت (Kg)</label>
+                            {{ form.loss_weight }}
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                {{ form.is_loss_overridden }}
+                                <label class="form-check-label fw-bold text-danger" for="id_is_loss_overridden">افت به صورت دستی تعیین شده است</label>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold">دلیل اورراید افت</label>
+                            {{ form.loss_override_reason }}
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold">توضیحات</label>
+                            {{ form.notes }}
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-top text-end">
+                        <button type="submit" class="btn btn-danger px-5 fw-bold shadow-sm">
+                            <i class="bi bi-check2-circle me-1"></i> تایید و ثبت نهایی اصلاحات
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

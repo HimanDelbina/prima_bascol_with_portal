@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-slate-900"><i class="bi bi-bag-check-fill text-primary me-2"></i>{{ title }}</h4>
+        <p class="text-muted small mb-0">پایش محموله‌های ورودی، تامین‌کنندگان، افت کالا و اختلاف با وزن بارنامه</p>
+    </div>
+    <div>
+        <a href="?{{ request.GET.urlencode }}&export=excel" class="btn btn-success btn-sm fw-bold">
+            <i class="bi bi-file-earmark-excel-fill me-1"></i> خروجی اکسل
+        </a>
+    </div>
+</div>
+
+{% include 'management/filter_bar.html' %}
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-primary border-4">
+            <div class="text-muted small fw-bold">تعداد سرویس‌های خرید</div>
+            <div class="fs-4 fw-bold text-dark mt-1">{{ data.trips }} <span class="fs-6 fw-normal text-muted">بار</span></div>
+            <div class="small text-muted mt-2">میانگین هر بار: {{ data.avg_load_ton }} Ton</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-info border-4">
+            <div class="text-muted small fw-bold">مجموع تناژ دریافتی</div>
+            <div class="fs-4 fw-bold text-info mt-1 font-monospace">{{ data.net_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2">وزن نهایی: {{ data.final_ton|floatformat:2 }} Ton</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-warning border-4">
+            <div class="text-muted small fw-bold">مجموع وزن ارسالی مبدأ</div>
+            <div class="fs-4 fw-bold text-warning mt-1 font-monospace">{{ data.sent_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2">اختلاف کل: {{ data.diff_kg|floatformat:0 }} Kg</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-3 border-start border-danger border-4">
+            <div class="text-muted small fw-bold">مجموع افت کسر شده</div>
+            <div class="fs-4 fw-bold text-danger mt-1 font-monospace">{{ data.loss_ton|floatformat:2 }} <span class="fs-6 fw-normal text-muted">Ton</span></div>
+            <div class="small text-muted mt-2">میانگین افت: {{ data.avg_loss_pct }}%</div>
+        </div>
+    </div>
+</div>
+
+<!-- Supplier Breakdown Table -->
+<div class="card border-0 shadow-sm bg-white rounded-3">
+    <div class="card-header bg-transparent py-3 border-bottom">
+        <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-buildings-fill text-primary me-2"></i>عملکرد تامین‌کنندگان و مقایسه اوزان</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>تامین‌کننده (طرف حساب)</th>
+                    <th>تعداد بار</th>
+                    <th class="text-end">وزن مبدأ (Kg)</th>
+                    <th class="text-end">وزن باسکول (Kg)</th>
+                    <th class="text-end">اختلاف وزن (Kg)</th>
+                    <th class="text-end">افت (Kg)</th>
+                    <th class="text-center">میانگین افت</th>
+                    <th class="text-end">وزن نهایی (Kg)</th>
+                    <th class="text-center">مغایرت‌ها</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in data.suppliers_table %}
+                <tr>
+                    <td class="fw-bold">{{ s.party__name|default:"نامشخص" }}</td>
+                    <td>{{ s.trips }} بار</td>
+                    <td class="text-end font-monospace">{{ s.sent_kg|floatformat:0 }}</td>
+                    <td class="text-end fw-bold text-primary font-monospace">{{ s.net_kg|floatformat:0 }}</td>
+                    <td class="text-end font-monospace {% if s.diff_kg < 0 %}text-danger fw-bold{% endif %}">{{ s.diff_kg|floatformat:0 }}</td>
+                    <td class="text-end text-danger font-monospace">{{ s.loss_kg|floatformat:0 }}</td>
+                    <td class="text-center small">{{ s.avg_loss|floatformat:2 }}%</td>
+                    <td class="text-end fw-bold text-success font-monospace">{{ s.final_kg|floatformat:0 }}</td>
+                    <td class="text-center">
+                        {% if s.discrepancies > 0 %}
+                        <span class="badge bg-danger">{{ s.discrepancies }}</span>
+                        {% else %}
+                        <span class="badge bg-light text-muted">۰</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" class="text-center py-3 text-muted">رکوردی برای خرید یافت نشد.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h4 class="fw-bold mb-1 text-primary"><i class="bi bi-search me-2"></i>{{ title }}</h4>
+    <p class="text-muted small mb-0">نتایج جستجو در میان کلیه قبوض، پلاک‌ها، رانندگان و طرف‌های حساب</p>
+</div>
+
+<div class="card shadow-sm border-0 rounded-3">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table custom-table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>شماره قبض</th>
+                        <th>تاریخ</th>
+                        <th>طرف حساب</th>
+                        <th>محصول</th>
+                        <th>پلاک خودرو</th>
+                        <th>راننده</th>
+                        <th>وزن خالص (Kg)</th>
+                        <th>وزن نهایی (Kg)</th>
+                        <th>وضعیت</th>
+                        <th class="text-center">عملیات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ticket in tickets %}
+                    <tr>
+                        <td class="fw-bold text-primary">{{ ticket.serial_number }}</td>
+                        <td>{{ ticket.jalali_first_date }}</td>
+                        <td>{{ ticket.party.name|default:"-" }}</td>
+                        <td><span class="fw-bold">{{ ticket.product.name|default:"-" }}</span></td>
+                        <td>
+                            <span class="plate-badge">
+                                <span class="plate-badge-blue">ایران</span>
+                                {{ ticket.license_plate_display }}
+                            </span>
+                        </td>
+                        <td>{{ ticket.driver_display }}</td>
+                        <td class="text-end fw-bold text-success">{{ ticket.net_weight|weight_fmt }}</td>
+                        <td class="text-end fw-bold text-primary">{{ ticket.final_weight|weight_fmt }}</td>
+                        <td>{{ ticket.status|status_badge }}</td>
+                        <td class="text-center">
+                            <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> مشاهده
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center py-5 text-muted">هیچ رکوردی منطبق با عبارت «{{ q }}» یافت نشد.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

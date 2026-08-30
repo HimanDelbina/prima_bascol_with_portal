@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}ابطال قبض شماره {{ ticket.serial_number }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-header bg-danger text-white py-3">
+                <h5 class="fw-bold mb-0"><i class="bi bi-x-circle-fill me-2"></i>ابطال قبض باسکول شماره {{ ticket.serial_number }}</h5>
+            </div>
+            <div class="card-body p-4">
+                <p class="text-danger fw-bold fs-6">
+                    آیا از ابطال این قبض اطمینان دارید؟ توجه فرمایید قبوض به صورت فیزیکی حذف نمی‌شوند بلکه وضعیت آن‌ها به «ابطال شده» تغییر یافته و در گزارشات نظارتی باقی می‌ماند.
+                </p>
+
+                <div class="p-3 bg-light rounded-3 mb-3 border">
+                    <div>پلاک: <strong>{{ ticket.license_plate_display }}</strong></div>
+                    <div>طرف حساب: <strong>{{ ticket.party.name }}</strong></div>
+                    <div>کالا: <strong>{{ ticket.product.name }}</strong></div>
+                    <div>وزن خالص: <strong>{{ ticket.net_weight|weight_fmt }} کیلوگرم</strong></div>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-danger">دلیل ابطال سند <span class="text-danger">*</span></label>
+                        <textarea name="cancellation_reason" class="form-control" rows="3" placeholder="دلیل رسمی ابطال سند را وارد کنید..." required></textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-secondary">انصراف</a>
+                        <button type="submit" class="btn btn-danger px-4 fw-bold">تایید و ابطال قطعی سند</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

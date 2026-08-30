@@ -1,0 +1,1237 @@
+[
+{
+  "model": "auth.user",
+  "pk": 1,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$c3uuxFLTjTYCcTArr8eKrX$SH+jow2R7qx39jp5dmlgNoVVYr8yYidriwOYg1Dswpg=",
+    "last_login": "2026-08-29T08:23:26.155Z",
+    "is_superuser": true,
+    "username": "admin",
+    "first_name": "مدیر",
+    "last_name": "ارشد سیستم",
+    "email": "admin@prima.ir",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-08-29T08:20:50.987Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 2,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$fiPEXXuLVyzakjkxHKSZXC$xCaZNkVGuwDS0kgLNMmk1dUE4r4PijtPhVjMUmYKrGw=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "ceo",
+    "first_name": "دکتر",
+    "last_name": "احمدی (مدیرعامل)",
+    "email": "ceo@prima.ir",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-08-29T08:20:52.023Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 3,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$DeUtgcq0VnngMvBFxopbNg$EbKFnIzUU3wsNat3CsqgLhHma7jb7xdvz4wno41Bs1g=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "factory_mgr",
+    "first_name": "مهندس",
+    "last_name": "رستمی (مدیر کارخانه)",
+    "email": "factory@prima.ir",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-08-29T08:20:53.057Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 4,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$fk1esvFglDM70jdvxYJhmE$Rm0YXlVb7cn1ArMp3dEiqJMVZE+6hw+8AVVUa2UJnhY=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "commercial_mgr",
+    "first_name": "علیرضا",
+    "last_name": "نادری (مدیر بازرگانی)",
+    "email": "commercial@prima.ir",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-08-29T08:20:54.105Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 5,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$mUZ39H7ymIPKBa81ON81Ae$uXE+L6Tlx1pU10KAOJI/M4pjrkE1ehdh7SiImJwPqoQ=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "financial_mgr",
+    "first_name": "مریم",
+    "last_name": "سعیدی (مدیر مالی)",
+    "email": "finance@prima.ir",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-08-29T08:20:55.114Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 6,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$NFA0S9jHbwTBihLJSTKvsf$jsCAl8ZXLx8FdHU1rguhtdSJrKPTaCQpZ+tWgrJYTQQ=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "manager",
+    "first_name": "مهندس",
+    "last_name": "کاظمی (مدیر باسکول)",
+    "email": "manager@prima.ir",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-08-29T08:20:56.131Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 7,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$T7p3MIeKPeNBLGxCRwYLS2$jnQZavZRkQwCFAffG8nEiAkccJyOk9YiQWv6MKpK/Rg=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "operator1",
+    "first_name": "حسین",
+    "last_name": "مرادی (اپراتور شیفت ۱)",
+    "email": "op1@prima.ir",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-08-29T08:20:57.146Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 8,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$aGSREDOqMya3HSk9Ozk7Tl$5mV6KL8uy6FyNztF03MtDRV/rj/ivlU0NHj3tGWssIc=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "operator2",
+    "first_name": "رضا",
+    "last_name": "اکبری (اپراتور شیفت ۲)",
+    "email": "op2@prima.ir",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-08-29T08:20:58.198Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 9,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$dmkDbeATMz5Gw6TaXZD2tS$7pPM1LhvGaWSuvTDcebxB2oK6nGya1r2Es0S+mfpGTc=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "reporter",
+    "first_name": "سارا",
+    "last_name": "کریمی (مدیر گزارشات)",
+    "email": "report@prima.ir",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-08-29T08:20:59.250Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 10,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$ezGCoFquTHetC8QAvde4Yw$qoTmCT/i5yWBDAH+tKV5pkemllrHeNuy5AOFeV9F8mw=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "viewer",
+    "first_name": "محسن",
+    "last_name": "شفیعی (مشاهده‌گر)",
+    "email": "viewer@prima.ir",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-08-29T08:21:00.283Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "6hzv5ec6j6ugiftcgd3mu3x7hs2rt81e",
+  "fields": {
+    "session_data": ".eJxVjMsOgjAQAP9lz6bZAn1x9O43NLt0sahpEwon478bEg56nZnMGyLtW457kzUuCUbQcPllTNNTyiHSg8q9qqmWbV1YHYk6bVO3muR1Pdu_QaaWYQSvxaMMvU5Bd07YGO1moYBOUIKeLPeM7L3pfGedNZ4Ice55oIBJ0MHnC8poNz4:1x0ELW:ND1fmQU6SBoW6N4e1l2frsr_h4hgmJxNCk1BrXwL8qM",
+    "expire_date": "2026-09-12T08:23:26.161Z"
+  }
+},
+{
+  "model": "core.systemsetting",
+  "pk": 1,
+  "fields": {
+    "company_name": "مجتمع صنعتی و معدنی فولاد پریما",
+    "company_logo": "",
+    "company_address": "اصفهان، شهرک صنعتی رازی، بلوار فناوری، پلاک ۱۰۰",
+    "company_phone": "۰۳۱-۳۳۳۳۴۴۴۴",
+    "company_email": "info@primasteel.ir",
+    "receipt_header_title": "قبض رسمی توزین و باسکول دیجیتال",
+    "serial_start_number": 1001,
+    "serial_prefix": "WB-",
+    "weight_unit": "کیلوگرم",
+    "decimal_places": 0,
+    "max_tolerance_percent": "1.00",
+    "max_tolerance_kg": "50.00",
+    "require_waybill": false,
+    "require_driver": true,
+    "require_origin": false,
+    "require_destination": false,
+    "require_unload_location": false,
+    "default_print_template": "a4",
+    "receipt_footer_note": "این قبض به عنوان سند رسمی خروج و ورود کالا تلقی شده و بدون مهر و امضا فاقد اعتبار است.",
+    "items_per_page": 20
+  }
+},
+{
+  "model": "accounts.userprofile",
+  "pk": 1,
+  "fields": {
+    "user": 1,
+    "role": "super_admin",
+    "mobile": "09121000001",
+    "personnel_code": "",
+    "is_active": true,
+    "created_at": "2026-08-29T08:20:50.990Z",
+    "updated_at": "2026-08-29T08:23:26.159Z"
+  }
+},
+{
+  "model": "accounts.userprofile",
+  "pk": 2,
+  "fields": {
+    "user": 2,
+    "role": "ceo",
+    "mobile": "09121000002",
+    "personnel_code": "",
+    "is_active": true,
+    "created_at": "2026-08-29T08:20:52.024Z",
+    "updated_at": "2026-08-29T08:20:53.055Z"
+  }
+},
+{
+  "model": "accounts.userprofile",
+  "pk": 3,
+  "fields": {
+    "user": 3,
+    "role": "factory_manager",
+    "mobile": "09121000003",
+    "personnel_code": "",
+    "is_active": true,
+    "created_at": "2026-08-29T08:20:53.058Z",
+    "updated_at": "2026-08-29T08:20:54.103Z"
+  }
+},
+{
+  "model": "accounts.userprofile",
+  "pk": 4,
+  "fields": {
+    "user": 4,
+    "role": "commercial_manager",
+    "mobile": "09121000004",
+    "personnel_code": "",
+    "is_active": true,
+    "created_at": "2026-08-29T08:20:54.106Z",
+    "updated_at": "2026-08-29T08:20:55.111Z"
+  }
+},
+{
+  "model": "accounts.userprofile",
+  "pk": 5,
+  "fields": {
+    "user": 5,
+    "role": "financial_manager",
+    "mobile": "09121000005",
+    "personnel_code": "",
+    "is_active": true,
+    "created_at": "2026-08-29T08:20:55.114Z",
+    "updated_at": "2026-08-29T08:20:56.129Z"
+  }
+},
+{
+  "model": "accounts.userprofile",
+  "pk": 6,
+  "fields": {
+    "user": 6,
+    "role": "weighbridge_manager",
+    "mobile": "09121000006",
+    "personnel_code": "",
+    "is_active": true,
+    "created_at": "2026-08-29T08:20:56.132Z",
+    "updated_at": "2026-08-29T08:20:57.144Z"
+  }
+},
+{
+  "model": "accounts.userprofile",
+  "pk": 7,
+  "fields": {
+    "user": 7,
+    "role": "weighbridge_operator",
+    "mobile": "09121000007",
+    "personnel_code": "",
+    "is_active": true,
+    "created_at": "2026-08-29T08:20:57.148Z",
+    "updated_at": "2026-08-29T08:20:58.196Z"
+  }
+},
+{
+  "model": "accounts.userprofile",
+  "pk": 8,
+  "fields": {
+    "user": 8,
+    "role": "weighbridge_operator",
+    "mobile": "09121000008",
+    "personnel_code": "",
+    "is_active": true,
+    "created_at": "2026-08-29T08:20:58.200Z",
+    "updated_at": "2026-08-29T08:20:59.248Z"
+  }
+},
+{
+  "model": "accounts.userprofile",
+  "pk": 9,
+  "fields": {
+    "user": 9,
+    "role": "report_manager",
+    "mobile": "09121000009",
+    "personnel_code": "",
+    "is_active": true,
+    "created_at": "2026-08-29T08:20:59.252Z",
+    "updated_at": "2026-08-29T08:21:00.281Z"
+  }
+},
+{
+  "model": "accounts.userprofile",
+  "pk": 10,
+  "fields": {
+    "user": 10,
+    "role": "viewer",
+    "mobile": "09121000010",
+    "personnel_code": "",
+    "is_active": true,
+    "created_at": "2026-08-29T08:21:00.285Z",
+    "updated_at": "2026-08-29T08:21:01.290Z"
+  }
+},
+{
+  "model": "masterdata.product",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.293Z",
+    "updated_at": "2026-08-29T08:21:01.293Z",
+    "is_active": true,
+    "name": "آهن اسفنجی (DRI)",
+    "code": "DRI-101",
+    "standard_tolerance_kg": "50.00",
+    "default_loss_percent": "0.50",
+    "description": "آهن اسفنجی ویژه احیا مستقیم با کربن استاندارد"
+  }
+},
+{
+  "model": "masterdata.product",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.296Z",
+    "updated_at": "2026-08-29T08:21:01.296Z",
+    "is_active": true,
+    "name": "گندله سنگ آهن",
+    "code": "PEL-201",
+    "standard_tolerance_kg": "60.00",
+    "default_loss_percent": "1.00",
+    "description": "گندله سنگ آهن درجه یک مناسب کوره قوس"
+  }
+},
+{
+  "model": "masterdata.product",
+  "pk": 3,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.298Z",
+    "updated_at": "2026-08-29T08:21:01.299Z",
+    "is_active": true,
+    "name": "بریکت گرم آهن (HBI)",
+    "code": "HBI-301",
+    "standard_tolerance_kg": "40.00",
+    "default_loss_percent": "0.00",
+    "description": "بریکت آهن فشرده مناسب صادرات"
+  }
+},
+{
+  "model": "masterdata.product",
+  "pk": 4,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.301Z",
+    "updated_at": "2026-08-29T08:21:01.301Z",
+    "is_active": true,
+    "name": "شمش فولادی (بیلت)",
+    "code": "BLT-401",
+    "standard_tolerance_kg": "30.00",
+    "default_loss_percent": "0.00",
+    "description": "شمش فولادی ۱۵۰×۱۵۰ استاندارد 5sp"
+  }
+},
+{
+  "model": "masterdata.product",
+  "pk": 5,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.303Z",
+    "updated_at": "2026-08-29T08:21:01.303Z",
+    "is_active": true,
+    "name": "میلگرد آجدار A3",
+    "code": "RBR-501",
+    "standard_tolerance_kg": "30.00",
+    "default_loss_percent": "0.00",
+    "description": "میلگرد سایز ۱۶ و ۲۰ استاندارد"
+  }
+},
+{
+  "model": "masterdata.product",
+  "pk": 6,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.305Z",
+    "updated_at": "2026-08-29T08:21:01.305Z",
+    "is_active": true,
+    "name": "ضایعات آهن و قراضه سنگین",
+    "code": "SCR-601",
+    "standard_tolerance_kg": "80.00",
+    "default_loss_percent": "2.50",
+    "description": "قراضه روغنی و سنگین صنعتی"
+  }
+},
+{
+  "model": "masterdata.product",
+  "pk": 7,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.309Z",
+    "updated_at": "2026-08-29T08:21:01.309Z",
+    "is_active": true,
+    "name": "کنسانتره سنگ آهن",
+    "code": "CON-701",
+    "standard_tolerance_kg": "70.00",
+    "default_loss_percent": "1.50",
+    "description": "کنسانتره سنگ آهن رطوبت‌دار عیار ۶۷٪"
+  }
+},
+{
+  "model": "masterdata.party",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.312Z",
+    "updated_at": "2026-08-29T08:21:01.312Z",
+    "is_active": true,
+    "name": "شرکت صنایع فولاد خوزستان",
+    "code": "PT-101",
+    "party_type": "supplier",
+    "phone": "09161111111",
+    "tel": "061-32222222",
+    "email": "",
+    "address": "اهواز، کیلومتر ۱۰ جاده کوت عبدالله",
+    "national_id": "",
+    "economic_code": ""
+  }
+},
+{
+  "model": "masterdata.party",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.314Z",
+    "updated_at": "2026-08-29T08:21:01.314Z",
+    "is_active": true,
+    "name": "مجتمع فولاد مبارکه اصفهان",
+    "code": "PT-102",
+    "party_type": "customer",
+    "phone": "09131111111",
+    "tel": "031-52732222",
+    "email": "",
+    "address": "اصفهان، مبارکه",
+    "national_id": "",
+    "economic_code": ""
+  }
+},
+{
+  "model": "masterdata.party",
+  "pk": 3,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.315Z",
+    "updated_at": "2026-08-29T08:21:01.315Z",
+    "is_active": true,
+    "name": "شرکت معدنی و صنعتی چادرملو",
+    "code": "PT-103",
+    "party_type": "supplier",
+    "phone": "09121111111",
+    "tel": "021-88889999",
+    "email": "",
+    "address": "یزد، بهاباد، معدن چادرملو",
+    "national_id": "",
+    "economic_code": ""
+  }
+},
+{
+  "model": "masterdata.party",
+  "pk": 4,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.318Z",
+    "updated_at": "2026-08-29T08:21:01.318Z",
+    "is_active": true,
+    "name": "شرکت سنگ آهن گل‌گهر سیرجان",
+    "code": "PT-104",
+    "party_type": "supplier",
+    "phone": "09132222222",
+    "tel": "034-41423000",
+    "email": "",
+    "address": "کرمان، سیرجان، کیلومتر ۵۰ جاده شیراز",
+    "national_id": "",
+    "economic_code": ""
+  }
+},
+{
+  "model": "masterdata.party",
+  "pk": 5,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.320Z",
+    "updated_at": "2026-08-29T08:21:01.320Z",
+    "is_active": true,
+    "name": "شرکت فولاد کاوه جنوب کیش",
+    "code": "PT-105",
+    "party_type": "customer",
+    "phone": "09171111111",
+    "tel": "076-33512000",
+    "email": "",
+    "address": "بندرعباس، منطقه ویژه صنایع معدنی",
+    "national_id": "",
+    "economic_code": ""
+  }
+},
+{
+  "model": "masterdata.party",
+  "pk": 6,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.321Z",
+    "updated_at": "2026-08-29T08:21:01.321Z",
+    "is_active": true,
+    "name": "شرکت حمل و نقل سراسری بارگستر شرق",
+    "code": "PT-106",
+    "party_type": "contractor",
+    "phone": "09151111111",
+    "tel": "051-38400000",
+    "email": "",
+    "address": "مشهد، پایانه بار",
+    "national_id": "",
+    "economic_code": ""
+  }
+},
+{
+  "model": "masterdata.driver",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.324Z",
+    "updated_at": "2026-08-29T08:21:01.324Z",
+    "is_active": true,
+    "full_name": "علی رضایی",
+    "mobile": "09121112233",
+    "national_code": "0012345678",
+    "license_number": "LIC-98765",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.driver",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.326Z",
+    "updated_at": "2026-08-29T08:21:01.326Z",
+    "is_active": true,
+    "full_name": "محمد حسینی",
+    "mobile": "09122223344",
+    "national_code": "0023456789",
+    "license_number": "LIC-87654",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.driver",
+  "pk": 3,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.327Z",
+    "updated_at": "2026-08-29T08:21:01.327Z",
+    "is_active": true,
+    "full_name": "حسین کریمی",
+    "mobile": "09123334455",
+    "national_code": "0034567890",
+    "license_number": "LIC-76543",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.driver",
+  "pk": 4,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.328Z",
+    "updated_at": "2026-08-29T08:21:01.328Z",
+    "is_active": true,
+    "full_name": "رضا مرادی",
+    "mobile": "09124445566",
+    "national_code": "0045678901",
+    "license_number": "LIC-65432",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.driver",
+  "pk": 5,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.329Z",
+    "updated_at": "2026-08-29T08:21:01.329Z",
+    "is_active": true,
+    "full_name": "مهدی احمدی",
+    "mobile": "09125556677",
+    "national_code": "0056789012",
+    "license_number": "LIC-54321",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.vehicletype",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.331Z",
+    "updated_at": "2026-08-29T08:21:01.331Z",
+    "is_active": true,
+    "name": "تریلی ۱۸ چرخ کفی",
+    "code": "TRL-FLAT",
+    "standard_tare_weight": "15500.00"
+  }
+},
+{
+  "model": "masterdata.vehicletype",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.333Z",
+    "updated_at": "2026-08-29T08:21:01.333Z",
+    "is_active": true,
+    "name": "کمپرسی بنز ده چرخ",
+    "code": "CMP-10W",
+    "standard_tare_weight": "11200.00"
+  }
+},
+{
+  "model": "masterdata.vehicletype",
+  "pk": 3,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.336Z",
+    "updated_at": "2026-08-29T08:21:01.336Z",
+    "is_active": true,
+    "name": "کمپرسی تریلی جفت",
+    "code": "CMP-TRL",
+    "standard_tare_weight": "16800.00"
+  }
+},
+{
+  "model": "masterdata.vehicletype",
+  "pk": 4,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.338Z",
+    "updated_at": "2026-08-29T08:21:01.338Z",
+    "is_active": true,
+    "name": "تریلی لبه‌دار",
+    "code": "TRL-EDGE",
+    "standard_tare_weight": "15800.00"
+  }
+},
+{
+  "model": "masterdata.vehicletype",
+  "pk": 5,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.339Z",
+    "updated_at": "2026-08-29T08:21:01.339Z",
+    "is_active": true,
+    "name": "کامیون تک ۶ چرخ",
+    "code": "TRK-6W",
+    "standard_tare_weight": "7500.00"
+  }
+},
+{
+  "model": "masterdata.vehicle",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.343Z",
+    "updated_at": "2026-08-29T08:21:01.343Z",
+    "is_active": true,
+    "plate_part1": "12",
+    "plate_letter": "ع",
+    "plate_part2": "345",
+    "plate_iran": "67",
+    "plate_display": "12 ع 345 - ایران 67",
+    "vehicle_type": 1,
+    "default_driver": 1,
+    "empty_weight": "15720.00",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.vehicle",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.345Z",
+    "updated_at": "2026-08-29T08:21:01.345Z",
+    "is_active": true,
+    "plate_part1": "34",
+    "plate_letter": "ج",
+    "plate_part2": "567",
+    "plate_iran": "88",
+    "plate_display": "34 ج 567 - ایران 88",
+    "vehicle_type": 2,
+    "default_driver": 2,
+    "empty_weight": "11340.00",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.vehicle",
+  "pk": 3,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.347Z",
+    "updated_at": "2026-08-29T08:21:01.347Z",
+    "is_active": true,
+    "plate_part1": "56",
+    "plate_letter": "د",
+    "plate_part2": "789",
+    "plate_iran": "21",
+    "plate_display": "56 د 789 - ایران 21",
+    "vehicle_type": 3,
+    "default_driver": 3,
+    "empty_weight": "16950.00",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.vehicle",
+  "pk": 4,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.348Z",
+    "updated_at": "2026-08-29T08:21:01.349Z",
+    "is_active": true,
+    "plate_part1": "78",
+    "plate_letter": "س",
+    "plate_part2": "123",
+    "plate_iran": "44",
+    "plate_display": "78 س 123 - ایران 44",
+    "vehicle_type": 4,
+    "default_driver": 4,
+    "empty_weight": "15420.00",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.vehicle",
+  "pk": 5,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.352Z",
+    "updated_at": "2026-08-29T08:21:01.352Z",
+    "is_active": true,
+    "plate_part1": "91",
+    "plate_letter": "ط",
+    "plate_part2": "456",
+    "plate_iran": "55",
+    "plate_display": "91 ط 456 - ایران 55",
+    "vehicle_type": 5,
+    "default_driver": 5,
+    "empty_weight": "7680.00",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.location",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.355Z",
+    "updated_at": "2026-08-29T08:21:01.355Z",
+    "is_active": true,
+    "name": "مجتمع فولاد پریما (اصفهان)",
+    "location_type": "both",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.location",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.356Z",
+    "updated_at": "2026-08-29T08:21:01.356Z",
+    "is_active": true,
+    "name": "معدن چادرملو (یزد)",
+    "location_type": "both",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.location",
+  "pk": 3,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.358Z",
+    "updated_at": "2026-08-29T08:21:01.358Z",
+    "is_active": true,
+    "name": "بندر شهید رجایی (بندرعباس)",
+    "location_type": "both",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.location",
+  "pk": 4,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.359Z",
+    "updated_at": "2026-08-29T08:21:01.359Z",
+    "is_active": true,
+    "name": "کارخانه فولاد خوزستان (اهواز)",
+    "location_type": "both",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.location",
+  "pk": 5,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.361Z",
+    "updated_at": "2026-08-29T08:21:01.361Z",
+    "is_active": true,
+    "name": "انبار مرکزی تهران (شورآباد)",
+    "location_type": "both",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.unloadlocation",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.363Z",
+    "updated_at": "2026-08-29T08:21:01.363Z",
+    "is_active": true,
+    "name": "داخل سالن تولید شماره ۱",
+    "code": "UL-01",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.unloadlocation",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.364Z",
+    "updated_at": "2026-08-29T08:21:01.364Z",
+    "is_active": true,
+    "name": "انبار مواد اولیه و دپو روباز",
+    "code": "UL-02",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.unloadlocation",
+  "pk": 3,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.365Z",
+    "updated_at": "2026-08-29T08:21:01.365Z",
+    "is_active": true,
+    "name": "سیلوهای ذخیره آهن اسفنجی",
+    "code": "UL-03",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.unloadlocation",
+  "pk": 4,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.367Z",
+    "updated_at": "2026-08-29T08:21:01.367Z",
+    "is_active": true,
+    "name": "محوطه انبار قراضه",
+    "code": "UL-04",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.unloadlocation",
+  "pk": 5,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.370Z",
+    "updated_at": "2026-08-29T08:21:01.370Z",
+    "is_active": true,
+    "name": "انبار محصول نهایی و بارگیری بیلت",
+    "code": "UL-05",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.operationtype",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.372Z",
+    "updated_at": "2026-08-29T08:21:01.372Z",
+    "is_active": true,
+    "name": "وارده (خرید مواد اولیه)",
+    "code": "OP-IN",
+    "direction": "inbound"
+  }
+},
+{
+  "model": "masterdata.operationtype",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.374Z",
+    "updated_at": "2026-08-29T08:21:01.374Z",
+    "is_active": true,
+    "name": "صادره (فروش محصول)",
+    "code": "OP-OUT",
+    "direction": "outbound"
+  }
+},
+{
+  "model": "masterdata.operationtype",
+  "pk": 3,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.375Z",
+    "updated_at": "2026-08-29T08:21:01.375Z",
+    "is_active": true,
+    "name": "انتقال بین انبارها",
+    "code": "OP-TRF",
+    "direction": "transfer"
+  }
+},
+{
+  "model": "masterdata.operationtype",
+  "pk": 4,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.376Z",
+    "updated_at": "2026-08-29T08:21:01.376Z",
+    "is_active": true,
+    "name": "تردد داخلی کارخانه",
+    "code": "OP-INT",
+    "direction": "internal"
+  }
+},
+{
+  "model": "masterdata.losstype",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.378Z",
+    "updated_at": "2026-08-29T08:21:01.378Z",
+    "is_active": true,
+    "name": "بدون افت",
+    "code": "LS-0",
+    "default_percent": "0.00",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.losstype",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.380Z",
+    "updated_at": "2026-08-29T08:21:01.380Z",
+    "is_active": true,
+    "name": "افت رطوبت",
+    "code": "LS-MOIST",
+    "default_percent": "1.50",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.losstype",
+  "pk": 3,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.381Z",
+    "updated_at": "2026-08-29T08:21:01.381Z",
+    "is_active": true,
+    "name": "افت ناخالصی و خاک",
+    "code": "LS-DIRT",
+    "default_percent": "2.00",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.losstype",
+  "pk": 4,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.382Z",
+    "updated_at": "2026-08-29T08:21:01.382Z",
+    "is_active": true,
+    "name": "افت کسری وزن و ریزش",
+    "code": "LS-LEAK",
+    "default_percent": "0.80",
+    "description": ""
+  }
+},
+{
+  "model": "masterdata.losstype",
+  "pk": 5,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.385Z",
+    "updated_at": "2026-08-29T08:21:01.385Z",
+    "is_active": true,
+    "name": "افت توافقی بازرگانی",
+    "code": "LS-AGREE",
+    "default_percent": "1.00",
+    "description": ""
+  }
+},
+{
+  "model": "weighbridge.weighticket",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.420Z",
+    "updated_at": "2026-08-29T08:21:01.420Z",
+    "is_active": true,
+    "serial_number": "WB-1001",
+    "status": "completed",
+    "weight_mode": "full_first",
+    "operation_type": 1,
+    "party": 3,
+    "product": 1,
+    "vehicle": 1,
+    "vehicle_type": null,
+    "vehicle_type_custom": "",
+    "driver": 1,
+    "driver_name_custom": "",
+    "driver_mobile_custom": "",
+    "license_plate_display": "12 ع 345 - ایران 67",
+    "waybill_number": "WB-982410",
+    "origin": 2,
+    "destination": 1,
+    "unload_location": 3,
+    "load_count": 1,
+    "first_weight": "39840.00",
+    "first_weight_date": "2026-08-29",
+    "first_weight_time": "08:30:00",
+    "first_weight_operator": 7,
+    "second_weight": "15720.00",
+    "second_weight_date": "2026-08-29",
+    "second_weight_time": "09:45:00",
+    "second_weight_operator": 7,
+    "gross_weight": "39840.00",
+    "tare_weight": "15720.00",
+    "net_weight": "24120.00",
+    "sent_weight": "24100.00",
+    "weight_difference": "20.00",
+    "weight_difference_percent": "0.08",
+    "is_tolerance_exceeded": false,
+    "loss_type": 2,
+    "loss_percent": "0.50",
+    "loss_weight": "120.60",
+    "is_loss_overridden": false,
+    "loss_override_reason": "",
+    "final_weight": "23999.40",
+    "notes": "بارگیری از معدن چادرملو، کیفیت مطلوب و بدون ناخالصی غیرمجاز",
+    "cancellation_reason": "",
+    "cancelled_by": null,
+    "cancelled_at": null,
+    "last_edited_by": null,
+    "last_edit_reason": ""
+  }
+},
+{
+  "model": "weighbridge.weighticket",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.427Z",
+    "updated_at": "2026-08-29T08:21:01.427Z",
+    "is_active": true,
+    "serial_number": "WB-1002",
+    "status": "completed",
+    "weight_mode": "empty_first",
+    "operation_type": 2,
+    "party": 2,
+    "product": 4,
+    "vehicle": 4,
+    "vehicle_type": null,
+    "vehicle_type_custom": "",
+    "driver": 4,
+    "driver_name_custom": "",
+    "driver_mobile_custom": "",
+    "license_plate_display": "78 س 123 - ایران 44",
+    "waybill_number": "WB-982411",
+    "origin": 1,
+    "destination": 2,
+    "unload_location": 5,
+    "load_count": 1,
+    "first_weight": "15420.00",
+    "first_weight_date": "2026-08-29",
+    "first_weight_time": "10:15:00",
+    "first_weight_operator": 7,
+    "second_weight": "40280.00",
+    "second_weight_date": "2026-08-29",
+    "second_weight_time": "11:20:00",
+    "second_weight_operator": 7,
+    "gross_weight": "40280.00",
+    "tare_weight": "15420.00",
+    "net_weight": "24860.00",
+    "sent_weight": "24860.00",
+    "weight_difference": "0.00",
+    "weight_difference_percent": "0.00",
+    "is_tolerance_exceeded": false,
+    "loss_type": 1,
+    "loss_percent": "0.00",
+    "loss_weight": "0.00",
+    "is_loss_overridden": false,
+    "loss_override_reason": "",
+    "final_weight": "24860.00",
+    "notes": "ارسال شمش فولادی ۵sp به مقصد فولاد مبارکه",
+    "cancellation_reason": "",
+    "cancelled_by": null,
+    "cancelled_at": null,
+    "last_edited_by": null,
+    "last_edit_reason": ""
+  }
+},
+{
+  "model": "weighbridge.weighticket",
+  "pk": 3,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.430Z",
+    "updated_at": "2026-08-29T08:21:01.430Z",
+    "is_active": true,
+    "serial_number": "WB-1003",
+    "status": "waiting_second",
+    "weight_mode": "full_first",
+    "operation_type": 1,
+    "party": 4,
+    "product": 2,
+    "vehicle": 2,
+    "vehicle_type": null,
+    "vehicle_type_custom": "",
+    "driver": 2,
+    "driver_name_custom": "",
+    "driver_mobile_custom": "",
+    "license_plate_display": "34 ج 567 - ایران 88",
+    "waybill_number": "WB-982412",
+    "origin": 3,
+    "destination": 1,
+    "unload_location": 2,
+    "load_count": 1,
+    "first_weight": "36450.00",
+    "first_weight_date": "2026-08-29",
+    "first_weight_time": "12:05:00",
+    "first_weight_operator": 7,
+    "second_weight": null,
+    "second_weight_date": null,
+    "second_weight_time": null,
+    "second_weight_operator": null,
+    "gross_weight": "36450.00",
+    "tare_weight": "0.00",
+    "net_weight": "0.00",
+    "sent_weight": "25100.00",
+    "weight_difference": "0.00",
+    "weight_difference_percent": "0.00",
+    "is_tolerance_exceeded": false,
+    "loss_type": 3,
+    "loss_percent": "1.00",
+    "loss_weight": "0.00",
+    "is_loss_overridden": false,
+    "loss_override_reason": "",
+    "final_weight": "0.00",
+    "notes": "کامیون در محوطه تخلیه گندله منتظر نوبت است",
+    "cancellation_reason": "",
+    "cancelled_by": null,
+    "cancelled_at": null,
+    "last_edited_by": null,
+    "last_edit_reason": ""
+  }
+},
+{
+  "model": "weighbridge.weighticket",
+  "pk": 4,
+  "fields": {
+    "created_at": "2026-08-29T08:21:01.435Z",
+    "updated_at": "2026-08-29T08:21:01.435Z",
+    "is_active": true,
+    "serial_number": "WB-1004",
+    "status": "completed",
+    "weight_mode": "full_first",
+    "operation_type": 1,
+    "party": 1,
+    "product": 6,
+    "vehicle": 3,
+    "vehicle_type": null,
+    "vehicle_type_custom": "",
+    "driver": 3,
+    "driver_name_custom": "",
+    "driver_mobile_custom": "",
+    "license_plate_display": "56 د 789 - ایران 21",
+    "waybill_number": "WB-982413",
+    "origin": 4,
+    "destination": 1,
+    "unload_location": 4,
+    "load_count": 1,
+    "first_weight": "41800.00",
+    "first_weight_date": "2026-08-29",
+    "first_weight_time": "13:00:00",
+    "first_weight_operator": 7,
+    "second_weight": "16950.00",
+    "second_weight_date": "2026-08-29",
+    "second_weight_time": "14:10:00",
+    "second_weight_operator": 7,
+    "gross_weight": "41800.00",
+    "tare_weight": "16950.00",
+    "net_weight": "24850.00",
+    "sent_weight": "25500.00",
+    "weight_difference": "-650.00",
+    "weight_difference_percent": "-2.55",
+    "is_tolerance_exceeded": true,
+    "loss_type": 4,
+    "loss_percent": "2.00",
+    "loss_weight": "497.00",
+    "is_loss_overridden": false,
+    "loss_override_reason": "",
+    "final_weight": "24353.00",
+    "notes": "مغایرت ۶۵۰ کیلوگرمی با بارنامه مبدا اهواز - گزارش به حراست و بازرگانی",
+    "cancellation_reason": "",
+    "cancelled_by": null,
+    "cancelled_at": null,
+    "last_edited_by": null,
+    "last_edit_reason": ""
+  }
+},
+{
+  "model": "audit.auditlog",
+  "pk": 1,
+  "fields": {
+    "user": 1,
+    "ip_address": "127.0.0.1",
+    "timestamp": "2026-08-29T08:21:01.437Z",
+    "action": "create",
+    "model_name": "System",
+    "record_id": "1",
+    "record_repr": "System Initialization",
+    "old_values": {},
+    "new_values": {},
+    "reason": "Seed data executed."
+  }
+}
+]

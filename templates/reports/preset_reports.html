@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-slate-900" style="color: #0f172a;">
+            <i class="bi bi-grid-3x3-gap-fill text-primary me-2"></i>مجموعه ۳۰ گزارش آماده و تخصصی باسکول
+        </h4>
+        <p class="text-muted small mb-0">گزارش‌های عملیاتی از پیش‌طراحی شده برای انبارداری، بازرگانی، حسابداری، کنترل کیفیت و مدیریت</p>
+    </div>
+    <div>
+        <a href="{% url 'reports:report_builder' %}" class="btn btn-outline-primary fw-bold">
+            <i class="bi bi-sliders me-1"></i> گزارش‌ساز پیشرفته پویا
+        </a>
+    </div>
+</div>
+
+<!-- Search in Reports -->
+<div class="industrial-card p-3 mb-4">
+    <div class="input-group">
+        <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+        <input type="text" id="presetSearchInput" class="form-control form-control-lg" placeholder="جستجو در میان ۳۰ گزارش آماده (مثلاً: روزانه، مغایرت، افت، مشتری، راننده...)...">
+    </div>
+</div>
+
+<!-- Categorized Report Cards -->
+{% for category, reports in categories.items %}
+<div class="mb-4 category-section">
+    <h5 class="fw-bold text-secondary border-bottom pb-2 mb-3 d-flex align-items-center gap-2">
+        <i class="bi bi-folder-fill text-warning"></i>
+        <span>گروه گزارشات: {{ category }}</span>
+        <span class="badge bg-light text-muted border small">{{ reports|length }} گزارش</span>
+    </h5>
+    
+    <div class="row g-3">
+        {% for r in reports %}
+        <div class="col-md-6 col-lg-4 report-card-item">
+            <div class="industrial-card h-100 p-3 d-flex flex-column hover-shadow transition">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <div class="kpi-icon-box bg-primary-subtle text-primary rounded p-2 d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                        <i class="bi {{ r.icon }} fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold text-dark fs-6">{{ r.title }}</div>
+                        <span class="badge bg-light text-muted border small font-monospace">شناسه: {{ r.id }}</span>
+                    </div>
+                </div>
+                <p class="text-muted small flex-grow-1 mb-3">{{ r.description }}</p>
+                <div class="text-end border-top pt-2">
+                    <a href="{% url 'reports:preset_report_view' r.code %}" class="btn btn-sm btn-primary fw-bold px-3">
+                        <i class="bi bi-play-fill me-1"></i> مشاهده و اجرای گزارش
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $('#presetSearchInput').on('input', function() {
+        const val = $(this).val().toLowerCase().trim();
+        $('.report-card-item').each(function() {
+            const text = $(this).text().toLowerCase();
+            $(this).toggle(text.includes(val));
+        });
+        $('.category-section').each(function() {
+            const visibleItems = $(this).find('.report-card-item:visible').length;
+            $(this).toggle(visibleItems > 0);
+        });
+    });
+</script>
+{% endblock %}

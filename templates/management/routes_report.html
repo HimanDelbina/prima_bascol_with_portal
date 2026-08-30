@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1 text-slate-900"><i class="bi bi-geo-alt-fill text-danger me-2"></i>{{ title }}</h4>
+        <p class="text-muted small mb-0">تحلیل جغرافیایی مبادی، مقاصد و مسیرهای پرترافیک حمل بار</p>
+    </div>
+</div>
+
+{% include 'management/filter_bar.html' %}
+
+<div class="row g-3 mb-4">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm bg-white rounded-3">
+            <div class="card-header bg-transparent py-3 border-bottom">
+                <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-signpost-2 text-primary me-2"></i>مبادی بارگیری (Origins)</h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>مبدأ</th>
+                            <th>تعداد بار</th>
+                            <th class="text-end">تناژ خالص (Ton)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for o in origins %}
+                        <tr>
+                            <td class="fw-bold">{{ o.origin__name }}</td>
+                            <td>{{ o.trips }} بار</td>
+                            <td class="text-end font-monospace fw-bold text-primary">{{ o.net_kg|weight_ton }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center py-3 text-muted">داده‌ای یافت نشد.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm bg-white rounded-3">
+            <div class="card-header bg-transparent py-3 border-bottom">
+                <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-pin-map text-success me-2"></i>مقاصد تخلیه (Destinations)</h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>مقصد</th>
+                            <th>تعداد بار</th>
+                            <th class="text-end">تناژ خالص (Ton)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in destinations %}
+                        <tr>
+                            <td class="fw-bold">{{ d.destination__name }}</td>
+                            <td>{{ d.trips }} بار</td>
+                            <td class="text-end font-monospace fw-bold text-success">{{ d.net_kg|weight_ton }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center py-3 text-muted">داده‌ای یافت نشد.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Routes Table -->
+<div class="card border-0 shadow-sm bg-white rounded-3">
+    <div class="card-header bg-transparent py-3 border-bottom">
+        <h6 class="fw-bold mb-0 text-slate-800"><i class="bi bi-arrow-left-right text-warning me-2"></i>مسیرهای پرتکرار حمل (مبدأ → مقصد)</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>مسیر حمل</th>
+                    <th>تعداد بار</th>
+                    <th>تنوع خودروها</th>
+                    <th class="text-end">تناژ کل (Ton)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in routes %}
+                <tr>
+                    <td class="fw-bold"><span class="text-primary">{{ r.origin__name }}</span> <i class="bi bi-arrow-left text-muted mx-2"></i> <span class="text-success">{{ r.destination__name }}</span></td>
+                    <td>{{ r.trips }} بار</td>
+                    <td>{{ r.trucks_count }} خودرو</td>
+                    <td class="text-end font-monospace fw-bold text-dark">{{ r.net_kg|weight_ton }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-center py-3 text-muted">مسیری ثبت نشده است.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

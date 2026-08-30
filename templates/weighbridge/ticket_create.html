@@ -1,0 +1,361 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<form method="post" id="weighbridge-form">
+    {% csrf_token %}
+    
+    <!-- Top Action & Ticket Info Header -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 pb-2 border-bottom gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <h4 class="fw-bold mb-0 text-slate-900" style="color: #0f172a;">
+                <i class="bi bi-speedometer2 text-primary me-2"></i>ثبت باسکول جدید
+            </h4>
+            <span class="badge bg-dark fs-6 px-3 py-1 font-monospace">قبض: {{ next_serial }}</span>
+            <span class="badge bg-warning-subtle text-warning border border-warning">در انتظار وزن اول</span>
+        </div>
+        
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-dark" onclick="toggleOperatorFullscreen()" title="حالت تمام‌صفحه اپراتور (F10)">
+                <i class="bi bi-arrows-fullscreen me-1"></i> تمام‌صفحه [F10]
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#shortcutsModal">
+                <i class="bi bi-keyboard me-1"></i> کلیدهای میانبر
+            </button>
+            <a href="{% url 'weighbridge:ticket_list' %}" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-x-circle me-1"></i> انصراف
+            </a>
+        </div>
+    </div>
+
+    <!-- Live Plate Warnings & Open Ticket Alerts -->
+    <div id="plate-open-ticket-alert" class="mb-3 d-none"></div>
+    <div id="plate-history-banner" class="mb-3 d-none"></div>
+
+    <div class="row g-3">
+        <!-- Main Form Column (8 or 9 cols on Desktop) -->
+        <div class="col-lg-8 col-xl-9">
+            
+            <!-- Card 1: Operation & Cargo Info -->
+            <div class="industrial-card">
+                <div class="industrial-card-header">
+                    <h6 class="industrial-card-title"><i class="bi bi-box-seam-fill text-primary"></i>اطلاعات محموله و عملیات</h6>
+                </div>
+                <div class="industrial-card-body p-3">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-secondary">نوع عملیات <span class="text-danger">*</span></label>
+                            {{ form.operation_type }}
+                            {% if form.operation_type.errors %}<div class="text-danger small">{{ form.operation_type.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-secondary">طرف حساب <span class="text-danger">*</span></label>
+                            {{ form.party }}
+                            {% if form.party.errors %}<div class="text-danger small">{{ form.party.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-secondary">نام محصول (کالا) <span class="text-danger">*</span></label>
+                            {{ form.product }}
+                            {% if form.product.errors %}<div class="text-danger small">{{ form.product.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-secondary">شماره بارنامه / حواله</label>
+                            {{ form.waybill_number }}
+                            {% if form.waybill_number.errors %}<div class="text-danger small">{{ form.waybill_number.errors }}</div>{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: Vehicle & Driver (With Iran Plate Component) -->
+            <div class="industrial-card">
+                <div class="industrial-card-header">
+                    <h6 class="industrial-card-title"><i class="bi bi-truck-front-fill text-primary"></i>مشخصات خودرو و راننده</h6>
+                </div>
+                <div class="industrial-card-body p-3">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold small text-secondary d-block">پلاک ملی خودرو <span class="key-hint-badge">F2</span> <span class="text-danger">*</span></label>
+                            {% include 'components/iran_plate_input.html' %}
+                            {% if form.license_plate_display.errors %}<div class="text-danger small">{{ form.license_plate_display.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-secondary">نوع خودرو</label>
+                            {{ form.vehicle_type }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold small text-secondary">نام راننده</label>
+                            {{ form.driver_name_custom }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold small text-secondary">موبایل راننده</label>
+                            {{ form.driver_mobile_custom }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3: Route & Logistic Locations -->
+            <div class="industrial-card">
+                <div class="industrial-card-header">
+                    <h6 class="industrial-card-title"><i class="bi bi-geo-alt-fill text-primary"></i>اطلاعات مسیر و حمل</h6>
+                </div>
+                <div class="industrial-card-body p-3">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-secondary">مبدأ بار</label>
+                            {{ form.origin }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-secondary">مقصد بار</label>
+                            {{ form.destination }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-secondary">جایگاه تخلیه / بارگیری</label>
+                            {{ form.unload_location }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold small text-secondary">تعداد بار / سرویس</label>
+                            {{ form.load_count }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 4: Weight Section (Giant Hero Weight Boxes) -->
+            <div class="industrial-card border-primary">
+                <div class="industrial-card-header bg-slate-900 text-white" style="background: #0f172a;">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-speedometer2 text-warning fs-5"></i>
+                        <h6 class="fw-bold mb-0 text-white">ثبت اوزان باسکول</h6>
+                        <span class="key-hint-badge bg-warning text-dark">F4</span>
+                    </div>
+                    <div>
+                        <span class="badge bg-success-subtle text-success border border-success">باسکول آنلاین: آماده دریافت</span>
+                    </div>
+                </div>
+                <div class="industrial-card-body p-3">
+                    <div class="row g-3">
+                        <!-- First Weight Box -->
+                        <div class="col-md-6">
+                            <div class="weight-hero-box highlight-gross">
+                                <div class="weight-label">
+                                    <span>وزن اول (توزین ورودی)</span>
+                                    <span class="badge bg-primary-subtle text-primary">توزین اول</span>
+                                </div>
+                                <div class="weight-input-wrapper">
+                                    {{ form.first_weight }}
+                                    <span class="unit-tag">Kg</span>
+                                </div>
+                                <div class="weight-meta">
+                                    <span>تاریخ: <strong>{{ today_jalali }}</strong></span>
+                                    <span>ساعت: <strong>{{ today_time }}</strong></span>
+                                    <span>اپراتور: <strong>{{ user.get_full_name|default:user.username }}</strong></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Second Weight Box -->
+                        <div class="col-md-6">
+                            <div class="weight-hero-box highlight-tare">
+                                <div class="weight-label">
+                                    <span>وزن دوم (اختیاری در ثبت اولیه)</span>
+                                    <span class="badge bg-secondary-subtle text-secondary">توزین خروج</span>
+                                </div>
+                                <div class="weight-input-wrapper">
+                                    {{ form.second_weight }}
+                                    <span class="unit-tag">Kg</span>
+                                </div>
+                                <div class="weight-meta">
+                                    <span>در صورت ثبت مستقیم هر دو وزن پر شود</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden dates for submission -->
+                    <input type="hidden" name="first_weight_date_jalali" value="{{ today_jalali }}">
+                    <input type="hidden" name="first_weight_time_str" value="{{ today_time }}">
+                </div>
+            </div>
+
+            <!-- Card 5 & 6: Variance and Loss Controls -->
+            <div class="row g-3">
+                <!-- Weight Tolerance Check -->
+                <div class="col-md-6">
+                    <div class="industrial-card h-100">
+                        <div class="industrial-card-header">
+                            <h6 class="industrial-card-title"><i class="bi bi-shield-check text-primary"></i>کنترل وزن بارنامه مبدأ</h6>
+                        </div>
+                        <div class="industrial-card-body p-3">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small text-secondary">وزن ارسالی مبدأ (Kg)</label>
+                                {{ form.sent_weight }}
+                            </div>
+                            <div class="p-2 bg-light rounded border d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="small text-muted">اختلاف با بارنامه:</div>
+                                    <div class="fw-bold font-monospace fs-6" id="calc-diff-val">۰ Kg (۰%)</div>
+                                </div>
+                                <div id="calc-diff-badge" class="badge bg-secondary">در انتظار محاسبه</div>
+                            </div>
+                            <div id="tolerance-warning-alert" class="alert alert-danger small p-2 mt-2 d-none mb-0"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loss Calculations -->
+                <div class="col-md-6">
+                    <div class="industrial-card h-100">
+                        <div class="industrial-card-header">
+                            <h6 class="industrial-card-title"><i class="bi bi-percent text-danger"></i>محاسبات افت کالا</h6>
+                        </div>
+                        <div class="industrial-card-body p-3">
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-secondary">نوع افت</label>
+                                    {{ form.loss_type }}
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-secondary">درصد افت (%)</label>
+                                    {{ form.loss_percent }}
+                                </div>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-secondary">وزن افت (Kg)</label>
+                                    {{ form.loss_weight }}
+                                </div>
+                                <div class="col-6 d-flex align-items-center mt-3">
+                                    <div class="form-check form-switch">
+                                        {{ form.is_loss_overridden }}
+                                        <label class="form-check-label fw-bold small text-danger" for="id_is_loss_overridden">اورراید دستی</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                {{ form.loss_override_reason }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notes -->
+            <div class="industrial-card">
+                <div class="industrial-card-body p-3">
+                    <label class="form-label fw-bold small text-secondary">توضیحات و یادداشت اختیاری سند</label>
+                    {{ form.notes }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sticky Summary Column (Desktop 3 or 4 cols) -->
+        <div class="col-lg-4 col-xl-3">
+            <div class="sticky-summary-card">
+                <h6 class="fw-bold border-bottom pb-2 mb-3 text-slate-900 d-flex align-items-center justify-content-between">
+                    <span><i class="bi bi-card-checklist me-1 text-primary"></i>خلاصه زنده قبض</span>
+                    <span class="badge bg-light text-dark font-monospace">LIVE</span>
+                </h6>
+
+                <!-- Hero Net Metric -->
+                <div class="net-hero-metric mb-3">
+                    <div class="title">وزن خالص باسکول (Net)</div>
+                    <div class="value" id="calc-net-val">۰</div>
+                    <div class="sub-value" id="calc-net-ton">≈ ۰ تن</div>
+                </div>
+
+                <div class="sticky-summary-row">
+                    <span class="label">وزن پر (Gross):</span>
+                    <span class="val font-monospace" id="calc-gross-val">۰ Kg</span>
+                </div>
+                <div class="sticky-summary-row">
+                    <span class="label">وزن خالی (Tare):</span>
+                    <span class="val font-monospace text-muted" id="calc-tare-val">۰ Kg</span>
+                </div>
+                <div class="sticky-summary-row">
+                    <span class="label">کسر افت بار:</span>
+                    <span class="val font-monospace text-danger" id="calc-loss-val">۰ Kg</span>
+                </div>
+                <div class="sticky-summary-row border-top pt-2">
+                    <span class="label fw-bold text-dark">وزن نهایی تحویل:</span>
+                    <span class="val font-monospace text-primary fs-6 fw-bold" id="calc-final-val">۰ Kg</span>
+                </div>
+
+                <div class="p-2 bg-light rounded mt-3 text-center small text-muted">
+                    <i class="bi bi-keyboard me-1"></i> با فشردن <kbd>Enter</kbd> بین فیلدها جابجا شوید
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sticky Bottom Action Bar -->
+    <div class="sticky-bottom-action-bar">
+        <div class="d-flex align-items-center gap-2">
+            <button type="submit" name="submit_action" value="save_and_print" id="btn-save-and-print" class="btn btn-outline-dark fw-bold">
+                <i class="bi bi-printer me-1"></i> ثبت و چاپ قبض <span class="key-hint-badge">F8</span>
+            </button>
+            <button type="submit" name="submit_action" value="save" id="btn-save-draft" class="btn btn-outline-primary fw-bold">
+                <i class="bi bi-save me-1"></i> ذخیره پیش‌نویس <span class="key-hint-badge">Ctrl + S</span>
+            </button>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-success btn-lg px-4 fw-bold shadow" data-bs-toggle="modal" data-bs-target="#confirmCompleteModal">
+                <i class="bi bi-check2-circle me-1"></i> ثبت و تکمیل نهایی باسکول <span class="key-hint-badge bg-white text-dark">Ctrl + Enter</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal Before Final Submit -->
+    <div class="modal fade" id="confirmCompleteModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-success text-white py-3">
+                    <h6 class="modal-title fw-bold"><i class="bi bi-patch-check-fill me-2"></i>تأیید نهایی ثبت قبض باسکول</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="mb-3 text-dark fw-bold">آیا از ثبت قطعی و ذخیره نهایی این سند اطمینان دارید؟</p>
+                    <div class="p-3 bg-light rounded border mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">شماره قبض:</span>
+                            <span class="fw-bold">{{ next_serial }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">وزن ورودی (Kg):</span>
+                            <span class="fw-bold font-monospace" id="modal-gross-preview">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between border-top pt-2">
+                            <span class="text-success fw-bold">وزن خالص نهایی:</span>
+                            <span class="text-success fw-bold font-monospace fs-5" id="modal-net-preview">-</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 px-3 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">بازگشت و اصلاح</button>
+                    <button type="submit" name="submit_action" value="save" id="btn-complete-ticket" class="btn btn-success px-4 fw-bold">
+                        تأیید و ثبت قطعی
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Populate modal previews on open
+    const modal = document.getElementById('confirmCompleteModal');
+    if (modal) {
+        modal.addEventListener('show.bs.modal', function () {
+            document.getElementById('modal-gross-preview').textContent = document.getElementById('calc-gross-val').textContent;
+            document.getElementById('modal-net-preview').textContent = document.getElementById('calc-net-val').textContent;
+        });
+    }
+});
+</script>
+{% endblock %}

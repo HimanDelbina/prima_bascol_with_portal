@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}انواع خودرو{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="fw-bold mb-1 text-primary"><i class="bi bi-truck me-2"></i>انواع خودرو</h4>
+        <p class="text-muted small mb-0">دسته‌بندی ناوگان حمل و نقل (تریلی، کمپرسی، ده چرخ، خاور و...)</p>
+    </div>
+    <a href="{% url 'masterdata:vehicle_type_create' %}" class="btn btn-primary shadow-sm fw-bold">
+        <i class="bi bi-plus-circle me-1"></i> افزودن نوع خودرو
+    </a>
+</div>
+
+<div class="card shadow-sm border-0 rounded-3">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table custom-table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>شرح / نوع خودرو</th>
+                        <th>کد</th>
+                        <th>میانگین وزن خالی استاندارد (Kg)</th>
+                        <th>وضعیت</th>
+                        <th class="text-center">عملیات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vt in page_obj %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td class="fw-bold text-primary">{{ vt.name }}</td>
+                        <td>{{ vt.code|default:"-" }}</td>
+                        <td>{{ vt.standard_tare_weight|weight_fmt:0 }} Kg</td>
+                        <td>
+                            {% if vt.is_active %}
+                            <span class="badge bg-success-subtle text-success">فعال</span>
+                            {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary">غیرفعال</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <a href="{% url 'masterdata:vehicle_type_edit' vt.id %}" class="btn btn-sm btn-outline-primary me-1" title="ویرایش">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'masterdata:vehicle_type_toggle' vt.id %}" class="btn btn-sm {% if vt.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}" title="تغییر وضعیت">
+                                {% if vt.is_active %}<i class="bi bi-toggle-on"></i>{% else %}<i class="bi bi-toggle-off"></i>{% endif %}
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">هیچ نوع خودرویی ثبت نشده است.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
