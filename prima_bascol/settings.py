@@ -212,5 +212,6 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
     "http://192.168.1.105:8000",
+    "http://2.184.55.37:5500",
 ]
 
