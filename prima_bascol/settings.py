@@ -27,6 +27,14 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.humanize',
     
+    # Third-party Apps
+    'corsheaders',
+    'rest_framework',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
+    'drf_spectacular',
+    'django_filters',
+
     # Project Apps
     'core.apps.CoreConfig',
     'accounts.apps.AccountsConfig',
@@ -37,9 +45,11 @@ INSTALLED_APPS = [
     'dashboard.apps.DashboardConfig',
     'management.apps.ManagementConfig',
     'monitoring.apps.MonitoringConfig',
+    'api.apps.ApiConfig',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -116,3 +126,91 @@ LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ==========================================
+# REST Framework Configuration
+# ==========================================
+from datetime import timedelta
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'api.v1.pagination.StandardResultsSetPagination',
+    'PAGE_SIZE': 25,
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ),
+    'EXCEPTION_HANDLER': 'api.v1.exceptions.custom_exception_handler',
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'api.v1.throttling.CustomAnonRateThrottle',
+        'api.v1.throttling.CustomUserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/min',
+        'user': '300/min',
+        'auth': '10/min',
+        'export': '20/min',
+    },
+}
+
+# ==========================================
+# Simple JWT Configuration
+# ==========================================
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'TOKEN_OBTAIN_SERIALIZER': 'api.v1.serializers.auth_serializers.CustomTokenObtainPairSerializer',
+}
+
+# ==========================================
+# OpenAPI / Spectacular Configuration
+# ==========================================
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'سامانه جامع و پیشرفته باسکول صنعتی (Prima Bascol API)',
+    'DESCRIPTION': 'REST API کامل، امن و Production-Ready جهت مدیریت عملیات باسکول، پایش هوشمند، گزارشات و هوش تجاری.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'TAGS': [
+        {'name': 'Authentication', 'description': 'احراز هویت JWT و اطلاعات کاربر جاری'},
+        {'name': 'Tickets', 'description': 'عملیات توزین و مدیریت قبوض باسکول'},
+        {'name': 'Master Data', 'description': 'اطلاعات پایه: محصولات، طرف‌ها، رانندگان، خودروها و جایگاه‌ها'},
+        {'name': 'Dashboard', 'description': 'داشبورد عملیاتی و شاخص‌های لحظه‌ای'},
+        {'name': 'Management', 'description': 'هوش تجاری و گزارشات تخصصی مدیران ارشد'},
+        {'name': 'Monitoring', 'description': 'ماژول پایش هوشمند و کشف مغایرت‌های توزین'},
+        {'name': 'Reports', 'description': 'گزارش‌ساز پویا و خروجی‌های Excel، CSV و PDF'},
+        {'name': 'Audit', 'description': 'گزارشات ممیزی و ردگیری تغییرات سیستم'},
+        {'name': 'Users', 'description': 'مدیریت کاربران و نقش‌های کاربری'},
+        {'name': 'System Settings', 'description': 'تنظیمات سامانه و بررسی سلامت سرویس'},
+    ],
+}
+
+# ==========================================
+# CORS Configuration
+# ==========================================
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://192.168.1.105:8000",
+]
+

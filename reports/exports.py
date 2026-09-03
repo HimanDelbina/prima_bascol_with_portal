@@ -214,3 +214,72 @@ def export_csv(queryset, title="گزارش باسکول"):
         ])
 
     return response
+
+
+def export_pdf(queryset, summaries=None, title="گزارش باسکول"):
+    """
+    Generate a clean PDF report for tickets.
+    """
+    from reportlab.lib.pagesizes import letter, landscape, A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=20,
+        leftMargin=20,
+        topMargin=20,
+        bottomMargin=20
+    )
+    elements = []
+    styles = getSampleStyleSheet()
+
+    settings_obj = SystemSetting.get_settings()
+    title_text = f"{settings_obj.company_name} - {title}"
+    elements.append(Paragraph(title_text, styles['Title']))
+    elements.append(Paragraph(f"Date: {get_today_jalali()} | Records: {queryset.count()}", styles['Normal']))
+    elements.append(Spacer(1, 15))
+
+    table_data = [
+        ["#", "Serial", "Date", "Operation", "Party", "Product", "Plate", "Gross", "Tare", "Net", "Final", "Status"]
+    ]
+
+    for idx, t in enumerate(queryset[:500], 1):
+        d_str = format_jalali_date(t.first_weight_date or t.created_at.date())
+        table_data.append([
+            str(idx),
+            str(t.serial_number),
+            str(d_str),
+            str(t.operation_type.name if t.operation_type else "-"),
+            str(t.party.name if t.party else "-"),
+            str(t.product.name if t.product else "-"),
+            str(t.license_plate_display),
+            f"{int(t.gross_weight or 0):,}",
+            f"{int(t.tare_weight or 0):,}",
+            f"{int(t.net_weight or 0):,}",
+            f"{int(t.final_weight or 0):,}",
+            str(t.status)
+        ])
+
+    table = Table(table_data)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+    ]))
+    elements.append(table)
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="weighbridge_report.pdf"'
+    return response
+

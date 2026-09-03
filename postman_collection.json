@@ -1,0 +1,745 @@
+{
+  "info": {
+    "_postman_id": "8f68d374-4b5b-4871-8bc1-1234567890ab",
+    "name": "Prima Bascol REST API",
+    "description": "مجموعه کامل و آماده تست درخواست‌های REST API سامانه جامع باسکول و توزین صنعتی (Prima Bascol)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Authentication",
+      "item": [
+        {
+          "name": "01. Obtain Token (Login)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.access) {",
+                  "    pm.collectionVariables.set('access_token', jsonData.access);",
+                  "    pm.collectionVariables.set('refresh_token', jsonData.refresh);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"admin\",\n    \"password\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/token/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "token", ""]
+            }
+          }
+        },
+        {
+          "name": "02. Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/token/refresh/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "token", "refresh", ""]
+            }
+          }
+        },
+        {
+          "name": "03. Current User (/me)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "me", ""]
+            }
+          }
+        },
+        {
+          "name": "04. Logout (Blacklist)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "logout", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Tickets (Weighbridge)",
+      "item": [
+        {
+          "name": "01. List Tickets",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/tickets/?page=1&page_size=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tickets", ""],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "20"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "02. Create Ticket",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"license_plate_display\": \"12 ع 345 - ایران 68\",\n    \"driver_name_custom\": \"رضا محمدی\",\n    \"first_weight\": 14250,\n    \"sent_weight\": 21000,\n    \"notes\": \"ثبت تستی از طریق Postman\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/tickets/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tickets", ""]
+            }
+          }
+        },
+        {
+          "name": "03. Get Ticket Detail",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/tickets/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tickets", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "04. Record Second Weight",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"weight\": 35120,\n    \"loss_percent\": 0.5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/tickets/1/second-weight/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tickets", "1", "second-weight", ""]
+            }
+          }
+        },
+        {
+          "name": "05. Correct Ticket (Manager)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"field\": \"tare_weight\",\n    \"new_value\": 14200,\n    \"reason\": \"اصلاح خطای تایپ اپراتور\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/tickets/1/correct/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tickets", "1", "correct", ""]
+            }
+          }
+        },
+        {
+          "name": "06. Cancel Ticket",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"reason\": \"ثبت اشتباه پلاک و نیاز به صدور مجدد\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/tickets/1/cancel/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tickets", "1", "cancel", ""]
+            }
+          }
+        },
+        {
+          "name": "07. Open Tickets",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/tickets/open/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tickets", "open", ""]
+            }
+          }
+        },
+        {
+          "name": "08. Waiting Second Weight",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/tickets/waiting-second-weight/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tickets", "waiting-second-weight", ""]
+            }
+          }
+        },
+        {
+          "name": "09. Ticket Analysis",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/tickets/1/analysis/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tickets", "1", "analysis", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Dashboard",
+      "item": [
+        {
+          "name": "01. Dashboard Summary",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/summary/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "dashboard", "summary", ""]
+            }
+          }
+        },
+        {
+          "name": "02. Dashboard Trends",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/trends/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "dashboard", "trends", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Management Suite",
+      "item": [
+        {
+          "name": "01. Management Summary & Comparison",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/management/summary/?quick_period=this_month",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "management", "summary", ""],
+              "query": [
+                {"key": "quick_period", "value": "this_month"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "02. Product Analysis",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/management/products/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "management", "products", ""]
+            }
+          }
+        },
+        {
+          "name": "03. Discrepancies Analysis",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/management/discrepancies/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "management", "discrepancies", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Smart Monitoring",
+      "item": [
+        {
+          "name": "01. Alerts List",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/monitoring/alerts/?status=OPEN",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "monitoring", "alerts", ""],
+              "query": [
+                {"key": "status", "value": "OPEN"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "02. Monitoring Summary",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/monitoring/summary/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "monitoring", "summary", ""]
+            }
+          }
+        },
+        {
+          "name": "03. Resolve Alert",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"resolution_note\": \"وزن مجدداً بررسی و تایید شد.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/monitoring/alerts/1/resolve/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "monitoring", "alerts", "1", "resolve", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Reports & Exports",
+      "item": [
+        {
+          "name": "01. Report Tickets",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/tickets/?page=1&page_size=25",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "tickets", ""],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "25"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "02. Report Summary Metrics",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/tickets/summary/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "tickets", "summary", ""]
+            }
+          }
+        },
+        {
+          "name": "03. Grouped Report",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/tickets/grouped/?group_by=product",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "tickets", "grouped", ""],
+              "query": [
+                {"key": "group_by", "value": "product"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "04. Export Excel (.xlsx)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/tickets/export/xlsx/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "tickets", "export", "xlsx", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07. Audit & Settings",
+      "item": [
+        {
+          "name": "01. Audit Logs",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/audit/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "audit", ""]
+            }
+          }
+        },
+        {
+          "name": "02. Public Settings",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/settings/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "settings", ""]
+            }
+          }
+        },
+        {
+          "name": "03. Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/health/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "health", ""]
+            }
+          }
+        },
+        {
+          "name": "04. Meta",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/meta/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "meta", ""]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

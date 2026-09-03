@@ -1,0 +1,7017 @@
+openapi: 3.0.3
+info:
+  title: سامانه جامع و پیشرفته باسکول صنعتی (Prima Bascol API)
+  version: 1.0.0
+  description: REST API کامل، امن و Production-Ready جهت مدیریت عملیات باسکول، پایش
+    هوشمند، گزارشات و هوش تجاری.
+paths:
+  /api/v1/admin/settings/:
+    get:
+      operationId: v1_admin_settings_retrieve
+      description: دریافت کلیه پارامترها و آستانه‌های سامانه.
+      summary: تنظیمات مدیریتی سامانه (ادمین)
+      tags:
+      - System Settings
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSystemSetting'
+          description: ''
+    patch:
+      operationId: v1_admin_settings_partial_update
+      description: ویرایش آستانه‌های انحراف، پیشوند سریال و الزامات فرم‌ها.
+      summary: ویرایش تنظیمات مدیریتی (ادمین)
+      tags:
+      - System Settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminSystemSettingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminSystemSettingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminSystemSettingRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSystemSetting'
+          description: ''
+  /api/v1/audit/:
+    get:
+      operationId: v1_audit_list
+      description: مشاهده گزارشات ممیزی و ردیابی تغییرات حساس سیستم (فقط‌خواندنی -
+        بدون امکان ویرایش یا حذف).
+      summary: لیست گزارشات ممیزی (Audit Log)
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+          title: نوع عملیات
+          enum:
+          - cancel
+          - create
+          - delete
+          - override_loss
+          - override_weight
+          - print
+          - restore
+          - status_change
+          - update
+        description: |-
+          * `create` - ثبت جدید
+          * `update` - ویرایش اطلاعات
+          * `delete` - حذف رکورد
+          * `override_weight` - تغییر دستی اوزان
+          * `override_loss` - تغییر دستی افت
+          * `cancel` - ابطال سند
+          * `status_change` - تغییر وضعیت
+          * `restore` - بازیابی اطلاعات
+          * `print` - چاپ قبض
+      - in: query
+        name: date_from
+        schema:
+          type: string
+      - in: query
+        name: date_to
+        schema:
+          type: string
+      - in: query
+        name: model_name
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - in: query
+        name: record_id
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      - in: query
+        name: user
+        schema:
+          type: number
+      tags:
+      - Audit
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAuditLogList'
+          description: ''
+  /api/v1/audit/{id}/:
+    get:
+      operationId: v1_audit_retrieve
+      description: مشاهده گزارشات ممیزی و ردیابی تغییرات حساس سیستم (فقط‌خواندنی -
+        بدون امکان ویرایش یا حذف).
+      summary: مشاهده لاگ ممیزی و تغییرات
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این ثبت تغییرات (Audit Log) را شناسایی میکند.
+        required: true
+      tags:
+      - Audit
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLog'
+          description: ''
+  /api/v1/auth/logout/:
+    post:
+      operationId: v1_auth_logout_create
+      description: ابطال Refresh Token و قرار دادن آن در لیست سیاه جهت جلوگیری از
+        استفاده مجدد.
+      summary: خروج از سامانه (Logout)
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh:
+                  type: string
+                  description: توکن رفرش جاری
+              required:
+              - refresh
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: خروج با موفقیت انجام شد.
+        '400':
+          description: توکن نامعتبر است.
+  /api/v1/auth/me/:
+    get:
+      operationId: v1_auth_me_retrieve
+      description: دریافت اطلاعات پروفایل، نقش، شماره پرسنلی و لیست مجوزهای مجاز کاربر
+        فعلی.
+      summary: مشخصات کاربر جاری (/me)
+      tags:
+      - Authentication
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMe'
+          description: ''
+  /api/v1/auth/token/:
+    post:
+      operationId: v1_auth_token_create
+      description: ورود به سامانه با نام کاربری و رمز عبور و دریافت Access Token و
+        Refresh Token به همراه مشخصات و دسترسی‌های کاربر.
+      summary: دریافت توکن JWT (لاگین)
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomTokenObtainPairRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomTokenObtainPairRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomTokenObtainPairRequest'
+        required: true
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/token/refresh/:
+    post:
+      operationId: v1_auth_token_refresh_create
+      description: ارسال refresh token جهت دریافت access token جدید بدون نیاز به ورود
+        مجدد.
+      summary: تمدید Access Token
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/auth/token/verify/:
+    post:
+      operationId: v1_auth_token_verify_create
+      description: بررسی صحت و عدم انقضای توکن ارسالی.
+      summary: اعتبارسنجی توکن
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenVerifyRequest'
+        required: true
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/summary/:
+    get:
+      operationId: v1_dashboard_summary_retrieve
+      description: محاسبه درون‌دیتابیسی تجمیعی تناژ، تعداد توزین، خودروهای در انتظار
+        و هشدارهای پایش امروز.
+      summary: خلاصه آمار لحظه‌ای امروز
+      tags:
+      - Dashboard
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummary'
+          description: ''
+  /api/v1/dashboard/trends/:
+    get:
+      operationId: v1_dashboard_trends_retrieve
+      description: دیتاست‌های استاندارد سری زمانی جهت رندر نمودارهای خطی، میله‌ای
+        و دایره‌ای در فرانت‌اند، موبایل و Power BI.
+      summary: روندهای آماری و چارت‌ها
+      tags:
+      - Dashboard
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardTrend'
+          description: ''
+  /api/v1/drivers/:
+    get:
+      operationId: v1_drivers_list
+      summary: لیست رانندگان
+      parameters:
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDriverList'
+          description: ''
+    post:
+      operationId: v1_drivers_create
+      summary: ثبت راننده جدید
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DriverRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DriverRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+          description: ''
+  /api/v1/drivers/{id}/:
+    get:
+      operationId: v1_drivers_retrieve
+      summary: مشاهده راننده
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این راننده را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+          description: ''
+    put:
+      operationId: v1_drivers_update
+      summary: ویرایش راننده
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این راننده را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DriverRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DriverRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+          description: ''
+    patch:
+      operationId: v1_drivers_partial_update
+      summary: ویرایش جزیی راننده
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این راننده را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDriverRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDriverRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDriverRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+          description: ''
+    delete:
+      operationId: v1_drivers_destroy
+      summary: حذف راننده
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این راننده را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/health/:
+    get:
+      operationId: v1_health_retrieve
+      description: تست اتصال به پایگاه داده و در دسترس بودن سرور بدون افشای اطلاعات
+        حساس.
+      summary: بررسی سلامت سرویس (Health Check)
+      tags:
+      - System Settings
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheck'
+          description: ''
+  /api/v1/locations/:
+    get:
+      operationId: v1_locations_list
+      summary: لیست مبادی و مقاصد
+      parameters:
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - in: query
+        name: location_type
+        schema:
+          type: string
+          title: نوع محل
+          enum:
+          - both
+          - destination
+          - origin
+        description: |-
+          * `origin` - مبدأ
+          * `destination` - مقصد
+          * `both` - مبدأ و مقصد
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLocationList'
+          description: ''
+    post:
+      operationId: v1_locations_create
+      summary: ثبت محل جدید
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LocationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LocationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+          description: ''
+  /api/v1/locations/{id}/:
+    get:
+      operationId: v1_locations_retrieve
+      summary: مشاهده محل
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این محل (مبدأ / مقصد) را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+          description: ''
+    put:
+      operationId: v1_locations_update
+      summary: ویرایش محل
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این محل (مبدأ / مقصد) را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LocationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LocationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+          description: ''
+    patch:
+      operationId: v1_locations_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این محل (مبدأ / مقصد) را شناسایی میکند.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLocationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLocationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLocationRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+          description: ''
+    delete:
+      operationId: v1_locations_destroy
+      summary: حذف محل
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این محل (مبدأ / مقصد) را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/loss-types/:
+    get:
+      operationId: v1_loss_types_list
+      summary: لیست انواع افت کالا
+      parameters:
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLossTypeList'
+          description: ''
+    post:
+      operationId: v1_loss_types_create
+      summary: ثبت نوع افت جدید
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LossTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LossTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LossTypeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LossType'
+          description: ''
+  /api/v1/loss-types/{id}/:
+    get:
+      operationId: v1_loss_types_retrieve
+      summary: مشاهده نوع افت
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این نوع افت را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LossType'
+          description: ''
+    put:
+      operationId: v1_loss_types_update
+      summary: ویرایش نوع افت
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این نوع افت را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LossTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LossTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LossTypeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LossType'
+          description: ''
+    patch:
+      operationId: v1_loss_types_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این نوع افت را شناسایی میکند.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLossTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLossTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLossTypeRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LossType'
+          description: ''
+    delete:
+      operationId: v1_loss_types_destroy
+      summary: حذف نوع افت
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این نوع افت را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/management/discrepancies/:
+    get:
+      operationId: v1_management_discrepancies_retrieve
+      description: تحلیل تخصصی مغایرت‌های وزنی بارنامه و باسکول.
+      summary: تحلیل مغایرت‌های وزنی
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: آمار و گزارش مغایرت‌های وزنی
+  /api/v1/management/drivers/:
+    get:
+      operationId: v1_management_drivers_retrieve
+      description: تحلیل عملکرد و سفرهای رانندگان.
+      summary: تحلیل عملکرد رانندگان
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: تحلیل عملکرد رانندگان
+  /api/v1/management/losses/:
+    get:
+      operationId: v1_management_losses_retrieve
+      description: تحلیل افت و کسری محموله‌ها به تفکیک نوع افت، کالا و تامین‌کننده.
+      summary: تحلیل افت و کسری محموله‌ها
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: تحلیل افت و کسری محموله‌ها
+  /api/v1/management/parties/:
+    get:
+      operationId: v1_management_parties_retrieve
+      description: تحلیل رفتار تجاری، تناژ، افت و مغایرت‌های طرف‌های حساب.
+      summary: تحلیل طرف‌های حساب مدیران
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: لیست آمار تناژ و رفتار تجاری طرف‌های حساب
+  /api/v1/management/products/:
+    get:
+      operationId: v1_management_products_retrieve
+      description: تحلیل جامع عملکرد، تناژ و سهم محصولات در بازه انتخابی.
+      summary: تحلیل محصولات مدیران
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: لیست آمار تناژ و افت محصولات
+  /api/v1/management/summary/:
+    get:
+      operationId: v1_management_summary_retrieve
+      description: دریافت شاخص‌های کلیدی عملکرد با مقایسه خودکار نسبت به دوره مشابه
+        قبل (درصد تغییر، تفاضل، تحلیل متنی خودکار).
+      summary: خلاصه هوش تجاری و مقایسه دوره‌ای
+      parameters:
+      - in: query
+        name: end_date_jalali
+        schema:
+          type: string
+        description: تاریخ پایان شمسی مثلاً 1405/06/31
+      - in: query
+        name: operation_type
+        schema:
+          type: integer
+        description: شناسه نوع عملیات
+      - in: query
+        name: party
+        schema:
+          type: integer
+        description: شناسه طرف حساب
+      - in: query
+        name: product
+        schema:
+          type: integer
+        description: شناسه محصول
+      - in: query
+        name: quick_period
+        schema:
+          type: string
+        description: 'بازه سریع: today, this_week, this_month, this_year, last_month'
+      - in: query
+        name: start_date_jalali
+        schema:
+          type: string
+        description: تاریخ شروع شمسی مثلاً 1405/01/01
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagementSummary'
+          description: ''
+  /api/v1/management/turnaround/:
+    get:
+      operationId: v1_management_turnaround_retrieve
+      description: تحلیل زمان حضور و معطلی خودروها در کارخانه.
+      summary: تحلیل زمان توقف و معطلی
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: تحلیل زمان معطلی ناوگان
+  /api/v1/management/vehicles/:
+    get:
+      operationId: v1_management_vehicles_retrieve
+      description: تحلیل عملکرد ناوگان حمل و نقل و خودروها.
+      summary: تحلیل عملکرد ناوگان و خودروها
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: تحلیل عملکرد خودروها
+  /api/v1/meta/:
+    get:
+      operationId: v1_meta_retrieve
+      description: مشخصات نسخه جاری API، نام سامانه و تنظیمات بومی‌سازی.
+      summary: متادیتای API
+      tags:
+      - System Settings
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meta'
+          description: ''
+  /api/v1/monitoring/alerts/:
+    get:
+      operationId: v1_monitoring_alerts_list
+      summary: لیست هشدارهای پایش هوشمند
+      parameters:
+      - in: query
+        name: alert_type
+        schema:
+          type: string
+          title: نوع هشدار
+          enum:
+          - LONG_WAITING_TIME
+          - LOSS_ANOMALY
+          - NET_WEIGHT_ANOMALY
+          - VEHICLE_TARE_ANOMALY
+          - WEIGHT_DISCREPANCY
+          - WEIGHT_EDIT_ANOMALY
+        description: |-
+          * `VEHICLE_TARE_ANOMALY` - وزن خالی غیرعادی خودرو
+          * `WEIGHT_DISCREPANCY` - مغایرت وزن ارسالی و باسکول
+          * `LOSS_ANOMALY` - افت غیرعادی محموله
+          * `NET_WEIGHT_ANOMALY` - وزن خالص غیرعادی
+          * `LONG_WAITING_TIME` - زمان توقف غیرعادی
+          * `WEIGHT_EDIT_ANOMALY` - اصلاح غیرعادی وزن
+      - in: query
+        name: date_from
+        schema:
+          type: string
+      - in: query
+        name: date_to
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - in: query
+        name: party
+        schema:
+          type: number
+      - in: query
+        name: plate
+        schema:
+          type: string
+      - in: query
+        name: product
+        schema:
+          type: number
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      - in: query
+        name: severity
+        schema:
+          type: string
+          title: سطح اهمیت
+          enum:
+          - CRITICAL
+          - HIGH
+          - INFO
+          - LOW
+          - MEDIUM
+        description: |-
+          * `INFO` - اطلاعات (Info)
+          * `LOW` - کم (Low)
+          * `MEDIUM` - متوسط (Medium)
+          * `HIGH` - بالا (High)
+          * `CRITICAL` - بحرانی (Critical)
+      - in: query
+        name: status
+        schema:
+          type: string
+          title: وضعیت هشدار
+          enum:
+          - IGNORED
+          - OPEN
+          - RESOLVED
+          - REVIEWED
+        description: |-
+          * `OPEN` - باز (Open)
+          * `REVIEWED` - بررسی‌شده (Reviewed)
+          * `RESOLVED` - حل‌شده (Resolved)
+          * `IGNORED` - نادیده‌گرفته‌شده (Ignored)
+      - in: query
+        name: ticket
+        schema:
+          type: number
+      - in: query
+        name: vehicle
+        schema:
+          type: number
+      tags:
+      - Monitoring
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMonitoringAlertList'
+          description: ''
+  /api/v1/monitoring/alerts/{id}/:
+    get:
+      operationId: v1_monitoring_alerts_retrieve
+      summary: مشاهده جزییات هشدار پایش
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این هشدار پایش هوشمند را شناسایی میکند.
+        required: true
+      tags:
+      - Monitoring
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitoringAlert'
+          description: ''
+  /api/v1/monitoring/alerts/{id}/ignore/:
+    post:
+      operationId: v1_monitoring_alerts_ignore_create
+      description: نادیده‌گرفتن هشدار با ثبت دلیل موجه (IGNORED).
+      summary: نادیده‌گرفتن هشدار پایش
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این هشدار پایش هوشمند را شناسایی میکند.
+        required: true
+      tags:
+      - Monitoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertIgnoreRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AlertIgnoreRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AlertIgnoreRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitoringAlert'
+          description: ''
+  /api/v1/monitoring/alerts/{id}/resolve/:
+    post:
+      operationId: v1_monitoring_alerts_resolve_create
+      description: ثبت اقدام نهایی و حل هشدار با یادداشت اجباری (RESOLVED).
+      summary: اقدام و حل هشدار پایش
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این هشدار پایش هوشمند را شناسایی میکند.
+        required: true
+      tags:
+      - Monitoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertResolveRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AlertResolveRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AlertResolveRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitoringAlert'
+          description: ''
+  /api/v1/monitoring/alerts/{id}/review/:
+    post:
+      operationId: v1_monitoring_alerts_review_create
+      description: تغییر وضعیت هشدار به بررسی‌شده (REVIEWED).
+      summary: بازبینی هشدار پایش
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این هشدار پایش هوشمند را شناسایی میکند.
+        required: true
+      tags:
+      - Monitoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertReviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AlertReviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AlertReviewRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitoringAlert'
+          description: ''
+  /api/v1/monitoring/alerts/summary/:
+    get:
+      operationId: v1_monitoring_alerts_summary_retrieve
+      description: آمار کلی هشدارهای باز، بررسی‌شده، حل‌شده، نادیده‌گرفته، بحرانی،
+        بالا و هشدارهای ثبت‌شده امروز.
+      summary: خلاصه وضعیت هشدارهای پایش
+      tags:
+      - Monitoring
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitoringAlert'
+          description: ''
+  /api/v1/monitoring/rules/:
+    get:
+      operationId: v1_monitoring_rules_list
+      summary: لیست تنظیمات قوانین پایش
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      tags:
+      - Monitoring
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMonitoringRuleConfigList'
+          description: ''
+  /api/v1/monitoring/rules/{id}/:
+    get:
+      operationId: v1_monitoring_rules_retrieve
+      summary: مشاهده تنظیم قانون پایش
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این تنظیم قانون پایش را شناسایی میکند.
+        required: true
+      tags:
+      - Monitoring
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitoringRuleConfig'
+          description: ''
+    put:
+      operationId: v1_monitoring_rules_update
+      summary: ویرایش تنظیمات و آستانه‌های قانون پایش
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این تنظیم قانون پایش را شناسایی میکند.
+        required: true
+      tags:
+      - Monitoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MonitoringRuleConfigRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MonitoringRuleConfigRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MonitoringRuleConfigRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitoringRuleConfig'
+          description: ''
+    patch:
+      operationId: v1_monitoring_rules_partial_update
+      summary: ویرایش جزیی آستانه‌های قانون پایش
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این تنظیم قانون پایش را شناسایی میکند.
+        required: true
+      tags:
+      - Monitoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMonitoringRuleConfigRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMonitoringRuleConfigRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMonitoringRuleConfigRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitoringRuleConfig'
+          description: ''
+  /api/v1/monitoring/summary/:
+    get:
+      operationId: v1_monitoring_summary_retrieve
+      description: آمار کلی هشدارهای باز، بررسی‌شده، حل‌شده، نادیده‌گرفته، بحرانی،
+        بالا و هشدارهای ثبت‌شده امروز.
+      summary: خلاصه وضعیت هشدارهای پایش
+      tags:
+      - Monitoring
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitoringAlert'
+          description: ''
+  /api/v1/operation-types/:
+    get:
+      operationId: v1_operation_types_list
+      summary: لیست انواع عملیات بار
+      parameters:
+      - in: query
+        name: direction
+        schema:
+          type: string
+          title: جهت عملیات
+          enum:
+          - inbound
+          - internal
+          - other
+          - outbound
+          - transfer
+        description: |-
+          * `inbound` - وارده (خرید / ورود)
+          * `outbound` - صادره (فروش / خروج)
+          * `internal` - داخلی
+          * `transfer` - انتقال بین‌واحدی
+          * `other` - سایر
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOperationTypeList'
+          description: ''
+    post:
+      operationId: v1_operation_types_create
+      summary: ثبت نوع عملیات جدید
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationTypeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationType'
+          description: ''
+  /api/v1/operation-types/{id}/:
+    get:
+      operationId: v1_operation_types_retrieve
+      summary: مشاهده نوع عملیات
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این نوع عملیات را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationType'
+          description: ''
+    put:
+      operationId: v1_operation_types_update
+      summary: ویرایش نوع عملیات
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این نوع عملیات را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationTypeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationType'
+          description: ''
+    patch:
+      operationId: v1_operation_types_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این نوع عملیات را شناسایی میکند.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOperationTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOperationTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOperationTypeRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationType'
+          description: ''
+    delete:
+      operationId: v1_operation_types_destroy
+      summary: حذف نوع عملیات
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این نوع عملیات را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/parties/:
+    get:
+      operationId: v1_parties_list
+      summary: لیست طرف‌های حساب
+      parameters:
+      - in: query
+        name: code
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - in: query
+        name: party_type
+        schema:
+          type: string
+          title: نوع طرف حساب
+          enum:
+          - contractor
+          - customer
+          - internal
+          - other
+          - supplier
+        description: |-
+          * `customer` - خریدار / مشتری
+          * `supplier` - فروشنده / تامین‌کننده
+          * `contractor` - پیمانکار حمل و نقل
+          * `internal` - واحد داخلی / انبار
+          * `other` - سایر
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPartyList'
+          description: ''
+    post:
+      operationId: v1_parties_create
+      summary: ایجاد طرف حساب جدید
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Party'
+          description: ''
+  /api/v1/parties/{id}/:
+    get:
+      operationId: v1_parties_retrieve
+      summary: مشاهده طرف حساب
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این طرف حساب را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Party'
+          description: ''
+    put:
+      operationId: v1_parties_update
+      summary: ویرایش طرف حساب
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این طرف حساب را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Party'
+          description: ''
+    patch:
+      operationId: v1_parties_partial_update
+      summary: ویرایش جزیی طرف حساب
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این طرف حساب را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPartyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPartyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPartyRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Party'
+          description: ''
+    delete:
+      operationId: v1_parties_destroy
+      summary: حذف طرف حساب
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این طرف حساب را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/products/:
+    get:
+      operationId: v1_products_list
+      summary: لیست محصولات
+      parameters:
+      - in: query
+        name: code
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductList'
+          description: ''
+    post:
+      operationId: v1_products_create
+      summary: ایجاد محصول جدید
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+  /api/v1/products/{id}/:
+    get:
+      operationId: v1_products_retrieve
+      summary: مشاهده محصول
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این محصول را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    put:
+      operationId: v1_products_update
+      summary: ویرایش کامل محصول
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این محصول را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    patch:
+      operationId: v1_products_partial_update
+      summary: ویرایش جزیی محصول
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این محصول را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    delete:
+      operationId: v1_products_destroy
+      summary: حذف محصول
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این محصول را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/reports/tickets/:
+    get:
+      operationId: v1_reports_tickets_list
+      description: فیلتر همزمان بر اساس تاریخ شمسی/میلادی، کالا، مشتری، راننده، پلاک،
+        مبدأ، مقصد، اپراتور، افت و وضعیت سند با صفحه‌بندی.
+      summary: گزارش‌ساز پیشرفته قبوض
+      parameters:
+      - in: query
+        name: end_date
+        schema:
+          type: string
+        description: تاریخ پایان شمسی مثلاً 1405/06/31
+      - in: query
+        name: has_loss
+        schema:
+          type: string
+        description: 'دارای افت: yes, no'
+      - in: query
+        name: operation_direction
+        schema:
+          type: string
+        description: 'جهت عملیات: inbound, outbound, internal'
+      - in: query
+        name: party
+        schema:
+          type: integer
+        description: شناسه طرف حساب
+      - in: query
+        name: product
+        schema:
+          type: integer
+        description: شناسه محصول
+      - in: query
+        name: start_date
+        schema:
+          type: string
+        description: تاریخ شروع شمسی مثلاً 1405/01/01
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 'وضعیت سند: completed, waiting_second, cancelled'
+      - in: query
+        name: tolerance_exceeded
+        schema:
+          type: string
+        description: 'مغایرت بیش از حد مجاز: yes, no'
+      tags:
+      - Reports
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WeighTicketList'
+          description: ''
+  /api/v1/reports/tickets/export/csv/:
+    get:
+      operationId: v1_reports_tickets_export_csv_retrieve
+      description: دانلود فایل CSV استاندارد با UTF-8 BOM جهت پردازش در نرم‌افزارهای
+        تحلیلی و اکسل.
+      summary: خروجی CSV گزارش (.csv)
+      tags:
+      - Reports
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: فایل متنی جداشده با کاما (.csv)
+  /api/v1/reports/tickets/export/pdf/:
+    get:
+      operationId: v1_reports_tickets_export_pdf_retrieve
+      description: دانلود فایل PDF استاندارد جدول قبوض جهت چاپ و بایگانی اسناد.
+      summary: خروجی PDF گزارش (.pdf)
+      tags:
+      - Reports
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: سند الکترونیکی قابل حمل (.pdf)
+  /api/v1/reports/tickets/export/xlsx/:
+    get:
+      operationId: v1_reports_tickets_export_xlsx_retrieve
+      description: دانلود فایل اکسل کامل، راست‌چین و فرمت‌بندی‌شده گزارش باسکول بر
+        اساس فیلترهای ارسالی.
+      summary: خروجی اکسل گزارش (.xlsx)
+      tags:
+      - Reports
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: فایل اکسل مایکروسافت (.xlsx)
+  /api/v1/reports/tickets/grouped/:
+    get:
+      operationId: v1_reports_tickets_grouped_retrieve
+      description: تجمیع داده‌ها بر اساس یک بعد دلخواه (day, product, party, driver,
+        plate, origin, destination, unload_location, operation_type, operator).
+      summary: گزارش دسته‌بندی‌شده پویا (Group By)
+      parameters:
+      - in: query
+        name: group_by
+        schema:
+          type: string
+        description: 'فیلد گروه‌بندی: day, product, party, driver, plate, origin,
+          destination, unload_location, operation_type, operator'
+        required: true
+      tags:
+      - Reports
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: گزارش دسته‌بندی‌شده تجمیعی
+  /api/v1/reports/tickets/summary/:
+    get:
+      operationId: v1_reports_tickets_summary_retrieve
+      description: محاسبه درون‌دیتابیسی مجموع اوزان، میانگین و افت برای رکوردهای منطبق
+        بر فیلترهای ارسالی.
+      summary: خلاصه آماری گزارش (کارت‌های KPI)
+      tags:
+      - Reports
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportSummary'
+          description: ''
+  /api/v1/roles/:
+    get:
+      operationId: v1_roles_list
+      description: دریافت کدهای استاندارد و عناوین فارسی نقش‌های کاربری.
+      summary: لیست نقش‌های کاربری سیستم
+      tags:
+      - Users
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+          description: ''
+  /api/v1/settings/:
+    get:
+      operationId: v1_settings_retrieve
+      description: دریافت متغیرهای عمومی و غیرحساس مورد نیاز کلاینت‌های موبایل، وب
+        و تبلت اپراتور.
+      summary: تنظیمات عمومی سامانه
+      tags:
+      - System Settings
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicSystemSetting'
+          description: ''
+  /api/v1/tickets/:
+    get:
+      operationId: v1_tickets_list
+      description: دریافت لیست جامع قبوض با قابلیت جستجو، فیلتر پیشرفته (تاریخ، محصول،
+        مشتری، پلاک، وضعیت و...) و صفحه‌بندی.
+      summary: لیست قبوض باسکول
+      parameters:
+      - in: query
+        name: date_from
+        schema:
+          type: string
+      - in: query
+        name: date_to
+        schema:
+          type: string
+      - in: query
+        name: destination
+        schema:
+          type: number
+      - in: query
+        name: driver
+        schema:
+          type: number
+      - in: query
+        name: gross_weight_max
+        schema:
+          type: number
+      - in: query
+        name: gross_weight_min
+        schema:
+          type: number
+      - in: query
+        name: has_discrepancy
+        schema:
+          type: boolean
+      - in: query
+        name: has_loss
+        schema:
+          type: boolean
+      - in: query
+        name: is_loss_overridden
+        schema:
+          type: boolean
+      - in: query
+        name: is_tolerance_exceeded
+        schema:
+          type: boolean
+      - in: query
+        name: loss_percent_max
+        schema:
+          type: number
+      - in: query
+        name: loss_percent_min
+        schema:
+          type: number
+      - in: query
+        name: net_weight_max
+        schema:
+          type: number
+      - in: query
+        name: net_weight_min
+        schema:
+          type: number
+      - in: query
+        name: operation_type
+        schema:
+          type: number
+      - in: query
+        name: operator
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - in: query
+        name: origin
+        schema:
+          type: number
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - in: query
+        name: party
+        schema:
+          type: number
+      - in: query
+        name: plate
+        schema:
+          type: string
+      - in: query
+        name: product
+        schema:
+          type: number
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      - in: query
+        name: sent_weight_max
+        schema:
+          type: number
+      - in: query
+        name: sent_weight_min
+        schema:
+          type: number
+      - in: query
+        name: status
+        schema:
+          type: string
+          title: وضعیت سند
+          enum:
+          - cancelled
+          - completed
+          - draft
+          - first_registered
+          - waiting_first
+          - waiting_second
+        description: |-
+          * `draft` - پیش‌نویس
+          * `waiting_first` - در انتظار وزن اول
+          * `first_registered` - ثبت وزن اول
+          * `waiting_second` - در انتظار وزن دوم (داخل محوطه)
+          * `completed` - تکمیل شده
+          * `cancelled` - ابطال / لغو شده
+      - in: query
+        name: tare_weight_max
+        schema:
+          type: number
+      - in: query
+        name: tare_weight_min
+        schema:
+          type: number
+      - in: query
+        name: unload_location
+        schema:
+          type: number
+      - in: query
+        name: vehicle
+        schema:
+          type: number
+      - in: query
+        name: waybill_number
+        schema:
+          type: string
+      tags:
+      - Tickets
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedWeighTicketListList'
+          description: ''
+    post:
+      operationId: v1_tickets_create
+      description: صدور اولیه قبض باسکول با تولید خودکار و امن شماره سریال در سمت
+        سرور.
+      summary: ثبت و صدور قبض جدید
+      tags:
+      - Tickets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WeighTicketCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WeighTicketCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WeighTicketCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeighTicketCreate'
+          description: ''
+  /api/v1/tickets/{id}/:
+    get:
+      operationId: v1_tickets_retrieve
+      description: مشاهده اطلاعات کامل قبض، اوزان ناخالص، تارا، خالص، افت، درصد انحراف
+        و مشخصات راننده و ناوگان.
+      summary: جزییات قبض باسکول
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این قبض باسکول را شناسایی میکند.
+        required: true
+      tags:
+      - Tickets
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeighTicketDetail'
+          description: ''
+    put:
+      operationId: v1_tickets_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این قبض باسکول را شناسایی میکند.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeighTicketDetail'
+          description: ''
+    patch:
+      operationId: v1_tickets_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این قبض باسکول را شناسایی میکند.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeighTicketDetail'
+          description: ''
+    delete:
+      operationId: v1_tickets_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این قبض باسکول را شناسایی میکند.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/tickets/{id}/analysis/:
+    get:
+      operationId: v1_tickets_analysis_retrieve
+      description: دریافت امتیاز ریسک (0-100)، سطح ریسک، لیست هشدارهای فعال و مقایسه
+        آماری با سوابق تاریخی خودرو و طرف حساب.
+      summary: تحلیل پایش هوشمند و کشف مغایرت قبض
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این قبض باسکول را شناسایی میکند.
+        required: true
+      tags:
+      - Tickets
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeighTicketDetail'
+          description: ''
+  /api/v1/tickets/{id}/cancel/:
+    post:
+      operationId: v1_tickets_cancel_create
+      description: ابطال سند باسکول با الزام ثبت دلیل ابطال (عدم امکان حذف فیزیکی
+        سند جهت حفظ ممیزی).
+      summary: ابطال / لغو قبض
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این قبض باسکول را شناسایی میکند.
+        required: true
+      tags:
+      - Tickets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketCancelRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TicketCancelRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TicketCancelRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeighTicketDetail'
+          description: ''
+  /api/v1/tickets/{id}/complete/:
+    post:
+      operationId: v1_tickets_complete_create
+      description: نهایی‌سازی سند باسکول پس از بررسی کامل بودن اوزان و اطلاعات.
+      summary: تکمیل نهایی قبض
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این قبض باسکول را شناسایی میکند.
+        required: true
+      tags:
+      - Tickets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketCompleteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TicketCompleteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TicketCompleteRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeighTicketDetail'
+          description: ''
+  /api/v1/tickets/{id}/correct/:
+    post:
+      operationId: v1_tickets_correct_create
+      description: اصلاح مقادیر حساس (مانند اوزان، محصول، طرف حساب) توسط مدیر مجاز
+        به همراه ثبت دقیق مقادیر قبل و بعد در Audit Log.
+      summary: اصلاح مدیریتی قبض
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این قبض باسکول را شناسایی میکند.
+        required: true
+      tags:
+      - Tickets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketCorrectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TicketCorrectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TicketCorrectRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeighTicketDetail'
+          description: ''
+  /api/v1/tickets/{id}/first-weight/:
+    post:
+      operationId: v1_tickets_first_weight_create
+      description: ثبت مقدار وزن اول برای یک قبض در جریان یا اصلاح آن با اعتبارسنجی
+        و ثبت ممیزی.
+      summary: ثبت وزن اول
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این قبض باسکول را شناسایی میکند.
+        required: true
+      tags:
+      - Tickets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FirstWeightRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FirstWeightRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FirstWeightRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeighTicketDetail'
+          description: ''
+  /api/v1/tickets/{id}/second-weight/:
+    post:
+      operationId: v1_tickets_second_weight_create
+      description: ثبت مقدار وزن دوم، محاسبه آنی وزن ناخالص، تارا، خالص، افت و وزن
+        نهایی و تغییر وضعیت قبض به تکمیل‌شده.
+      summary: ثبت وزن دوم و تکمیل فرایند
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این قبض باسکول را شناسایی میکند.
+        required: true
+      tags:
+      - Tickets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecondWeightRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SecondWeightRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SecondWeightRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeighTicketDetail'
+          description: ''
+  /api/v1/tickets/open/:
+    get:
+      operationId: v1_tickets_open_retrieve
+      description: لیست خودروها و قبوضی که فرایند توزین آن‌ها هنوز تکمیل نشده است.
+      summary: قبوض باز و در جریان
+      tags:
+      - Tickets
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeighTicketDetail'
+          description: ''
+  /api/v1/tickets/waiting-second-weight/:
+    get:
+      operationId: v1_tickets_waiting_second_weight_retrieve
+      description: لیست خودروهایی که وزن اول آن‌ها ثبت شده و هم‌اکنون داخل محوطه شرکت
+        منتظر توزین دوم هستند به همراه مدت زمان توقف.
+      summary: خودروهای در انتظار وزن دوم (داخل محوطه)
+      tags:
+      - Tickets
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeighTicketDetail'
+          description: ''
+  /api/v1/unload-locations/:
+    get:
+      operationId: v1_unload_locations_list
+      summary: لیست جایگاه‌های تخلیه/بارگیری
+      parameters:
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUnloadLocationList'
+          description: ''
+    post:
+      operationId: v1_unload_locations_create
+      summary: ثبت جایگاه جدید
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnloadLocationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UnloadLocationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UnloadLocationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnloadLocation'
+          description: ''
+  /api/v1/unload-locations/{id}/:
+    get:
+      operationId: v1_unload_locations_retrieve
+      summary: مشاهده جایگاه
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این جایگاه تخلیه را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnloadLocation'
+          description: ''
+    put:
+      operationId: v1_unload_locations_update
+      summary: ویرایش جایگاه
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این جایگاه تخلیه را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnloadLocationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UnloadLocationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UnloadLocationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnloadLocation'
+          description: ''
+    patch:
+      operationId: v1_unload_locations_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این جایگاه تخلیه را شناسایی میکند.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUnloadLocationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUnloadLocationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUnloadLocationRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnloadLocation'
+          description: ''
+    delete:
+      operationId: v1_unload_locations_destroy
+      summary: حذف جایگاه
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این جایگاه تخلیه را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/users/:
+    get:
+      operationId: v1_users_list
+      description: مدیریت کاربران و انتساب نقش‌ها توسط مدیر سیستم.
+      summary: لیست کاربران سیستم
+      parameters:
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - in: query
+        name: profile__role
+        schema:
+          type: string
+          title: نقش کاربری
+          enum:
+          - ceo
+          - commercial_manager
+          - factory_manager
+          - financial_manager
+          - report_manager
+          - super_admin
+          - system_admin
+          - viewer
+          - weighbridge_manager
+          - weighbridge_operator
+        description: |-
+          * `super_admin` - مدیر ارشد (Super Admin)
+          * `system_admin` - مدیر سیستم (System Admin)
+          * `ceo` - مدیرعامل (CEO)
+          * `factory_manager` - مدیر کارخانه (Factory Manager)
+          * `commercial_manager` - مدیر بازرگانی (Commercial Manager)
+          * `financial_manager` - مدیر مالی (Financial Manager)
+          * `weighbridge_manager` - مدیر باسکول (Weighbridge Manager)
+          * `weighbridge_operator` - اپراتور باسکول (Operator)
+          * `report_manager` - مدیر گزارشات (Report Manager)
+          * `viewer` - مشاهده‌گر (Viewer)
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      tags:
+      - Users
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUserAdminList'
+          description: ''
+    post:
+      operationId: v1_users_create
+      description: مدیریت کاربران و انتساب نقش‌ها توسط مدیر سیستم.
+      summary: ایجاد کاربر جدید با تعیین نقش
+      tags:
+      - Users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAdmin'
+          description: ''
+  /api/v1/users/{id}/:
+    get:
+      operationId: v1_users_retrieve
+      description: مدیریت کاربران و انتساب نقش‌ها توسط مدیر سیستم.
+      summary: مشاهده کاربر
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این کاربر را شناسایی میکند.
+        required: true
+      tags:
+      - Users
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAdmin'
+          description: ''
+    put:
+      operationId: v1_users_update
+      description: مدیریت کاربران و انتساب نقش‌ها توسط مدیر سیستم.
+      summary: ویرایش کامل کاربر
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این کاربر را شناسایی میکند.
+        required: true
+      tags:
+      - Users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserAdminRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAdmin'
+          description: ''
+    patch:
+      operationId: v1_users_partial_update
+      description: مدیریت کاربران و انتساب نقش‌ها توسط مدیر سیستم.
+      summary: ویرایش جزیی کاربر
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این کاربر را شناسایی میکند.
+        required: true
+      tags:
+      - Users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserAdminRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAdmin'
+          description: ''
+    delete:
+      operationId: v1_users_destroy
+      description: مدیریت کاربران و انتساب نقش‌ها توسط مدیر سیستم.
+      summary: حذف کاربر
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این کاربر را شناسایی میکند.
+        required: true
+      tags:
+      - Users
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/vehicle-types/:
+    get:
+      operationId: v1_vehicle_types_list
+      summary: لیست انواع خودروها
+      parameters:
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedVehicleTypeList'
+          description: ''
+    post:
+      operationId: v1_vehicle_types_create
+      summary: ثبت نوع خودرو جدید
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VehicleTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VehicleTypeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleType'
+          description: ''
+  /api/v1/vehicle-types/{id}/:
+    get:
+      operationId: v1_vehicle_types_retrieve
+      summary: مشاهده نوع خودرو
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این نوع خودرو را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleType'
+          description: ''
+    put:
+      operationId: v1_vehicle_types_update
+      summary: ویرایش نوع خودرو
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این نوع خودرو را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VehicleTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VehicleTypeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleType'
+          description: ''
+    patch:
+      operationId: v1_vehicle_types_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این نوع خودرو را شناسایی میکند.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedVehicleTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedVehicleTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedVehicleTypeRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleType'
+          description: ''
+    delete:
+      operationId: v1_vehicle_types_destroy
+      summary: حذف نوع خودرو
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این نوع خودرو را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/vehicles/:
+    get:
+      operationId: v1_vehicles_list
+      summary: لیست خودروها
+      parameters:
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: کدام فیلد باید هنگام مرتب‌سازی نتایج استفاده شود.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: یک شماره صفحه‌ در مجموعه نتایج صفحه‌بندی شده.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: تعداد نتایج برای نمایش در هر صفحه.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: یک عبارت جستجو.
+        schema:
+          type: string
+      - in: query
+        name: vehicle_type
+        schema:
+          type: integer
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedVehicleList'
+          description: ''
+    post:
+      operationId: v1_vehicles_create
+      summary: ثبت خودرو جدید
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VehicleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VehicleRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vehicle'
+          description: ''
+  /api/v1/vehicles/{id}/:
+    get:
+      operationId: v1_vehicles_retrieve
+      summary: مشاهده خودرو
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این خودرو را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vehicle'
+          description: ''
+    put:
+      operationId: v1_vehicles_update
+      summary: ویرایش خودرو
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این خودرو را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VehicleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VehicleRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vehicle'
+          description: ''
+    patch:
+      operationId: v1_vehicles_partial_update
+      summary: ویرایش جزیی خودرو
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این خودرو را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedVehicleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedVehicleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedVehicleRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vehicle'
+          description: ''
+    delete:
+      operationId: v1_vehicles_destroy
+      summary: حذف خودرو
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این خودرو را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/vehicles/{id}/history/:
+    get:
+      operationId: v1_vehicles_history_retrieve
+      description: دریافت لیست تمام قبوض ثبت‌شده برای این خودرو به صورت صفحه‌بندی‌شده.
+      summary: سوابق توزین و تردد خودرو
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این خودرو را شناسایی میکند.
+        required: true
+      tags:
+      - Master Data
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vehicle'
+          description: ''
+components:
+  schemas:
+    ActionEnum:
+      enum:
+      - create
+      - update
+      - delete
+      - override_weight
+      - override_loss
+      - cancel
+      - status_change
+      - restore
+      - print
+      type: string
+      description: |-
+        * `create` - ثبت جدید
+        * `update` - ویرایش اطلاعات
+        * `delete` - حذف رکورد
+        * `override_weight` - تغییر دستی اوزان
+        * `override_loss` - تغییر دستی افت
+        * `cancel` - ابطال سند
+        * `status_change` - تغییر وضعیت
+        * `restore` - بازیابی اطلاعات
+        * `print` - چاپ قبض
+    AdminSystemSetting:
+      type: object
+      description: Full system settings for super admins / system admins.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        company_name:
+          type: string
+          title: نام شرکت
+          maxLength: 200
+        company_logo:
+          type: string
+          format: uri
+          nullable: true
+          title: لوگوی شرکت
+        company_address:
+          type: string
+          title: آدرس شرکت
+        company_phone:
+          type: string
+          title: تلفن
+          maxLength: 50
+        company_email:
+          title: ایمیل
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        receipt_header_title:
+          type: string
+          title: عنوان بالای قبض
+          maxLength: 200
+        serial_start_number:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: شماره سریال شروع
+        serial_prefix:
+          type: string
+          title: پیشوند شماره سریال (اختیاری)
+          maxLength: 20
+        weight_unit:
+          type: string
+          title: واحد وزن
+          maxLength: 20
+        decimal_places:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          title: تعداد ارقام اعشار وزن
+        max_tolerance_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: حداکثر درصد مجاز انحراف (%)
+        max_tolerance_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: حداکثر کیلوگرم مجاز انحراف (Kg)
+        require_waybill:
+          type: boolean
+          title: شماره بارنامه اجباری باشد
+        require_driver:
+          type: boolean
+          title: اطلاعات راننده اجباری باشد
+        require_origin:
+          type: boolean
+          title: مبدأ بار اجباری باشد
+        require_destination:
+          type: boolean
+          title: مقصد بار اجباری باشد
+        require_unload_location:
+          type: boolean
+          title: جایگاه تخلیه اجباری باشد
+        default_print_template:
+          allOf:
+          - $ref: '#/components/schemas/DefaultPrintTemplateEnum'
+          title: قالب پیش‌فرض چاپ
+        receipt_footer_note:
+          type: string
+          title: متن پاورقی قبض
+        items_per_page:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: تعداد رکورد در هر صفحه
+      required:
+      - id
+    AlertIgnoreRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 3
+      required:
+      - reason
+    AlertResolveRequest:
+      type: object
+      properties:
+        resolution_note:
+          type: string
+          minLength: 3
+      required:
+      - resolution_note
+    AlertReviewRequest:
+      type: object
+      properties:
+        note:
+          type: string
+    AlertTypeEnum:
+      enum:
+      - VEHICLE_TARE_ANOMALY
+      - WEIGHT_DISCREPANCY
+      - LOSS_ANOMALY
+      - NET_WEIGHT_ANOMALY
+      - LONG_WAITING_TIME
+      - WEIGHT_EDIT_ANOMALY
+      type: string
+      description: |-
+        * `VEHICLE_TARE_ANOMALY` - وزن خالی غیرعادی خودرو
+        * `WEIGHT_DISCREPANCY` - مغایرت وزن ارسالی و باسکول
+        * `LOSS_ANOMALY` - افت غیرعادی محموله
+        * `NET_WEIGHT_ANOMALY` - وزن خالص غیرعادی
+        * `LONG_WAITING_TIME` - زمان توقف غیرعادی
+        * `WEIGHT_EDIT_ANOMALY` - اصلاح غیرعادی وزن
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: کاربر اقدام‌کننده
+        username:
+          type: string
+          readOnly: true
+        user_name:
+          type: string
+          readOnly: true
+        ip_address:
+          type: string
+          readOnly: true
+          nullable: true
+          title: آدرس IP
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionEnum'
+          readOnly: true
+          title: نوع عملیات
+        action_display:
+          type: string
+          readOnly: true
+        model_name:
+          type: string
+          readOnly: true
+          title: نام بخش / مدل
+        record_id:
+          type: string
+          readOnly: true
+          title: شناسه رکورد
+        record_repr:
+          type: string
+          readOnly: true
+          title: عنوان رکورد
+        old_values:
+          readOnly: true
+          title: مقادیر قبلی
+        new_values:
+          readOnly: true
+          title: مقادیر جدید
+        reason:
+          type: string
+          readOnly: true
+          title: دلیل تغییر / ابطال
+        timestamp:
+          type: string
+          format: date-time
+          readOnly: true
+          title: زمان ثبت
+        timestamp_jalali:
+          type: string
+          readOnly: true
+      required:
+      - action
+      - action_display
+      - id
+      - ip_address
+      - model_name
+      - new_values
+      - old_values
+      - reason
+      - record_id
+      - record_repr
+      - timestamp
+      - timestamp_jalali
+      - user
+      - user_name
+      - username
+    ConfidenceEnum:
+      enum:
+      - insufficient
+      - low
+      - medium
+      - high
+      type: string
+      description: |-
+        * `insufficient` - داده ناکافی
+        * `low` - پایین (۱۰-۱۹ نمونه)
+        * `medium` - متوسط (۲۰-۴۹ نمونه)
+        * `high` - بالا (۵۰+ نمونه)
+    CustomTokenObtainPairRequest:
+      type: object
+      description: Custom JWT Token Obtain Serializer adding rich user profile and
+        role info to login response.
+      properties:
+        username:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - password
+      - username
+    DashboardSummary:
+      type: object
+      properties:
+        today_ticket_count:
+          type: integer
+        today_completed_count:
+          type: integer
+        today_net_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        today_tonnage:
+          type: number
+          format: double
+        today_inbound_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        today_outbound_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        waiting_second_weight:
+          type: integer
+        today_discrepancies:
+          type: integer
+        open_alerts_count:
+          type: integer
+        today_critical_alerts:
+          type: integer
+      required:
+      - open_alerts_count
+      - today_completed_count
+      - today_critical_alerts
+      - today_discrepancies
+      - today_inbound_weight
+      - today_net_weight
+      - today_outbound_weight
+      - today_ticket_count
+      - today_tonnage
+      - waiting_second_weight
+    DashboardTrend:
+      type: object
+      properties:
+        dates_30:
+          type: array
+          items:
+            type: string
+        tonnage_30:
+          type: array
+          items:
+            type: number
+            format: double
+        trips_30:
+          type: array
+          items:
+            type: integer
+        product_labels:
+          type: array
+          items:
+            type: string
+        product_values:
+          type: array
+          items:
+            type: number
+            format: double
+        inbound_tonnage:
+          type: number
+          format: double
+        outbound_tonnage:
+          type: number
+          format: double
+        party_labels:
+          type: array
+          items:
+            type: string
+        party_values:
+          type: array
+          items:
+            type: number
+            format: double
+      required:
+      - dates_30
+      - inbound_tonnage
+      - outbound_tonnage
+      - party_labels
+      - party_values
+      - product_labels
+      - product_values
+      - tonnage_30
+      - trips_30
+    DefaultPrintTemplateEnum:
+      enum:
+      - a4
+      - a5
+      - pos
+      type: string
+      description: |-
+        * `a4` - برگه A4 استاندارد
+        * `a5` - برگه A5 نیم صفحه
+        * `pos` - فیش حرارتی پرینتر کوچک (POS)
+    DirectionEnum:
+      enum:
+      - inbound
+      - outbound
+      - internal
+      - transfer
+      - other
+      type: string
+      description: |-
+        * `inbound` - وارده (خرید / ورود)
+        * `outbound` - صادره (فروش / خروج)
+        * `internal` - داخلی
+        * `transfer` - انتقال بین‌واحدی
+        * `other` - سایر
+    Driver:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        full_name:
+          type: string
+          title: نام و نام خانوادگی راننده
+          maxLength: 150
+        mobile:
+          type: string
+          title: شماره موبایل
+          maxLength: 30
+        national_code:
+          type: string
+          title: کد ملی
+          maxLength: 20
+        license_number:
+          type: string
+          title: شماره گواهینامه
+          maxLength: 30
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        created_at_jalali:
+          type: string
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ویرایش
+      required:
+      - created_at
+      - created_at_jalali
+      - full_name
+      - id
+      - updated_at
+    DriverRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+          minLength: 1
+          title: نام و نام خانوادگی راننده
+          maxLength: 150
+        mobile:
+          type: string
+          title: شماره موبایل
+          maxLength: 30
+        national_code:
+          type: string
+          title: کد ملی
+          maxLength: 20
+        license_number:
+          type: string
+          title: شماره گواهینامه
+          maxLength: 30
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+      required:
+      - full_name
+    FieldEnum:
+      enum:
+      - first_weight
+      - second_weight
+      - sent_weight
+      - loss_percent
+      - loss_weight
+      - product
+      - party
+      - vehicle
+      - driver
+      - license_plate_display
+      - waybill_number
+      type: string
+      description: |-
+        * `first_weight` - وزن اول
+        * `second_weight` - وزن دوم
+        * `sent_weight` - وزن ارسالی
+        * `loss_percent` - درصد افت
+        * `loss_weight` - وزن افت
+        * `product` - محصول
+        * `party` - طرف حساب
+        * `vehicle` - خودرو
+        * `driver` - راننده
+        * `license_plate_display` - شماره پلاک
+        * `waybill_number` - شماره بارنامه
+    FirstWeightRequest:
+      type: object
+      properties:
+        weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
+          nullable: true
+        time:
+          type: string
+          format: time
+          nullable: true
+      required:
+      - weight
+    HealthCheck:
+      type: object
+      properties:
+        status:
+          type: string
+        database:
+          type: string
+        timestamp:
+          type: string
+      required:
+      - database
+      - status
+      - timestamp
+    Location:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: نام محل
+          maxLength: 150
+        location_type:
+          allOf:
+          - $ref: '#/components/schemas/LocationTypeEnum'
+          title: نوع محل
+        location_type_display:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ویرایش
+      required:
+      - created_at
+      - id
+      - location_type_display
+      - name
+      - updated_at
+    LocationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نام محل
+          maxLength: 150
+        location_type:
+          allOf:
+          - $ref: '#/components/schemas/LocationTypeEnum'
+          title: نوع محل
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+      required:
+      - name
+    LocationTypeEnum:
+      enum:
+      - origin
+      - destination
+      - both
+      type: string
+      description: |-
+        * `origin` - مبدأ
+        * `destination` - مقصد
+        * `both` - مبدأ و مقصد
+    LossType:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: نوع افت
+          maxLength: 100
+        code:
+          type: string
+          nullable: true
+          title: کد
+          maxLength: 50
+        default_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: درصد افت پیش‌فرض (%)
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ویرایش
+      required:
+      - created_at
+      - id
+      - name
+      - updated_at
+    LossTypeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نوع افت
+          maxLength: 100
+        code:
+          type: string
+          nullable: true
+          title: کد
+          maxLength: 50
+        default_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: درصد افت پیش‌فرض (%)
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+      required:
+      - name
+    ManagementSummary:
+      type: object
+      properties:
+        period_label:
+          type: string
+        start_date_jalali:
+          type: string
+        end_date_jalali:
+          type: string
+        narrative:
+          type: string
+        kpis:
+          type: object
+          additionalProperties: {}
+        comparison:
+          type: object
+          additionalProperties: {}
+      required:
+      - comparison
+      - end_date_jalali
+      - kpis
+      - narrative
+      - period_label
+      - start_date_jalali
+    Meta:
+      type: object
+      properties:
+        api_version:
+          type: string
+        application_name:
+          type: string
+        application_version:
+          type: string
+        timezone:
+          type: string
+        weight_unit:
+          type: string
+      required:
+      - api_version
+      - application_name
+      - application_version
+      - timezone
+      - weight_unit
+    MonitoringAlert:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        ticket:
+          type: integer
+          readOnly: true
+          title: قبض باسکول
+        ticket_serial:
+          type: string
+          readOnly: true
+        ticket_plate:
+          type: string
+          readOnly: true
+        alert_type:
+          allOf:
+          - $ref: '#/components/schemas/AlertTypeEnum'
+          readOnly: true
+          title: نوع هشدار
+        alert_type_display:
+          type: string
+          readOnly: true
+        severity:
+          allOf:
+          - $ref: '#/components/schemas/SeverityEnum'
+          readOnly: true
+          title: سطح اهمیت
+        severity_display:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+          title: عنوان هشدار
+        description:
+          type: string
+          readOnly: true
+          title: شرح مختصر
+        reason:
+          type: string
+          readOnly: true
+          title: دلیل تحلیلی و شفاف هشدار
+        current_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+          title: مقدار فعلی
+        baseline_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+          title: مقدار مبنا / میانگین تاریخی
+        deviation_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+          title: میزان انحراف عددی
+        deviation_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+          title: درصد انحراف (%)
+        sample_size:
+          type: integer
+          readOnly: true
+          title: تعداد سوابق بررسی‌شده
+        confidence:
+          allOf:
+          - $ref: '#/components/schemas/ConfidenceEnum'
+          readOnly: true
+          title: درجه اطمینان مبنا
+        confidence_display:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+          title: وضعیت هشدار
+        status_display:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: زمان ایجاد هشدار
+        created_at_jalali:
+          type: string
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: زمان بررسی / حل
+        resolved_at_jalali:
+          type: string
+          readOnly: true
+        resolved_by:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: اقدام‌کننده
+        resolved_by_name:
+          type: string
+          readOnly: true
+        resolution_note:
+          type: string
+          readOnly: true
+          title: یادداشت و دلیل اقدام
+        metadata:
+          readOnly: true
+          title: متادیتا و جزییات محاسبات
+      required:
+      - alert_type
+      - alert_type_display
+      - baseline_value
+      - confidence
+      - confidence_display
+      - created_at
+      - created_at_jalali
+      - current_value
+      - description
+      - deviation_percent
+      - deviation_value
+      - id
+      - metadata
+      - reason
+      - resolution_note
+      - resolved_at
+      - resolved_at_jalali
+      - resolved_by
+      - resolved_by_name
+      - sample_size
+      - severity
+      - severity_display
+      - status
+      - status_display
+      - ticket
+      - ticket_plate
+      - ticket_serial
+      - title
+    MonitoringRuleConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        rule_type:
+          allOf:
+          - $ref: '#/components/schemas/RuleTypeEnum'
+          readOnly: true
+          title: نوع قانون
+        rule_type_display:
+          type: string
+          readOnly: true
+        name_fa:
+          type: string
+          readOnly: true
+          title: نام فارسی قانون
+        description:
+          type: string
+          title: شرح عملکرد قانون
+        enabled:
+          type: boolean
+          title: فعال بودن قانون
+        warning_threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: آستانه هشدار عددی (Warning)
+        high_threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: آستانه بالای عددی (High)
+        critical_threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: آستانه بحرانی عددی (Critical)
+        percentage_warning:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: درصد انحراف هشدار (%)
+        percentage_high:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: درصد انحراف بالا (%)
+        percentage_critical:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: درصد انحراف بحرانی (%)
+        minimum_history:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: حداقل تعداد سابقه برای تحلیل
+        extra_params:
+          title: تنظیمات اختصاصی (JSON)
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: آخرین بروزرسانی
+        updated_by_name:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - name_fa
+      - rule_type
+      - rule_type_display
+      - updated_at
+      - updated_by_name
+    MonitoringRuleConfigRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          title: شرح عملکرد قانون
+        enabled:
+          type: boolean
+          title: فعال بودن قانون
+        warning_threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: آستانه هشدار عددی (Warning)
+        high_threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: آستانه بالای عددی (High)
+        critical_threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: آستانه بحرانی عددی (Critical)
+        percentage_warning:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: درصد انحراف هشدار (%)
+        percentage_high:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: درصد انحراف بالا (%)
+        percentage_critical:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: درصد انحراف بحرانی (%)
+        minimum_history:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: حداقل تعداد سابقه برای تحلیل
+        extra_params:
+          title: تنظیمات اختصاصی (JSON)
+    OperationType:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: نوع عملیات / وضعیت محموله
+          maxLength: 100
+        code:
+          type: string
+          nullable: true
+          title: کد
+          maxLength: 50
+        direction:
+          allOf:
+          - $ref: '#/components/schemas/DirectionEnum'
+          title: جهت عملیات
+        direction_display:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ویرایش
+      required:
+      - created_at
+      - direction_display
+      - id
+      - name
+      - updated_at
+    OperationTypeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نوع عملیات / وضعیت محموله
+          maxLength: 100
+        code:
+          type: string
+          nullable: true
+          title: کد
+          maxLength: 50
+        direction:
+          allOf:
+          - $ref: '#/components/schemas/DirectionEnum'
+          title: جهت عملیات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+      required:
+      - name
+    PaginatedAuditLogList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
+    PaginatedDriverList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Driver'
+    PaginatedLocationList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Location'
+    PaginatedLossTypeList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LossType'
+    PaginatedMonitoringAlertList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonitoringAlert'
+    PaginatedMonitoringRuleConfigList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonitoringRuleConfig'
+    PaginatedOperationTypeList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationType'
+    PaginatedPartyList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Party'
+    PaginatedProductList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+    PaginatedUnloadLocationList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnloadLocation'
+    PaginatedUserAdminList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserAdmin'
+    PaginatedVehicleList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vehicle'
+    PaginatedVehicleTypeList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/VehicleType'
+    PaginatedWeighTicketListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/WeighTicketList'
+    Party:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: نام طرف حساب
+          maxLength: 200
+        code:
+          type: string
+          nullable: true
+          title: کد حساب
+          maxLength: 50
+        party_type:
+          allOf:
+          - $ref: '#/components/schemas/PartyTypeEnum'
+          title: نوع طرف حساب
+        party_type_display:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          title: شماره همراه
+          maxLength: 30
+        tel:
+          type: string
+          title: تلفن ثابت / فکس
+          maxLength: 30
+        email:
+          title: ایمیل
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        address:
+          type: string
+          title: آدرس
+        national_id:
+          type: string
+          title: شناسه / کد ملی
+          maxLength: 30
+        economic_code:
+          type: string
+          title: کد اقتصادی
+          maxLength: 30
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        created_at_jalali:
+          type: string
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ویرایش
+      required:
+      - created_at
+      - created_at_jalali
+      - id
+      - name
+      - party_type_display
+      - updated_at
+    PartyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نام طرف حساب
+          maxLength: 200
+        code:
+          type: string
+          nullable: true
+          title: کد حساب
+          maxLength: 50
+        party_type:
+          allOf:
+          - $ref: '#/components/schemas/PartyTypeEnum'
+          title: نوع طرف حساب
+        phone:
+          type: string
+          title: شماره همراه
+          maxLength: 30
+        tel:
+          type: string
+          title: تلفن ثابت / فکس
+          maxLength: 30
+        email:
+          title: ایمیل
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        address:
+          type: string
+          title: آدرس
+        national_id:
+          type: string
+          title: شناسه / کد ملی
+          maxLength: 30
+        economic_code:
+          type: string
+          title: کد اقتصادی
+          maxLength: 30
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+      required:
+      - name
+    PartyTypeEnum:
+      enum:
+      - customer
+      - supplier
+      - contractor
+      - internal
+      - other
+      type: string
+      description: |-
+        * `customer` - خریدار / مشتری
+        * `supplier` - فروشنده / تامین‌کننده
+        * `contractor` - پیمانکار حمل و نقل
+        * `internal` - واحد داخلی / انبار
+        * `other` - سایر
+    PatchedAdminSystemSettingRequest:
+      type: object
+      description: Full system settings for super admins / system admins.
+      properties:
+        company_name:
+          type: string
+          minLength: 1
+          title: نام شرکت
+          maxLength: 200
+        company_logo:
+          type: string
+          format: binary
+          nullable: true
+          title: لوگوی شرکت
+        company_address:
+          type: string
+          title: آدرس شرکت
+        company_phone:
+          type: string
+          title: تلفن
+          maxLength: 50
+        company_email:
+          title: ایمیل
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        receipt_header_title:
+          type: string
+          minLength: 1
+          title: عنوان بالای قبض
+          maxLength: 200
+        serial_start_number:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: شماره سریال شروع
+        serial_prefix:
+          type: string
+          title: پیشوند شماره سریال (اختیاری)
+          maxLength: 20
+        weight_unit:
+          type: string
+          minLength: 1
+          title: واحد وزن
+          maxLength: 20
+        decimal_places:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          title: تعداد ارقام اعشار وزن
+        max_tolerance_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: حداکثر درصد مجاز انحراف (%)
+        max_tolerance_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: حداکثر کیلوگرم مجاز انحراف (Kg)
+        require_waybill:
+          type: boolean
+          title: شماره بارنامه اجباری باشد
+        require_driver:
+          type: boolean
+          title: اطلاعات راننده اجباری باشد
+        require_origin:
+          type: boolean
+          title: مبدأ بار اجباری باشد
+        require_destination:
+          type: boolean
+          title: مقصد بار اجباری باشد
+        require_unload_location:
+          type: boolean
+          title: جایگاه تخلیه اجباری باشد
+        default_print_template:
+          allOf:
+          - $ref: '#/components/schemas/DefaultPrintTemplateEnum'
+          title: قالب پیش‌فرض چاپ
+        receipt_footer_note:
+          type: string
+          title: متن پاورقی قبض
+        items_per_page:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: تعداد رکورد در هر صفحه
+    PatchedDriverRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+          minLength: 1
+          title: نام و نام خانوادگی راننده
+          maxLength: 150
+        mobile:
+          type: string
+          title: شماره موبایل
+          maxLength: 30
+        national_code:
+          type: string
+          title: کد ملی
+          maxLength: 20
+        license_number:
+          type: string
+          title: شماره گواهینامه
+          maxLength: 30
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+    PatchedLocationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نام محل
+          maxLength: 150
+        location_type:
+          allOf:
+          - $ref: '#/components/schemas/LocationTypeEnum'
+          title: نوع محل
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+    PatchedLossTypeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نوع افت
+          maxLength: 100
+        code:
+          type: string
+          nullable: true
+          title: کد
+          maxLength: 50
+        default_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: درصد افت پیش‌فرض (%)
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+    PatchedMonitoringRuleConfigRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          title: شرح عملکرد قانون
+        enabled:
+          type: boolean
+          title: فعال بودن قانون
+        warning_threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: آستانه هشدار عددی (Warning)
+        high_threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: آستانه بالای عددی (High)
+        critical_threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: آستانه بحرانی عددی (Critical)
+        percentage_warning:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: درصد انحراف هشدار (%)
+        percentage_high:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: درصد انحراف بالا (%)
+        percentage_critical:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: درصد انحراف بحرانی (%)
+        minimum_history:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: حداقل تعداد سابقه برای تحلیل
+        extra_params:
+          title: تنظیمات اختصاصی (JSON)
+    PatchedOperationTypeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نوع عملیات / وضعیت محموله
+          maxLength: 100
+        code:
+          type: string
+          nullable: true
+          title: کد
+          maxLength: 50
+        direction:
+          allOf:
+          - $ref: '#/components/schemas/DirectionEnum'
+          title: جهت عملیات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+    PatchedPartyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نام طرف حساب
+          maxLength: 200
+        code:
+          type: string
+          nullable: true
+          title: کد حساب
+          maxLength: 50
+        party_type:
+          allOf:
+          - $ref: '#/components/schemas/PartyTypeEnum'
+          title: نوع طرف حساب
+        phone:
+          type: string
+          title: شماره همراه
+          maxLength: 30
+        tel:
+          type: string
+          title: تلفن ثابت / فکس
+          maxLength: 30
+        email:
+          title: ایمیل
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        address:
+          type: string
+          title: آدرس
+        national_id:
+          type: string
+          title: شناسه / کد ملی
+          maxLength: 30
+        economic_code:
+          type: string
+          title: کد اقتصادی
+          maxLength: 30
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+    PatchedProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نام محصول
+          maxLength: 150
+        code:
+          type: string
+          nullable: true
+          title: کد محصول
+          maxLength: 50
+        standard_tolerance_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: حد مجاز انحراف استاندارد (کیلوگرم)
+        default_loss_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: درصد افت پیش‌فرض (%)
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+    PatchedUnloadLocationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نام جایگاه تخلیه / بارگیری
+          maxLength: 150
+        code:
+          type: string
+          nullable: true
+          title: کد جایگاه
+          maxLength: 50
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+    PatchedUserAdminRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: نام کاربری
+          description: الزامی. 150 کاراکتر یا کمتر. فقط شامل حروف، اعداد، و علامات
+            @/./+/-/_
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        first_name:
+          type: string
+          title: نام
+          maxLength: 150
+        last_name:
+          type: string
+          title: نام خانوادگی
+          maxLength: 150
+        email:
+          title: آدرس ایمیل
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        is_active:
+          type: boolean
+          title: فعال
+          description: نشان می‌دهد که آیا این کاربر اجازهٔ فعالیت دارد یا خیر. به
+            جای حذف کاربر این تیک را بردارید.
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          writeOnly: true
+        mobile:
+          type: string
+          writeOnly: true
+          maxLength: 20
+        personnel_code:
+          type: string
+          writeOnly: true
+          maxLength: 30
+        password:
+          type: string
+          writeOnly: true
+          minLength: 4
+    PatchedVehicleRequest:
+      type: object
+      properties:
+        plate_part1:
+          type: string
+          title: دو رقم اول پلاک
+          maxLength: 5
+        plate_letter:
+          type: string
+          title: حرف پلاک
+          maxLength: 10
+        plate_part2:
+          type: string
+          title: سه رقم بعد پلاک
+          maxLength: 5
+        plate_iran:
+          type: string
+          title: کد ایران (دو رقم)
+          maxLength: 5
+        vehicle_type:
+          type: integer
+          nullable: true
+          title: نوع خودرو
+        default_driver:
+          type: integer
+          nullable: true
+          title: راننده پیش‌فرض
+        empty_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: وزن خالی ثبت شده (Kg)
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+    PatchedVehicleTypeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نوع / شرح خودرو
+          maxLength: 100
+        code:
+          type: string
+          nullable: true
+          title: کد
+          maxLength: 50
+        standard_tare_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: میانگین وزن خالی استاندارد (Kg)
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: نام محصول
+          maxLength: 150
+        code:
+          type: string
+          nullable: true
+          title: کد محصول
+          maxLength: 50
+        standard_tolerance_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: حد مجاز انحراف استاندارد (کیلوگرم)
+        default_loss_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: درصد افت پیش‌فرض (%)
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        created_at_jalali:
+          type: string
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ویرایش
+      required:
+      - created_at
+      - created_at_jalali
+      - id
+      - name
+      - updated_at
+    ProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نام محصول
+          maxLength: 150
+        code:
+          type: string
+          nullable: true
+          title: کد محصول
+          maxLength: 50
+        standard_tolerance_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: حد مجاز انحراف استاندارد (کیلوگرم)
+        default_loss_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: درصد افت پیش‌فرض (%)
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+      required:
+      - name
+    PublicSystemSetting:
+      type: object
+      description: Safe public system settings.
+      properties:
+        company_name:
+          type: string
+          readOnly: true
+          title: نام شرکت
+        company_address:
+          type: string
+          readOnly: true
+          title: آدرس شرکت
+        company_phone:
+          type: string
+          readOnly: true
+          title: تلفن
+        company_email:
+          type: string
+          format: email
+          readOnly: true
+          title: ایمیل
+        receipt_header_title:
+          type: string
+          readOnly: true
+          title: عنوان بالای قبض
+        weight_unit:
+          type: string
+          readOnly: true
+          title: واحد وزن
+        decimal_places:
+          type: integer
+          readOnly: true
+          title: تعداد ارقام اعشار وزن
+        require_waybill:
+          type: boolean
+          readOnly: true
+          title: شماره بارنامه اجباری باشد
+        require_driver:
+          type: boolean
+          readOnly: true
+          title: اطلاعات راننده اجباری باشد
+        require_origin:
+          type: boolean
+          readOnly: true
+          title: مبدأ بار اجباری باشد
+        require_destination:
+          type: boolean
+          readOnly: true
+          title: مقصد بار اجباری باشد
+        require_unload_location:
+          type: boolean
+          readOnly: true
+          title: جایگاه تخلیه اجباری باشد
+        default_print_template:
+          allOf:
+          - $ref: '#/components/schemas/DefaultPrintTemplateEnum'
+          readOnly: true
+          title: قالب پیش‌فرض چاپ
+        receipt_footer_note:
+          type: string
+          readOnly: true
+          title: متن پاورقی قبض
+      required:
+      - company_address
+      - company_email
+      - company_name
+      - company_phone
+      - decimal_places
+      - default_print_template
+      - receipt_footer_note
+      - receipt_header_title
+      - require_destination
+      - require_driver
+      - require_origin
+      - require_unload_location
+      - require_waybill
+      - weight_unit
+    ReportSummary:
+      type: object
+      properties:
+        total_tickets:
+          type: integer
+        total_loads:
+          type: integer
+        sum_gross:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        sum_tare:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        sum_net:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        sum_sent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        sum_loss:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        sum_final:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        avg_net:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        avg_loss_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+        min_net:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        max_net:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+      required:
+      - avg_loss_percent
+      - avg_net
+      - max_net
+      - min_net
+      - sum_final
+      - sum_gross
+      - sum_loss
+      - sum_net
+      - sum_sent
+      - sum_tare
+      - total_loads
+      - total_tickets
+    Role:
+      type: object
+      properties:
+        code:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+      required:
+      - code
+      - label
+    RoleEnum:
+      enum:
+      - super_admin
+      - system_admin
+      - ceo
+      - factory_manager
+      - commercial_manager
+      - financial_manager
+      - weighbridge_manager
+      - weighbridge_operator
+      - report_manager
+      - viewer
+      type: string
+      description: |-
+        * `super_admin` - مدیر ارشد (Super Admin)
+        * `system_admin` - مدیر سیستم (System Admin)
+        * `ceo` - مدیرعامل (CEO)
+        * `factory_manager` - مدیر کارخانه (Factory Manager)
+        * `commercial_manager` - مدیر بازرگانی (Commercial Manager)
+        * `financial_manager` - مدیر مالی (Financial Manager)
+        * `weighbridge_manager` - مدیر باسکول (Weighbridge Manager)
+        * `weighbridge_operator` - اپراتور باسکول (Operator)
+        * `report_manager` - مدیر گزارشات (Report Manager)
+        * `viewer` - مشاهده‌گر (Viewer)
+    RuleTypeEnum:
+      enum:
+      - VEHICLE_TARE_ANOMALY
+      - WEIGHT_DISCREPANCY
+      - LOSS_ANOMALY
+      - NET_WEIGHT_ANOMALY
+      - LONG_WAITING_TIME
+      - WEIGHT_EDIT_ANOMALY
+      type: string
+      description: |-
+        * `VEHICLE_TARE_ANOMALY` - وزن خالی غیرعادی خودرو
+        * `WEIGHT_DISCREPANCY` - مغایرت وزن ارسالی و باسکول
+        * `LOSS_ANOMALY` - افت غیرعادی محموله
+        * `NET_WEIGHT_ANOMALY` - وزن خالص غیرعادی
+        * `LONG_WAITING_TIME` - زمان توقف غیرعادی
+        * `WEIGHT_EDIT_ANOMALY` - اصلاح غیرعادی وزن
+    SecondWeightRequest:
+      type: object
+      properties:
+        weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
+          nullable: true
+        time:
+          type: string
+          format: time
+          nullable: true
+        loss_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        loss_type:
+          type: integer
+          nullable: true
+      required:
+      - weight
+    SeverityEnum:
+      enum:
+      - INFO
+      - LOW
+      - MEDIUM
+      - HIGH
+      - CRITICAL
+      type: string
+      description: |-
+        * `INFO` - اطلاعات (Info)
+        * `LOW` - کم (Low)
+        * `MEDIUM` - متوسط (Medium)
+        * `HIGH` - بالا (High)
+        * `CRITICAL` - بحرانی (Critical)
+    StatusEnum:
+      enum:
+      - OPEN
+      - REVIEWED
+      - RESOLVED
+      - IGNORED
+      type: string
+      description: |-
+        * `OPEN` - باز (Open)
+        * `REVIEWED` - بررسی‌شده (Reviewed)
+        * `RESOLVED` - حل‌شده (Resolved)
+        * `IGNORED` - نادیده‌گرفته‌شده (Ignored)
+    TicketCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 3
+      required:
+      - reason
+    TicketCompleteRequest:
+      type: object
+      properties:
+        notes:
+          type: string
+    TicketCorrectRequest:
+      type: object
+      properties:
+        field:
+          $ref: '#/components/schemas/FieldEnum'
+        new_value:
+          type: string
+          minLength: 1
+        reason:
+          type: string
+          minLength: 3
+      required:
+      - field
+      - new_value
+      - reason
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    TokenVerifyRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - token
+    UnloadLocation:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: نام جایگاه تخلیه / بارگیری
+          maxLength: 150
+        code:
+          type: string
+          nullable: true
+          title: کد جایگاه
+          maxLength: 50
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ویرایش
+      required:
+      - created_at
+      - id
+      - name
+      - updated_at
+    UnloadLocationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نام جایگاه تخلیه / بارگیری
+          maxLength: 150
+        code:
+          type: string
+          nullable: true
+          title: کد جایگاه
+          maxLength: 50
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+      required:
+      - name
+    UserAdmin:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          title: نام کاربری
+          description: الزامی. 150 کاراکتر یا کمتر. فقط شامل حروف، اعداد، و علامات
+            @/./+/-/_
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        first_name:
+          type: string
+          title: نام
+          maxLength: 150
+        last_name:
+          type: string
+          title: نام خانوادگی
+          maxLength: 150
+        email:
+          title: آدرس ایمیل
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        is_active:
+          type: boolean
+          title: فعال
+          description: نشان می‌دهد که آیا این کاربر اجازهٔ فعالیت دارد یا خیر. به
+            جای حذف کاربر این تیک را بردارید.
+        role_display:
+          type: string
+          readOnly: true
+        mobile_display:
+          type: string
+          readOnly: true
+        personnel_code_display:
+          type: string
+          readOnly: true
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ پیوستن
+        last_login:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: آخرین ورود
+      required:
+      - date_joined
+      - id
+      - last_login
+      - mobile_display
+      - personnel_code_display
+      - role_display
+      - username
+    UserAdminRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: نام کاربری
+          description: الزامی. 150 کاراکتر یا کمتر. فقط شامل حروف، اعداد، و علامات
+            @/./+/-/_
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        first_name:
+          type: string
+          title: نام
+          maxLength: 150
+        last_name:
+          type: string
+          title: نام خانوادگی
+          maxLength: 150
+        email:
+          title: آدرس ایمیل
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        is_active:
+          type: boolean
+          title: فعال
+          description: نشان می‌دهد که آیا این کاربر اجازهٔ فعالیت دارد یا خیر. به
+            جای حذف کاربر این تیک را بردارید.
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          writeOnly: true
+        mobile:
+          type: string
+          writeOnly: true
+          maxLength: 20
+        personnel_code:
+          type: string
+          writeOnly: true
+          maxLength: 30
+        password:
+          type: string
+          writeOnly: true
+          minLength: 4
+      required:
+      - username
+    UserMe:
+      type: object
+      description: Serializer representing current authenticated user.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          title: نام کاربری
+          description: الزامی. 150 کاراکتر یا کمتر. فقط شامل حروف، اعداد، و علامات
+            @/./+/-/_
+        first_name:
+          type: string
+          readOnly: true
+          title: نام
+        last_name:
+          type: string
+          readOnly: true
+          title: نام خانوادگی
+        full_name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: آدرس ایمیل
+        role:
+          type: string
+          readOnly: true
+        mobile:
+          type: string
+          readOnly: true
+        personnel_code:
+          type: string
+          readOnly: true
+        permissions:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+          title: فعال
+          description: نشان می‌دهد که آیا این کاربر اجازهٔ فعالیت دارد یا خیر. به
+            جای حذف کاربر این تیک را بردارید.
+      required:
+      - email
+      - first_name
+      - full_name
+      - id
+      - is_active
+      - last_name
+      - mobile
+      - permissions
+      - personnel_code
+      - role
+      - username
+    Vehicle:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        plate_part1:
+          type: string
+          title: دو رقم اول پلاک
+          maxLength: 5
+        plate_letter:
+          type: string
+          title: حرف پلاک
+          maxLength: 10
+        plate_part2:
+          type: string
+          title: سه رقم بعد پلاک
+          maxLength: 5
+        plate_iran:
+          type: string
+          title: کد ایران (دو رقم)
+          maxLength: 5
+        plate_display:
+          type: string
+          readOnly: true
+          title: شماره کامل پلاک
+        vehicle_type:
+          type: integer
+          nullable: true
+          title: نوع خودرو
+        vehicle_type_name:
+          type: string
+          readOnly: true
+        default_driver:
+          type: integer
+          nullable: true
+          title: راننده پیش‌فرض
+        default_driver_name:
+          type: string
+          readOnly: true
+        empty_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: وزن خالی ثبت شده (Kg)
+        description:
+          type: string
+          title: توضیحات
+        trip_count:
+          type: string
+          readOnly: true
+        last_trip_date:
+          type: string
+          readOnly: true
+        avg_empty_weight:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        created_at_jalali:
+          type: string
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ویرایش
+      required:
+      - avg_empty_weight
+      - created_at
+      - created_at_jalali
+      - default_driver_name
+      - id
+      - last_trip_date
+      - plate_display
+      - trip_count
+      - updated_at
+      - vehicle_type_name
+    VehicleRequest:
+      type: object
+      properties:
+        plate_part1:
+          type: string
+          title: دو رقم اول پلاک
+          maxLength: 5
+        plate_letter:
+          type: string
+          title: حرف پلاک
+          maxLength: 10
+        plate_part2:
+          type: string
+          title: سه رقم بعد پلاک
+          maxLength: 5
+        plate_iran:
+          type: string
+          title: کد ایران (دو رقم)
+          maxLength: 5
+        vehicle_type:
+          type: integer
+          nullable: true
+          title: نوع خودرو
+        default_driver:
+          type: integer
+          nullable: true
+          title: راننده پیش‌فرض
+        empty_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: وزن خالی ثبت شده (Kg)
+        description:
+          type: string
+          title: توضیحات
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+    VehicleType:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: نوع / شرح خودرو
+          maxLength: 100
+        code:
+          type: string
+          nullable: true
+          title: کد
+          maxLength: 50
+        standard_tare_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: میانگین وزن خالی استاندارد (Kg)
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ویرایش
+      required:
+      - created_at
+      - id
+      - name
+      - updated_at
+    VehicleTypeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: نوع / شرح خودرو
+          maxLength: 100
+        code:
+          type: string
+          nullable: true
+          title: کد
+          maxLength: 50
+        standard_tare_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: میانگین وزن خالی استاندارد (Kg)
+        is_active:
+          type: boolean
+          title: فعال / معتبر
+      required:
+      - name
+    WeighTicketCreate:
+      type: object
+      description: |-
+        Serializer for creating a new weighbridge ticket.
+        Serial number is securely generated by backend.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        serial_number:
+          type: string
+          readOnly: true
+          title: شماره قبض / سریال
+        weight_mode:
+          allOf:
+          - $ref: '#/components/schemas/WeightModeEnum'
+          title: سناریوی توزین
+        operation_type:
+          type: integer
+          nullable: true
+          title: نوع عملیات / وضعیت محموله
+        party:
+          type: integer
+          nullable: true
+          title: طرف حساب
+        product:
+          type: integer
+          nullable: true
+          title: نام محصول
+        vehicle:
+          type: integer
+          nullable: true
+          title: خودرو
+        vehicle_type:
+          type: integer
+          nullable: true
+          title: نوع خودرو
+        vehicle_type_custom:
+          type: string
+          title: شرح دستی نوع ماشین
+          maxLength: 100
+        driver:
+          type: integer
+          nullable: true
+          title: راننده
+        driver_name_custom:
+          type: string
+          title: نام راننده (دستی)
+          maxLength: 150
+        driver_mobile_custom:
+          type: string
+          title: شماره موبایل راننده
+          maxLength: 30
+        license_plate_display:
+          type: string
+          title: شماره پلاک
+          maxLength: 60
+        waybill_number:
+          type: string
+          title: شماره بارنامه
+          maxLength: 60
+        origin:
+          type: integer
+          nullable: true
+          title: مبدأ بار
+        destination:
+          type: integer
+          nullable: true
+          title: مقصد بار
+        unload_location:
+          type: integer
+          nullable: true
+          title: جایگاه تخلیه / بارگیری
+        load_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: تعداد بار / سرویس
+        sent_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          title: وزن ارسالی / مبدا (Kg)
+        first_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+        first_weight_date:
+          type: string
+          format: date
+          nullable: true
+        first_weight_time:
+          type: string
+          format: time
+          nullable: true
+        second_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        loss_type:
+          type: integer
+          nullable: true
+          title: نوع افت
+        loss_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: درصد افت (%)
+        notes:
+          type: string
+          title: توضیحات قبض
+      required:
+      - id
+      - license_plate_display
+      - serial_number
+    WeighTicketCreateRequest:
+      type: object
+      description: |-
+        Serializer for creating a new weighbridge ticket.
+        Serial number is securely generated by backend.
+      properties:
+        weight_mode:
+          allOf:
+          - $ref: '#/components/schemas/WeightModeEnum'
+          title: سناریوی توزین
+        operation_type:
+          type: integer
+          nullable: true
+          title: نوع عملیات / وضعیت محموله
+        party:
+          type: integer
+          nullable: true
+          title: طرف حساب
+        product:
+          type: integer
+          nullable: true
+          title: نام محصول
+        vehicle:
+          type: integer
+          nullable: true
+          title: خودرو
+        vehicle_type:
+          type: integer
+          nullable: true
+          title: نوع خودرو
+        vehicle_type_custom:
+          type: string
+          title: شرح دستی نوع ماشین
+          maxLength: 100
+        driver:
+          type: integer
+          nullable: true
+          title: راننده
+        driver_name_custom:
+          type: string
+          title: نام راننده (دستی)
+          maxLength: 150
+        driver_mobile_custom:
+          type: string
+          title: شماره موبایل راننده
+          maxLength: 30
+        license_plate_display:
+          type: string
+          minLength: 1
+          title: شماره پلاک
+          maxLength: 60
+        waybill_number:
+          type: string
+          title: شماره بارنامه
+          maxLength: 60
+        origin:
+          type: integer
+          nullable: true
+          title: مبدأ بار
+        destination:
+          type: integer
+          nullable: true
+          title: مقصد بار
+        unload_location:
+          type: integer
+          nullable: true
+          title: جایگاه تخلیه / بارگیری
+        load_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: تعداد بار / سرویس
+        sent_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          title: وزن ارسالی / مبدا (Kg)
+        first_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+        first_weight_date:
+          type: string
+          format: date
+          nullable: true
+        first_weight_time:
+          type: string
+          format: time
+          nullable: true
+        second_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        loss_type:
+          type: integer
+          nullable: true
+          title: نوع افت
+        loss_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: درصد افت (%)
+        notes:
+          type: string
+          title: توضیحات قبض
+      required:
+      - license_plate_display
+    WeighTicketDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        serial_number:
+          type: string
+          readOnly: true
+          title: شماره قبض / سریال
+        status:
+          type: string
+          readOnly: true
+        weight_mode:
+          type: string
+          readOnly: true
+        operation_type:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: نوع عملیات / وضعیت محموله
+        operation_type_display:
+          type: string
+          readOnly: true
+        party:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: طرف حساب
+        party_display:
+          type: string
+          readOnly: true
+        product:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: نام محصول
+        product_display:
+          type: string
+          readOnly: true
+        vehicle:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: خودرو
+        vehicle_display:
+          type: string
+          readOnly: true
+        vehicle_type:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: نوع خودرو
+        vehicle_type_display:
+          type: string
+          readOnly: true
+        vehicle_type_custom:
+          type: string
+          readOnly: true
+          title: شرح دستی نوع ماشین
+        driver:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: راننده
+        driver_display:
+          type: string
+          readOnly: true
+        driver_mobile_display:
+          type: string
+          readOnly: true
+        driver_name_custom:
+          type: string
+          readOnly: true
+          title: نام راننده (دستی)
+        driver_mobile_custom:
+          type: string
+          readOnly: true
+          title: شماره موبایل راننده
+        license_plate_display:
+          type: string
+          readOnly: true
+          title: شماره پلاک
+        waybill_number:
+          type: string
+          readOnly: true
+          title: شماره بارنامه
+        origin:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: مبدأ بار
+        origin_name:
+          type: string
+          readOnly: true
+        destination:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: مقصد بار
+        destination_name:
+          type: string
+          readOnly: true
+        unload_location:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: جایگاه تخلیه / بارگیری
+        unload_location_name:
+          type: string
+          readOnly: true
+        load_count:
+          type: integer
+          readOnly: true
+          title: تعداد بار / سرویس
+        first_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن اول (Kg)
+        first_weight_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+          title: تاریخ وزن اول
+        first_weight_date_jalali:
+          type: string
+          readOnly: true
+        first_weight_time:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+          title: ساعت وزن اول
+        first_weight_operator:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: مسئول وزن اول
+        first_weight_operator_name:
+          type: string
+          readOnly: true
+        second_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+          title: وزن دوم (Kg)
+        second_weight_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+          title: تاریخ وزن دوم
+        second_weight_date_jalali:
+          type: string
+          readOnly: true
+        second_weight_time:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+          title: ساعت وزن دوم
+        second_weight_operator:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: مسئول وزن دوم
+        second_weight_operator_name:
+          type: string
+          readOnly: true
+        gross_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن پر (Kg)
+        tare_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن خالی (Kg)
+        net_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن خالص (Kg)
+        sent_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن ارسالی / مبدا (Kg)
+        weight_difference:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: اختلاف با وزن ارسالی (Kg)
+        weight_difference_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          readOnly: true
+          title: درصد اختلاف وزن (%)
+        is_tolerance_exceeded:
+          type: boolean
+          readOnly: true
+          title: مغایرت بیش از حد مجاز
+        loss_type:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: نوع افت
+        loss_type_name:
+          type: string
+          readOnly: true
+        loss_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          readOnly: true
+          title: درصد افت (%)
+        loss_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن افت (Kg)
+        is_loss_overridden:
+          type: boolean
+          readOnly: true
+          title: افت دستی تنظیم شده
+        loss_override_reason:
+          type: string
+          readOnly: true
+          title: دلیل تنظیم دستی افت
+        final_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن نهایی پس از کسر افت (Kg)
+        notes:
+          type: string
+          readOnly: true
+          title: توضیحات قبض
+        cancellation_reason:
+          type: string
+          readOnly: true
+          title: دلیل ابطال
+        cancelled_by:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: کاربر ابطال‌کننده
+        cancelled_by_name:
+          type: string
+          readOnly: true
+        cancelled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: زمان ابطال
+        cancelled_at_jalali:
+          type: string
+          readOnly: true
+        last_edited_by:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: آخرین ویرایش‌کننده
+        last_edited_by_name:
+          type: string
+          readOnly: true
+        last_edit_reason:
+          type: string
+          readOnly: true
+          title: دلیل آخرین ویرایش
+        risk_score:
+          type: string
+          readOnly: true
+        risk_level:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        created_at_jalali:
+          type: string
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ویرایش
+      required:
+      - cancellation_reason
+      - cancelled_at
+      - cancelled_at_jalali
+      - cancelled_by
+      - cancelled_by_name
+      - created_at
+      - created_at_jalali
+      - destination
+      - destination_name
+      - driver
+      - driver_display
+      - driver_mobile_custom
+      - driver_mobile_display
+      - driver_name_custom
+      - final_weight
+      - first_weight
+      - first_weight_date
+      - first_weight_date_jalali
+      - first_weight_operator
+      - first_weight_operator_name
+      - first_weight_time
+      - gross_weight
+      - id
+      - is_loss_overridden
+      - is_tolerance_exceeded
+      - last_edit_reason
+      - last_edited_by
+      - last_edited_by_name
+      - license_plate_display
+      - load_count
+      - loss_override_reason
+      - loss_percent
+      - loss_type
+      - loss_type_name
+      - loss_weight
+      - net_weight
+      - notes
+      - operation_type
+      - operation_type_display
+      - origin
+      - origin_name
+      - party
+      - party_display
+      - product
+      - product_display
+      - risk_level
+      - risk_score
+      - second_weight
+      - second_weight_date
+      - second_weight_date_jalali
+      - second_weight_operator
+      - second_weight_operator_name
+      - second_weight_time
+      - sent_weight
+      - serial_number
+      - status
+      - tare_weight
+      - unload_location
+      - unload_location_name
+      - updated_at
+      - vehicle
+      - vehicle_display
+      - vehicle_type
+      - vehicle_type_custom
+      - vehicle_type_display
+      - waybill_number
+      - weight_difference
+      - weight_difference_percent
+      - weight_mode
+    WeighTicketList:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        serial_number:
+          type: string
+          readOnly: true
+          title: شماره قبض / سریال
+        status:
+          type: string
+          readOnly: true
+        weight_mode:
+          type: string
+          readOnly: true
+        operation_type:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: نوع عملیات / وضعیت محموله
+        operation_type_name:
+          type: string
+          readOnly: true
+        party:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: طرف حساب
+        party_name:
+          type: string
+          readOnly: true
+        product:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: نام محصول
+        product_name:
+          type: string
+          readOnly: true
+        license_plate_display:
+          type: string
+          readOnly: true
+          title: شماره پلاک
+        driver_name:
+          type: string
+          readOnly: true
+        first_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن اول (Kg)
+        first_weight_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+          title: تاریخ وزن اول
+        first_weight_date_jalali:
+          type: string
+          readOnly: true
+        second_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+          title: وزن دوم (Kg)
+        second_weight_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+          title: تاریخ وزن دوم
+        second_weight_date_jalali:
+          type: string
+          readOnly: true
+        gross_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن پر (Kg)
+        tare_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن خالی (Kg)
+        net_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن خالص (Kg)
+        sent_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن ارسالی / مبدا (Kg)
+        weight_difference:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: اختلاف با وزن ارسالی (Kg)
+        loss_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن افت (Kg)
+        final_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          title: وزن نهایی پس از کسر افت (Kg)
+        is_tolerance_exceeded:
+          type: boolean
+          readOnly: true
+          title: مغایرت بیش از حد مجاز
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        created_at_jalali:
+          type: string
+          readOnly: true
+      required:
+      - created_at
+      - created_at_jalali
+      - driver_name
+      - final_weight
+      - first_weight
+      - first_weight_date
+      - first_weight_date_jalali
+      - gross_weight
+      - id
+      - is_tolerance_exceeded
+      - license_plate_display
+      - loss_weight
+      - net_weight
+      - operation_type
+      - operation_type_name
+      - party
+      - party_name
+      - product
+      - product_name
+      - second_weight
+      - second_weight_date
+      - second_weight_date_jalali
+      - sent_weight
+      - serial_number
+      - status
+      - tare_weight
+      - weight_difference
+      - weight_mode
+    WeightModeEnum:
+      enum:
+      - empty_first
+      - full_first
+      - direct
+      type: string
+      description: |-
+        * `empty_first` - ابتدا خالی (توزین اول) سپس پر (توزین دوم)
+        * `full_first` - ابتدا پر (توزین اول) سپس خالی (توزین دوم)
+        * `direct` - ثبت مستقیم هر دو وزن همزمان
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+tags:
+- name: Authentication
+  description: احراز هویت JWT و اطلاعات کاربر جاری
+- name: Tickets
+  description: عملیات توزین و مدیریت قبوض باسکول
+- name: Master Data
+  description: 'اطلاعات پایه: محصولات، طرف‌ها، رانندگان، خودروها و جایگاه‌ها'
+- name: Dashboard
+  description: داشبورد عملیاتی و شاخص‌های لحظه‌ای
+- name: Management
+  description: هوش تجاری و گزارشات تخصصی مدیران ارشد
+- name: Monitoring
+  description: ماژول پایش هوشمند و کشف مغایرت‌های توزین
+- name: Reports
+  description: گزارش‌ساز پویا و خروجی‌های Excel، CSV و PDF
+- name: Audit
+  description: گزارشات ممیزی و ردگیری تغییرات سیستم
+- name: Users
+  description: مدیریت کاربران و نقش‌های کاربری
+- name: System Settings
+  description: تنظیمات سامانه و بررسی سلامت سرویس
