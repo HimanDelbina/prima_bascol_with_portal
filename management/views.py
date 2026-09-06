@@ -77,9 +77,13 @@ def dashboard_view(request):
     heatmap_matrix = ManagementDashboardService.get_traffic_heatmap(curr_qs)
 
     from monitoring.models import MonitoringAlert, AlertStatus, AlertSeverity
-    monitoring_open_count = MonitoringAlert.objects.filter(status__in=[AlertStatus.OPEN, AlertStatus.REVIEWED]).count()
-    monitoring_critical_count = MonitoringAlert.objects.filter(
-        status__in=[AlertStatus.OPEN, AlertStatus.REVIEWED],
+    _alert_qs = MonitoringAlert.objects.filter(status__in=[AlertStatus.OPEN, AlertStatus.REVIEWED])
+    if start_date:
+        _alert_qs = _alert_qs.filter(created_at__date__gte=start_date)
+    if end_date:
+        _alert_qs = _alert_qs.filter(created_at__date__lte=end_date)
+    monitoring_open_count = _alert_qs.count()
+    monitoring_critical_count = _alert_qs.filter(
         severity__in=[AlertSeverity.CRITICAL, AlertSeverity.HIGH]
     ).count()
 
@@ -200,7 +204,10 @@ def parties_view(request):
 @login_required
 @management_role_required
 def discrepancies_view(request):
-    threshold = int(request.GET.get('threshold_kg', 50))
+    try:
+        threshold = int(request.GET.get('threshold_kg', 50))
+    except (ValueError, TypeError):
+        threshold = 50
     curr_qs, _, start_date, end_date, _, _, period_label = ManagementDashboardService.get_filtered_queryset(request.GET)
     if request.GET.get('export') == 'excel':
         return export_management_excel(curr_qs, format_jalali_date(start_date), format_jalali_date(end_date), "گزارش مغایرت‌های وزن")
