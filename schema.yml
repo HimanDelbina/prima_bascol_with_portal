@@ -279,6 +279,30 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/auth/verify-password/:
+    post:
+      operationId: v1_auth_verify_password_create
+      description: بررسی رمز عبور فعلی کاربر بدون ایجاد توکن جدید جهت تایید هویت مجدد.
+      summary: اعتبارسنجی رمز عبور جهت عملیات حساس
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                  description: رمز عبور کاربر
+              required:
+              - password
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: 'نتیجه بررسی رمز عبور (valid: true/false)'
   /api/v1/dashboard/summary/:
     get:
       operationId: v1_dashboard_summary_retrieve
@@ -1075,6 +1099,10 @@ paths:
         name: date_to
         schema:
           type: string
+      - in: query
+        name: driver
+        schema:
+          type: number
       - name: ordering
         required: false
         in: query
@@ -1103,6 +1131,14 @@ paths:
           type: string
       - in: query
         name: product
+        schema:
+          type: number
+      - in: query
+        name: risk_score_max
+        schema:
+          type: number
+      - in: query
+        name: risk_score_min
         schema:
           type: number
       - name: search
@@ -3660,22 +3696,6 @@ components:
       properties:
         note:
           type: string
-    AlertTypeEnum:
-      enum:
-      - VEHICLE_TARE_ANOMALY
-      - WEIGHT_DISCREPANCY
-      - LOSS_ANOMALY
-      - NET_WEIGHT_ANOMALY
-      - LONG_WAITING_TIME
-      - WEIGHT_EDIT_ANOMALY
-      type: string
-      description: |-
-        * `VEHICLE_TARE_ANOMALY` - وزن خالی غیرعادی خودرو
-        * `WEIGHT_DISCREPANCY` - مغایرت وزن ارسالی و باسکول
-        * `LOSS_ANOMALY` - افت غیرعادی محموله
-        * `NET_WEIGHT_ANOMALY` - وزن خالص غیرعادی
-        * `LONG_WAITING_TIME` - زمان توقف غیرعادی
-        * `WEIGHT_EDIT_ANOMALY` - اصلاح غیرعادی وزن
     AuditLog:
       type: object
       properties:
@@ -3752,18 +3772,6 @@ components:
       - user
       - user_name
       - username
-    ConfidenceEnum:
-      enum:
-      - insufficient
-      - low
-      - medium
-      - high
-      type: string
-      description: |-
-        * `insufficient` - داده ناکافی
-        * `low` - پایین (۱۰-۱۹ نمونه)
-        * `medium` - متوسط (۲۰-۴۹ نمونه)
-        * `high` - بالا (۵۰+ نمونه)
     CustomTokenObtainPairRequest:
       type: object
       description: Custom JWT Token Obtain Serializer adding rich user profile and
@@ -4221,20 +4229,18 @@ components:
         ticket_plate:
           type: string
           readOnly: true
-        alert_type:
-          allOf:
-          - $ref: '#/components/schemas/AlertTypeEnum'
+        product_name:
+          type: string
           readOnly: true
-          title: نوع هشدار
-        alert_type_display:
+          default: ''
+        party_name:
+          type: string
+          readOnly: true
+          default: ''
+        alert_type:
           type: string
           readOnly: true
         severity:
-          allOf:
-          - $ref: '#/components/schemas/SeverityEnum'
-          readOnly: true
-          title: سطح اهمیت
-        severity_display:
           type: string
           readOnly: true
         title:
@@ -4282,19 +4288,12 @@ components:
           readOnly: true
           title: تعداد سوابق بررسی‌شده
         confidence:
-          allOf:
-          - $ref: '#/components/schemas/ConfidenceEnum'
+          type: string
           readOnly: true
-          title: درجه اطمینان مبنا
-        confidence_display:
+        baseline_source:
           type: string
           readOnly: true
         status:
-          allOf:
-          - $ref: '#/components/schemas/StatusEnum'
-          readOnly: true
-          title: وضعیت هشدار
-        status_display:
           type: string
           readOnly: true
         created_at:
@@ -4303,6 +4302,31 @@ components:
           readOnly: true
           title: زمان ایجاد هشدار
         created_at_jalali:
+          type: string
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: زمان آخرین تغییر
+        updated_at_jalali:
+          type: string
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: زمان بازبینی
+        reviewed_at_jalali:
+          type: string
+          readOnly: true
+        reviewed_by:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: بازبینی‌کننده
+        reviewed_by_name:
           type: string
           readOnly: true
         resolved_at:
@@ -4329,35 +4353,52 @@ components:
         metadata:
           readOnly: true
           title: متادیتا و جزییات محاسبات
+        ticket_summary:
+          type: string
+          readOnly: true
+        historical_summary:
+          type: string
+          readOnly: true
+        recent_history:
+          type: string
+          readOnly: true
       required:
       - alert_type
-      - alert_type_display
+      - baseline_source
       - baseline_value
       - confidence
-      - confidence_display
       - created_at
       - created_at_jalali
       - current_value
       - description
       - deviation_percent
       - deviation_value
+      - historical_summary
       - id
       - metadata
+      - party_name
+      - product_name
       - reason
+      - recent_history
       - resolution_note
       - resolved_at
       - resolved_at_jalali
       - resolved_by
       - resolved_by_name
+      - reviewed_at
+      - reviewed_at_jalali
+      - reviewed_by
+      - reviewed_by_name
       - sample_size
       - severity
-      - severity_display
       - status
-      - status_display
       - ticket
       - ticket_plate
       - ticket_serial
+      - ticket_summary
       - title
+      - updated_at
+      - updated_at_jalali
     MonitoringRuleConfig:
       type: object
       properties:
@@ -5721,32 +5762,6 @@ components:
           nullable: true
       required:
       - weight
-    SeverityEnum:
-      enum:
-      - INFO
-      - LOW
-      - MEDIUM
-      - HIGH
-      - CRITICAL
-      type: string
-      description: |-
-        * `INFO` - اطلاعات (Info)
-        * `LOW` - کم (Low)
-        * `MEDIUM` - متوسط (Medium)
-        * `HIGH` - بالا (High)
-        * `CRITICAL` - بحرانی (Critical)
-    StatusEnum:
-      enum:
-      - OPEN
-      - REVIEWED
-      - RESOLVED
-      - IGNORED
-      type: string
-      description: |-
-        * `OPEN` - باز (Open)
-        * `REVIEWED` - بررسی‌شده (Reviewed)
-        * `RESOLVED` - حل‌شده (Resolved)
-        * `IGNORED` - نادیده‌گرفته‌شده (Ignored)
     TicketCancelRequest:
       type: object
       properties:
@@ -6938,6 +6953,13 @@ components:
           type: boolean
           readOnly: true
           title: مغایرت بیش از حد مجاز
+        open_alerts_count:
+          type: integer
+          readOnly: true
+          default: 0
+        risk_score:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -6960,12 +6982,14 @@ components:
       - license_plate_display
       - loss_weight
       - net_weight
+      - open_alerts_count
       - operation_type
       - operation_type_name
       - party
       - party_name
       - product
       - product_name
+      - risk_score
       - second_weight
       - second_weight_date
       - second_weight_date_jalali

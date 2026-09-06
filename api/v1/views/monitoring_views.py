@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
+from django.db.models import Count
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
@@ -31,7 +32,8 @@ from api.v1.utils import api_success_response, get_client_ip
 )
 class MonitoringAlertViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = MonitoringAlert.objects.select_related(
-        'ticket', 'ticket__product', 'ticket__party', 'ticket__vehicle', 'resolved_by'
+        'ticket', 'ticket__product', 'ticket__party', 'ticket__vehicle', 'ticket__driver',
+        'resolved_by', 'reviewed_by'
     ).all().order_by('-id')
 
     serializer_class = MonitoringAlertSerializer
@@ -59,11 +61,12 @@ class MonitoringAlertViewSet(viewsets.ReadOnlyModelViewSet):
 
         with transaction.atomic():
             alert = MonitoringAlert.objects.select_for_update().get(pk=pk)
+            old_status = alert.status
             alert.status = AlertStatus.REVIEWED
+            alert.reviewed_at = timezone.now()
+            alert.reviewed_by = request.user
             if note:
                 alert.resolution_note = note
-            alert.resolved_at = timezone.now()
-            alert.resolved_by = request.user
             alert.save()
 
             log_audit(
@@ -71,10 +74,12 @@ class MonitoringAlertViewSet(viewsets.ReadOnlyModelViewSet):
                 model_name="MonitoringAlert",
                 record_id=alert.id,
                 record_repr=str(alert),
-                new_values={"status": "reviewed", "note": note},
+                old_values={"status": old_status},
+                new_values={"status": AlertStatus.REVIEWED, "note": note},
                 reason="بازبینی هشدار پایش از طریق API",
                 user=request.user,
-                ip_address=get_client_ip(request)
+                ip_address=get_client_ip(request),
+                source="API"
             )
 
         return api_success_response(
@@ -97,6 +102,7 @@ class MonitoringAlertViewSet(viewsets.ReadOnlyModelViewSet):
 
         with transaction.atomic():
             alert = MonitoringAlert.objects.select_for_update().get(pk=pk)
+            old_status = alert.status
             alert.status = AlertStatus.RESOLVED
             alert.resolution_note = note
             alert.resolved_at = timezone.now()
@@ -108,10 +114,12 @@ class MonitoringAlertViewSet(viewsets.ReadOnlyModelViewSet):
                 model_name="MonitoringAlert",
                 record_id=alert.id,
                 record_repr=str(alert),
-                new_values={"status": "resolved", "resolution_note": note},
+                old_values={"status": old_status},
+                new_values={"status": AlertStatus.RESOLVED, "resolution_note": note},
                 reason=note,
                 user=request.user,
-                ip_address=get_client_ip(request)
+                ip_address=get_client_ip(request),
+                source="API"
             )
 
         return api_success_response(
@@ -134,6 +142,7 @@ class MonitoringAlertViewSet(viewsets.ReadOnlyModelViewSet):
 
         with transaction.atomic():
             alert = MonitoringAlert.objects.select_for_update().get(pk=pk)
+            old_status = alert.status
             alert.status = AlertStatus.IGNORED
             alert.resolution_note = reason
             alert.resolved_at = timezone.now()
@@ -145,10 +154,12 @@ class MonitoringAlertViewSet(viewsets.ReadOnlyModelViewSet):
                 model_name="MonitoringAlert",
                 record_id=alert.id,
                 record_repr=str(alert),
-                new_values={"status": "ignored", "reason": reason},
+                old_values={"status": old_status},
+                new_values={"status": AlertStatus.IGNORED, "reason": reason},
                 reason=reason,
                 user=request.user,
-                ip_address=get_client_ip(request)
+                ip_address=get_client_ip(request),
+                source="API"
             )
 
         return api_success_response(
@@ -176,15 +187,20 @@ class MonitoringAlertViewSet(viewsets.ReadOnlyModelViewSet):
 
         today_cnt = qs.filter(created_at__date=today_g).count()
 
+        by_type_qs = qs.filter(status__in=[AlertStatus.OPEN, AlertStatus.REVIEWED]).values('alert_type').annotate(count=Count('id'))
+        by_type = {item['alert_type']: item['count'] for item in by_type_qs}
+
         return Response({
+            "total_today": today_cnt,
+            "today": today_cnt,
             "open": open_cnt,
             "reviewed": reviewed_cnt,
             "resolved": resolved_cnt,
             "ignored": ignored_cnt,
             "high": high_cnt,
             "critical": critical_cnt,
-            "today": today_cnt,
-            "total_open": open_cnt + reviewed_cnt
+            "total_open": open_cnt + reviewed_cnt,
+            "by_type": by_type
         })
 
 

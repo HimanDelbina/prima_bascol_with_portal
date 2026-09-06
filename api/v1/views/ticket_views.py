@@ -53,6 +53,16 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
         "first_weight_operator", "second_weight_operator", "cancelled_by", "last_edited_by"
     ).all().order_by("-id")
 
+    def get_queryset(self):
+        from django.db.models import Count, Q
+        return super().get_queryset().annotate(
+            open_alerts_count=Count(
+                'monitoring_alerts',
+                filter=Q(monitoring_alerts__status__in=['OPEN', 'REVIEWED']),
+                distinct=True
+            )
+        )
+
     permission_classes = [IsAuthenticated, CanManageTicket]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = WeighTicketFilter
@@ -428,10 +438,12 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                 model_name="WeighTicket",
                 record_id=ticket.id,
                 record_repr=f"قبض شماره {ticket.serial_number}",
-                new_values={"status": "cancelled", "reason": reason},
+                old_values={"status": ticket.status},
+                new_values={"status": TicketStatus.CANCELLED, "reason": reason},
                 reason=reason,
                 user=request.user,
-                ip_address=get_client_ip(request)
+                ip_address=get_client_ip(request),
+                source="API"
             )
 
         return api_success_response(
@@ -516,8 +528,14 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                 "final_weight": float(ticket.final_weight),
             }
 
+            audit_action = AuditAction.UPDATE
+            if field in ['loss_weight', 'loss_percent']:
+                audit_action = AuditAction.OVERRIDE_LOSS
+            elif field in ['first_weight', 'second_weight', 'sent_weight']:
+                audit_action = AuditAction.OVERRIDE_WEIGHT
+
             log_audit(
-                action=AuditAction.OVERRIDE_WEIGHT,
+                action=audit_action,
                 model_name="WeighTicket",
                 record_id=ticket.id,
                 record_repr=f"قبض شماره {ticket.serial_number}",
@@ -525,7 +543,8 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                 new_values=new_values,
                 reason=reason,
                 user=request.user,
-                ip_address=get_client_ip(request)
+                ip_address=get_client_ip(request),
+                source="API"
             )
 
             AnomalyDetectionEngine.run_for_ticket(ticket)

@@ -22,6 +22,8 @@ class WeighTicketListSerializer(serializers.ModelSerializer):
     first_weight_date_jalali = serializers.CharField(source='jalali_first_date', read_only=True)
     second_weight_date_jalali = serializers.CharField(source='jalali_second_date', read_only=True)
     created_at_jalali = serializers.CharField(source='jalali_created_at', read_only=True)
+    open_alerts_count = serializers.IntegerField(read_only=True, default=0)
+    risk_score = serializers.SerializerMethodField()
 
     class Meta:
         model = WeighTicket
@@ -35,9 +37,18 @@ class WeighTicketListSerializer(serializers.ModelSerializer):
             'second_weight', 'second_weight_date', 'second_weight_date_jalali',
             'gross_weight', 'tare_weight', 'net_weight', 'sent_weight',
             'weight_difference', 'loss_weight', 'final_weight',
-            'is_tolerance_exceeded', 'created_at', 'created_at_jalali',
+            'is_tolerance_exceeded', 'open_alerts_count', 'risk_score',
+            'created_at', 'created_at_jalali',
         ]
         read_only_fields = fields
+
+    def get_risk_score(self, obj):
+        cnt = getattr(obj, 'open_alerts_count', None)
+        if cnt == 0:
+            return 0
+        from monitoring.selectors.monitoring_queries import get_ticket_risk_score
+        score, _ = get_ticket_risk_score(obj.id)
+        return score
 
     def get_status(self, obj):
         return format_choice_field(obj.status, obj.get_status_display())

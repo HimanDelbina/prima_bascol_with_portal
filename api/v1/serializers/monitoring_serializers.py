@@ -14,24 +14,39 @@ class MonitoringAlertSerializer(serializers.ModelSerializer):
     confidence = serializers.SerializerMethodField()
     ticket_serial = serializers.CharField(source='ticket.serial_number', read_only=True)
     ticket_plate = serializers.CharField(source='ticket.license_plate_display', read_only=True)
+    product_name = serializers.CharField(source='ticket.product.name', read_only=True, default='')
+    party_name = serializers.CharField(source='ticket.party.name', read_only=True, default='')
+    baseline_source = serializers.SerializerMethodField()
+    
     created_at_jalali = serializers.CharField(source='jalali_created_at', read_only=True)
+    updated_at_jalali = serializers.CharField(source='jalali_updated_at', read_only=True)
+    reviewed_at_jalali = serializers.CharField(source='jalali_reviewed_at', read_only=True)
+    reviewed_by_name = serializers.CharField(source='reviewed_by.get_full_name', read_only=True)
     resolved_at_jalali = serializers.CharField(source='jalali_resolved_at', read_only=True)
     resolved_by_name = serializers.CharField(source='resolved_by.get_full_name', read_only=True)
+
+    ticket_summary = serializers.SerializerMethodField()
+    historical_summary = serializers.SerializerMethodField()
+    recent_history = serializers.SerializerMethodField()
 
     class Meta:
         model = MonitoringAlert
         fields = [
-            'id', 'ticket', 'ticket_serial', 'ticket_plate',
+            'id', 'ticket', 'ticket_serial', 'ticket_plate', 'product_name', 'party_name',
             'alert_type',
             'severity',
             'title', 'description', 'reason',
             'current_value', 'baseline_value', 'deviation_value', 'deviation_percent',
-            'sample_size', 'confidence',
+            'sample_size', 'confidence', 'baseline_source',
             'status',
             'created_at', 'created_at_jalali',
+            'updated_at', 'updated_at_jalali',
+            'reviewed_at', 'reviewed_at_jalali',
+            'reviewed_by', 'reviewed_by_name',
             'resolved_at', 'resolved_at_jalali',
             'resolved_by', 'resolved_by_name',
-            'resolution_note', 'metadata'
+            'resolution_note', 'metadata',
+            'ticket_summary', 'historical_summary', 'recent_history'
         ]
         read_only_fields = fields
 
@@ -46,6 +61,47 @@ class MonitoringAlertSerializer(serializers.ModelSerializer):
 
     def get_confidence(self, obj):
         return format_choice_field(obj.confidence, obj.get_confidence_display())
+
+    def get_baseline_source(self, obj):
+        meta = obj.metadata or {}
+        return meta.get('baseline_source', '')
+
+    def get_ticket_summary(self, obj):
+        t = obj.ticket
+        if not t:
+            return None
+        return {
+            'id': t.id,
+            'serial_number': t.serial_number,
+            'license_plate': t.license_plate_display,
+            'product_id': t.product_id,
+            'product_name': t.product.name if t.product else '',
+            'party_id': t.party_id,
+            'party_name': t.party.name if t.party else '',
+            'driver_name': t.driver_display,
+            'net_weight': str(t.net_weight) if t.net_weight is not None else None,
+            'first_weight': str(t.first_weight) if t.first_weight is not None else None,
+            'second_weight': str(t.second_weight) if t.second_weight is not None else None,
+            'status': t.status,
+            'status_display': t.get_status_display(),
+        }
+
+    def get_historical_summary(self, obj):
+        meta = obj.metadata or {}
+        return {
+            'average': meta.get('historical_average') or meta.get('average'),
+            'median': meta.get('median'),
+            'stddev': meta.get('stddev'),
+            'min': meta.get('min'),
+            'max': meta.get('max'),
+            'sample_size': obj.sample_size,
+            'last_5_average': meta.get('last_5_average'),
+            'last_10_average': meta.get('last_10_average'),
+        }
+
+    def get_recent_history(self, obj):
+        meta = obj.metadata or {}
+        return meta.get('recent_history', [])
 
 
 class AlertReviewSerializer(serializers.Serializer):

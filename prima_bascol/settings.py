@@ -157,6 +157,7 @@ REST_FRAMEWORK = {
         'anon': '60/min',
         'user': '300/min',
         'auth': '10/min',
+        'password_reauth': '5/min',
         'export': '20/min',
     },
 }

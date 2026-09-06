@@ -1,3 +1,4 @@
+from api.v1.throttling import PasswordReauthThrottle
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -130,3 +131,74 @@ class CurrentUserView(APIView):
     def get(self, request):
         serializer = UserMeSerializer(request.user)
         return Response(serializer.data)
+
+
+class VerifyPasswordView(APIView):
+    """
+    اعتبارسنجی رمز عبور کاربر لاگین‌شده برای Re-authentication و عملیات حساس.
+    - فقط برای کاربر لاگین‌شده (IsAuthenticated)
+    - دارای محدودیت نرخ اختصاصی (password_reauth: 5/min)
+    - ثبت رویداد امنیتی در سرور بدون ذخیره کلمه عبور، توکن یا اطلاعات هدر
+    - بدون برگرداندن هیچ توکن جدیدی
+    """
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [PasswordReauthThrottle]
+    throttle_scope = 'password_reauth'
+
+    @extend_schema(
+        tags=['Authentication'],
+        summary='اعتبارسنجی رمز عبور جهت عملیات حساس',
+        description='بررسی رمز عبور فعلی کاربر بدون ایجاد توکن جدید جهت تایید هویت مجدد.',
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'password': {'type': 'string', 'description': 'رمز عبور کاربر'}
+                },
+                'required': ['password']
+            }
+        },
+        responses={
+            200: OpenApiResponse(description='نتیجه بررسی رمز عبور (valid: true/false)')
+        }
+    )
+    def post(self, request):
+        password = request.data.get('password')
+        if not password:
+            return Response(
+                {
+                    "success": False,
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "فیلد رمز عبور الزامی است."
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        is_valid = request.user.check_password(password)
+
+        if not is_valid:
+            try:
+                from audit.services import log_audit
+                from audit.models import AuditAction
+                from api.v1.utils import get_client_ip
+                log_audit(
+                    action=AuditAction.UPDATE,
+                    model_name="UserSecurity",
+                    record_id=request.user.id,
+                    record_repr=f"کاربر {request.user.username}",
+                    old_values={},
+                    new_values={"reauth_status": "failed"},
+                    reason="شکست در تایید مجدد رمز عبور (Re-authentication Failed)",
+                    user=request.user,
+                    ip_address=get_client_ip(request),
+                    source="API"
+                )
+            except Exception:
+                pass
+
+        return Response({
+            "success": True,
+            "valid": is_valid
+        }, status=status.HTTP_200_OK)

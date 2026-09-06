@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from api.v1.views.auth_views import (
+    VerifyPasswordView,
     CustomTokenObtainPairView, CustomTokenRefreshView,
     CustomTokenVerifyView, LogoutView, CurrentUserView
 )
@@ -58,6 +59,7 @@ urlpatterns = [
     path('auth/token/verify/', CustomTokenVerifyView.as_view(), name='token_verify'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),
     path('auth/me/', CurrentUserView.as_view(), name='auth_me'),
+    path('auth/verify-password/', VerifyPasswordView.as_view(), name='verify_password'),
 
     # Dashboard
     path('dashboard/summary/', DashboardSummaryView.as_view(), name='dashboard_summary'),

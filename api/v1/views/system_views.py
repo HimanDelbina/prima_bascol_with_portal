@@ -60,7 +60,26 @@ class AdminSettingsView(APIView):
         settings_obj = SystemSetting.get_settings()
         serializer = AdminSystemSettingSerializer(settings_obj, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        old_values = {f: getattr(settings_obj, f, None) for f in serializer.validated_data.keys()}
         serializer.save()
+        try:
+            from audit.services import log_audit
+            from audit.models import AuditAction
+            from api.v1.utils import get_client_ip
+            log_audit(
+                action=AuditAction.UPDATE,
+                model_name="SystemSetting",
+                record_id=settings_obj.id if hasattr(settings_obj, 'id') else 1,
+                record_repr="تنظیمات مدیریتی سامانه باسکول",
+                old_values={k: str(v) for k, v in old_values.items()},
+                new_values={k: str(v) for k, v in serializer.validated_data.items()},
+                reason="تغییر تنظیمات سیستم توسط مدیر سامانه",
+                user=request.user,
+                ip_address=get_client_ip(request),
+                source="API"
+            )
+        except Exception:
+            pass
         return api_success_response(data=serializer.data, message="تنظیمات سامانه با موفقیت بروزرسانی شد.")
 
 

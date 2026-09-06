@@ -10,7 +10,8 @@ def log_audit(
     new_values: dict = None,
     reason: str = "",
     user = None,
-    ip_address: str = None
+    ip_address: str = None,
+    source: str = "API"
 ):
     """Utility to register an audit log entry."""
     current_user = user or get_current_user()
@@ -25,5 +26,6 @@ def log_audit(
         record_repr=record_repr,
         old_values=old_values or {},
         new_values=new_values or {},
-        reason=reason or ""
+        reason=reason or "",
+        source=source
     )

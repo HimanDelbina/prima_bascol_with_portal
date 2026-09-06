@@ -405,9 +405,25 @@ def get_waiting_time_stats(product_id=None, unload_location_id=None, party_id=No
     }
 
 
+class RiskLevel:
+    NORMAL = "NORMAL"
+    LOW_RISK = "LOW_RISK"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+    HIGH_RISK = "HIGH_RISK"
+    CRITICAL = "CRITICAL"
+
+
 def get_ticket_risk_score(ticket_id) -> tuple[int, str]:
     """
     Compute ticket risk score (0 to 100) and risk level text from active open/reviewed alerts.
+    Risk weight configuration:
+    INFO = 2, LOW = 5, MEDIUM = 15, HIGH = 30, CRITICAL = 50
+    Risk level bands:
+    0-19: NORMAL
+    20-39: LOW_RISK
+    40-59: NEEDS_REVIEW
+    60-79: HIGH_RISK
+    80-100: CRITICAL
     """
     alerts = MonitoringAlert.objects.filter(
         ticket_id=ticket_id,
@@ -417,14 +433,14 @@ def get_ticket_risk_score(ticket_id) -> tuple[int, str]:
     risk_score = min(100, total_score)
 
     if risk_score >= 80:
-        level = "بحرانی (Critical)"
+        level = "CRITICAL"
     elif risk_score >= 60:
-        level = "پرخطر (High Risk)"
+        level = "HIGH_RISK"
     elif risk_score >= 40:
-        level = "نیازمند بررسی (Needs Review)"
+        level = "NEEDS_REVIEW"
     elif risk_score >= 20:
-        level = "کم‌خطر (Low Risk)"
+        level = "LOW_RISK"
     else:
-        level = "عادی (Normal)"
+        level = "NORMAL"
 
     return risk_score, level

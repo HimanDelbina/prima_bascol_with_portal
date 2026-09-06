@@ -105,6 +105,17 @@ class MonitoringRuleConfig(models.Model):
         verbose_name="ویرایش‌کننده"
     )
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.warning_threshold < Decimal("0") or self.high_threshold < Decimal("0") or self.critical_threshold < Decimal("0"):
+            raise ValidationError("آستانه‌های عددی نمی‌توانند منفی باشند.")
+        if self.warning_threshold > self.high_threshold or self.high_threshold > self.critical_threshold:
+            raise ValidationError("ترتیب آستانه‌ها باید رعایت شود: هشدار <= بالا <= بحرانی.")
+        if self.percentage_warning < Decimal("0") or self.percentage_high < Decimal("0") or self.percentage_critical < Decimal("0"):
+            raise ValidationError("درصدهای انحراف نمی‌توانند منفی باشند.")
+        if self.percentage_warning > self.percentage_high or self.percentage_high > self.percentage_critical:
+            raise ValidationError("ترتیب درصدهای انحراف باید رعایت شود: هشدار <= بالا <= بحرانی.")
+
     class Meta:
         verbose_name = "تنظیم قانون پایش"
         verbose_name_plural = "تنظیمات قوانین پایش هوشمند"
@@ -282,6 +293,23 @@ class MonitoringAlert(models.Model):
         db_index=True,
         verbose_name="زمان ایجاد هشدار"
     )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="زمان آخرین تغییر"
+    )
+    reviewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="زمان بازبینی"
+    )
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_monitoring_alerts",
+        verbose_name="بازبینی‌کننده"
+    )
     resolved_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -344,10 +372,18 @@ class MonitoringAlert(models.Model):
         return format_jalali_datetime(self.resolved_at) if self.resolved_at else "-"
 
     @property
+    def jalali_reviewed_at(self):
+        return format_jalali_datetime(self.reviewed_at) if self.reviewed_at else "-"
+
+    @property
+    def jalali_updated_at(self):
+        return format_jalali_datetime(self.updated_at) if self.updated_at else "-"
+
+    @property
     def severity_weight(self) -> int:
         """Numerical weight for Risk Score calculation."""
         weights = {
-            AlertSeverity.INFO: 0,
+            AlertSeverity.INFO: 2,
             AlertSeverity.LOW: 5,
             AlertSeverity.MEDIUM: 15,
             AlertSeverity.HIGH: 30,

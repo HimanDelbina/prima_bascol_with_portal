@@ -38,6 +38,7 @@ class AuditLog(models.Model):
     old_values = models.JSONField(default=dict, blank=True, verbose_name="مقادیر قبلی")
     new_values = models.JSONField(default=dict, blank=True, verbose_name="مقادیر جدید")
     reason = models.TextField(blank=True, verbose_name="دلیل تغییر / ابطال")
+    source = models.CharField(max_length=50, default="API", verbose_name="منبع درخواست")
 
     class Meta:
         verbose_name = "ثبت تغییرات (Audit Log)"

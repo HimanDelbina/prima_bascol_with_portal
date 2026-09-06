@@ -404,7 +404,7 @@ class MonitoringSmartAnalysisTests(TestCase):
         summary = AnomalyDetectionEngine.get_ticket_analysis_summary(ticket_multi)
         self.assertTrue(0 <= summary["risk_score"] <= 100)
         self.assertTrue(summary["has_high"] or summary["has_critical"])
-        self.assertIn(summary["risk_level"], ["پرخطر (High Risk)", "بحرانی (Critical)", "نیازمند بررسی (Needs Review)"])
+        self.assertIn(summary["risk_level"], ["HIGH_RISK", "CRITICAL", "NEEDS_REVIEW"])
 
     def test_resolve_alert_workflow_and_audit(self):
         """

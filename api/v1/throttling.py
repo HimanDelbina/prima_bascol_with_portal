@@ -15,3 +15,6 @@ class AuthRateThrottle(ScopedRateThrottle):
 
 class ExportRateThrottle(ScopedRateThrottle):
     scope = 'export'
+
+class PasswordReauthThrottle(ScopedRateThrottle):
+    scope = 'password_reauth'
