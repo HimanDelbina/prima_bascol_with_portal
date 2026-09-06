@@ -19,7 +19,12 @@ from api.v1.views.management_views import (
     ManagementSummaryView, ManagementProductsView,
     ManagementPartiesView, ManagementDiscrepanciesView,
     ManagementLossesView, ManagementVehiclesView,
-    ManagementDriversView, ManagementTurnaroundView
+    ManagementDriversView, ManagementTurnaroundView,
+    ManagementPartyDetailView, ManagementPartyAnalyticsView,
+    ManagementPartyScoreView, ManagementPartyTrendView,
+    ManagementPartyRankingView, ManagementPartyCompareView,
+    ManagementPartyConfigView, ManagementPartyExportXlsxView,
+    ManagementPartyExportCsvView, ManagementPartyExportPdfView
 )
 from api.v1.views.monitoring_views import (
     MonitoringAlertViewSet, MonitoringRuleConfigViewSet
@@ -69,6 +74,16 @@ urlpatterns = [
     path('management/summary/', ManagementSummaryView.as_view(), name='management_summary'),
     path('management/products/', ManagementProductsView.as_view(), name='management_products'),
     path('management/parties/', ManagementPartiesView.as_view(), name='management_parties'),
+    path('management/parties/ranking/', ManagementPartyRankingView.as_view(), name='management_parties_ranking'),
+    path('management/parties/compare/', ManagementPartyCompareView.as_view(), name='management_parties_compare'),
+    path('management/parties/config/', ManagementPartyConfigView.as_view(), name='management_parties_config'),
+    path('management/parties/export/xlsx/', ManagementPartyExportXlsxView.as_view(), name='management_parties_export_xlsx'),
+    path('management/parties/export/csv/', ManagementPartyExportCsvView.as_view(), name='management_parties_export_csv'),
+    path('management/parties/export/pdf/', ManagementPartyExportPdfView.as_view(), name='management_parties_export_pdf'),
+    path('management/parties/<int:pk>/', ManagementPartyDetailView.as_view(), name='management_party_detail'),
+    path('management/parties/<int:pk>/analytics/', ManagementPartyAnalyticsView.as_view(), name='management_party_analytics'),
+    path('management/parties/<int:pk>/score/', ManagementPartyScoreView.as_view(), name='management_party_score'),
+    path('management/parties/<int:pk>/trend/', ManagementPartyTrendView.as_view(), name='management_party_trend'),
     path('management/discrepancies/', ManagementDiscrepanciesView.as_view(), name='management_discrepancies'),
     path('management/losses/', ManagementLossesView.as_view(), name='management_losses'),
     path('management/vehicles/', ManagementVehiclesView.as_view(), name='management_vehicles'),

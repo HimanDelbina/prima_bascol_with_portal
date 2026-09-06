@@ -961,6 +961,332 @@ paths:
       responses:
         '200':
           description: لیست آمار تناژ و رفتار تجاری طرف‌های حساب
+  /api/v1/management/parties/{id}/:
+    get:
+      operationId: v1_management_parties_retrieve_2
+      description: مشاهده مشخصات کلی و شناسنامه اولیه طرف‌حساب.
+      summary: مشاهده شناسنامه پایه طرف‌حساب
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: اطلاعات پایه طرف حساب
+  /api/v1/management/parties/{id}/analytics/:
+    get:
+      operationId: v1_management_parties_analytics_retrieve
+      description: تحلیل جامع آماری عملکرد طرف‌حساب شامل حجم، مغایرت وزن، افت، هشدارهای
+        پایش، زمان توقف و اصلاحات.
+      summary: تحلیل جامع آماری طرف‌حساب (Profile & KPIs)
+      parameters:
+      - in: query
+        name: end_date
+        schema:
+          type: string
+        description: تاریخ پایان شمسی مثلاً 1405/06/31 یا میلادی 2026-09-30
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: query
+        name: product
+        schema:
+          type: integer
+        description: شناسه محصول
+      - in: query
+        name: quick_period
+        schema:
+          type: string
+        description: 'بازه سریع: today, this_week, this_month, last_month, this_year'
+      - in: query
+        name: start_date
+        schema:
+          type: string
+        description: تاریخ شروع شمسی مثلاً 1405/01/01 یا میلادی 2026-09-01
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyDetailAnalytics'
+          description: ''
+  /api/v1/management/parties/{id}/score/:
+    get:
+      operationId: v1_management_parties_score_retrieve
+      description: محاسبه و دریافت امتیاز کیفی طرف‌حساب به تفکیک ابعاد ۶ گانه و توضیحات
+        تحلیلی شفاف.
+      summary: امتیاز کیفی و ابعاد ۶ گانه طرف‌حساب (Score Breakdown)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: query
+        name: product
+        schema:
+          type: integer
+        description: شناسه محصول
+      - in: query
+        name: quick_period
+        schema:
+          type: string
+        description: 'بازه سریع: this_month, last_month, this_year'
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyScoreResponse'
+          description: ''
+  /api/v1/management/parties/{id}/trend/:
+    get:
+      operationId: v1_management_parties_trend_retrieve
+      description: تحلیل روند عملکردی طرف‌حساب در مقایسه با دوره مشابه قبلی و درصد
+        تغییر شاخص‌ها.
+      summary: تحلیل روند عملکرد طرف‌حساب (Trend Analysis)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: query
+        name: product
+        schema:
+          type: integer
+        description: شناسه محصول
+      - in: query
+        name: quick_period
+        schema:
+          type: string
+        description: 'بازه سریع: this_month, last_month, this_year'
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyTrendResponse'
+          description: ''
+  /api/v1/management/parties/compare/:
+    get:
+      operationId: v1_management_parties_compare_retrieve
+      description: مقایسه همزمان ۲ تا ۴ طرف‌حساب به صورت مقایسه جفتی/چندگانه، با امکان
+        فیلتر کالایی.
+      summary: مقایسه همزمان طرف‌های حساب (Party Comparison)
+      parameters:
+      - in: query
+        name: party_ids
+        schema:
+          type: string
+        description: شناسه‌های طرف‌حساب با ویرگول مثلاً 1,2,3
+        required: true
+      - in: query
+        name: product
+        schema:
+          type: integer
+        description: شناسه محصول جهت مقایسه در کانتکست یک کالای معین
+      - in: query
+        name: quick_period
+        schema:
+          type: string
+        description: 'بازه سریع: this_month, last_month, this_year'
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyComparisonResponse'
+          description: ''
+  /api/v1/management/parties/config/:
+    get:
+      operationId: v1_management_parties_config_retrieve
+      description: مشاهده و ویرایش وزن‌ها و تنظیمات فرمول امتیازدهی طرف‌حساب‌ها (دارای
+        ثبت لاگ ممیزی کامل در AuditLog).
+      summary: دریافت تنظیمات فرمول امتیازدهی طرف‌حساب‌ها
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyScoringConfig'
+          description: ''
+    put:
+      operationId: v1_management_parties_config_update
+      description: مشاهده و ویرایش وزن‌ها و تنظیمات فرمول امتیازدهی طرف‌حساب‌ها (دارای
+        ثبت لاگ ممیزی کامل در AuditLog).
+      summary: ویرایش وزن‌ها و تنظیمات فرمول امتیازدهی (نیازمند مجوز مدیریتی)
+      tags:
+      - Management
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartyScoringConfigRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartyScoringConfigRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartyScoringConfigRequest'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyScoringConfig'
+          description: ''
+  /api/v1/management/parties/export/csv/:
+    get:
+      operationId: v1_management_parties_export_csv_retrieve
+      description: دانلود فایل CSV رتبه‌بندی یا تحلیل طرف‌حساب‌ها با انکودینگ UTF-8
+        BOM.
+      summary: خروجی CSV رتبه‌بندی طرف‌های حساب
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: فایل متنی CSV با انکودینگ UTF-8 BOM
+  /api/v1/management/parties/export/pdf/:
+    get:
+      operationId: v1_management_parties_export_pdf_retrieve
+      description: دانلود کارنامه رسمی مدیریتی PDF طرف‌حساب با ReportLab.
+      summary: خروجی PDF کارنامه عملکرد طرف‌حساب
+      parameters:
+      - in: query
+        name: party_id
+        schema:
+          type: integer
+        description: شناسه طرف‌حساب
+        required: true
+      - in: query
+        name: quick_period
+        schema:
+          type: string
+        description: بازه زمانی
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: سند الکترونیکی قابل حمل (.pdf)
+  /api/v1/management/parties/export/xlsx/:
+    get:
+      operationId: v1_management_parties_export_xlsx_retrieve
+      description: دانلود فایل اکسل چندبرگه تحلیل یک طرف‌حساب یا اکسل رتبه‌بندی کل
+        طرف‌های حساب.
+      summary: خروجی اکسل کارنامه طرف‌حساب یا رتبه‌بندی
+      parameters:
+      - in: query
+        name: party_id
+        schema:
+          type: integer
+        description: شناسه طرف‌حساب جهت دریافت کارنامه تک‌نفره چندبرگه
+      - in: query
+        name: party_type
+        schema:
+          type: string
+        description: نوع طرف‌حساب جهت رتبه‌بندی
+      - in: query
+        name: quick_period
+        schema:
+          type: string
+        description: بازه سریع
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: فایل مایکروسافت اکسل (.xlsx)
+  /api/v1/management/parties/ranking/:
+    get:
+      operationId: v1_management_parties_ranking_retrieve
+      description: رتبه‌بندی عادلانه طرف‌های حساب و تأمین‌کنندگان با اعمال حداقل سابقه
+        آماری جهت جلوگیری از رتبه‌بندی تصادفی.
+      summary: رتبه‌بندی طرف‌های حساب و تأمین‌کنندگان (Party Ranking)
+      parameters:
+      - in: query
+        name: minimum_tickets
+        schema:
+          type: integer
+        description: 'حداقل قبوض برای ورود به رتبه‌بندی (پیش‌فرض: ۲۰)'
+      - in: query
+        name: ordering
+        schema:
+          type: string
+        description: 'مرتب‌سازی: overall_score, weight_accuracy, loss_performance,
+          total_net_weight, alert_rate, average_discrepancy, average_turnaround'
+      - in: query
+        name: party_type
+        schema:
+          type: string
+        description: 'نوع طرف حساب: supplier, customer, contractor'
+      - in: query
+        name: product
+        schema:
+          type: integer
+        description: شناسه محصول جهت رتبه‌بندی کالامحور
+      - in: query
+        name: quick_period
+        schema:
+          type: string
+        description: 'بازه سریع: this_month, last_month, this_year'
+      tags:
+      - Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyRankingResponse'
+          description: ''
   /api/v1/management/products/:
     get:
       operationId: v1_management_products_retrieve
@@ -4213,6 +4539,42 @@ components:
       - application_version
       - timezone
       - weight_unit
+    MetricComparison:
+      type: object
+      properties:
+        current:
+          type: number
+          format: double
+          nullable: true
+        previous:
+          type: number
+          format: double
+          nullable: true
+        diff:
+          type: number
+          format: double
+          nullable: true
+        pct_change:
+          type: number
+          format: double
+          nullable: true
+        delta_abs:
+          type: number
+          format: double
+          nullable: true
+        delta_percent:
+          type: number
+          format: double
+          nullable: true
+        direction:
+          type: string
+        is_positive:
+          type: boolean
+        is_neutral:
+          type: boolean
+      required:
+      - current
+      - previous
     MonitoringAlert:
       type: object
       properties:
@@ -4978,6 +5340,449 @@ components:
       - name
       - party_type_display
       - updated_at
+    PartyAnalyticsProfile:
+      type: object
+      properties:
+        party_id:
+          type: integer
+        party_name:
+          type: string
+        party_type:
+          type: string
+        party_type_display:
+          type: string
+        total_tickets:
+          type: integer
+        completed_tickets:
+          type: integer
+        cancelled_tickets:
+          type: integer
+        total_net_weight_kg:
+          type: number
+          format: double
+        total_net_weight_ton:
+          type: number
+          format: double
+        total_final_weight_kg:
+          type: number
+          format: double
+        total_final_weight_ton:
+          type: number
+          format: double
+        average_net_weight_kg:
+          type: number
+          format: double
+        average_final_weight_kg:
+          type: number
+          format: double
+        min_net_weight_kg:
+          type: number
+          format: double
+        max_net_weight_kg:
+          type: number
+          format: double
+        first_ticket_date:
+          type: string
+          nullable: true
+        first_ticket_date_fa:
+          type: string
+        last_ticket_date:
+          type: string
+          nullable: true
+        last_ticket_date_fa:
+          type: string
+        active_days:
+          type: integer
+      required:
+      - active_days
+      - average_final_weight_kg
+      - average_net_weight_kg
+      - cancelled_tickets
+      - completed_tickets
+      - first_ticket_date
+      - first_ticket_date_fa
+      - last_ticket_date
+      - last_ticket_date_fa
+      - max_net_weight_kg
+      - min_net_weight_kg
+      - party_id
+      - party_name
+      - party_type
+      - party_type_display
+      - total_final_weight_kg
+      - total_final_weight_ton
+      - total_net_weight_kg
+      - total_net_weight_ton
+      - total_tickets
+    PartyComparisonItem:
+      type: object
+      properties:
+        party_id:
+          type: integer
+        party_name:
+          type: string
+        party_type:
+          type: string
+        party_type_fa:
+          type: string
+        score:
+          $ref: '#/components/schemas/PartyScoreResponse'
+        volume:
+          type: object
+          additionalProperties: {}
+        discrepancy:
+          type: object
+          additionalProperties: {}
+        loss:
+          type: object
+          additionalProperties: {}
+        monitoring:
+          type: object
+          additionalProperties: {}
+        turnaround:
+          type: object
+          additionalProperties: {}
+      required:
+      - discrepancy
+      - loss
+      - monitoring
+      - party_id
+      - party_name
+      - party_type
+      - party_type_fa
+      - score
+      - turnaround
+      - volume
+    PartyComparisonResponse:
+      type: object
+      properties:
+        parties_count:
+          type: integer
+        product_context:
+          type: string
+        comparison:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartyComparisonItem'
+      required:
+      - comparison
+      - parties_count
+      - product_context
+    PartyConsistencyMetrics:
+      type: object
+      properties:
+        is_sufficient_sample:
+          type: boolean
+        weight_stddev:
+          type: number
+          format: double
+          nullable: true
+        weight_variation_coef:
+          type: number
+          format: double
+          nullable: true
+        loss_stddev:
+          type: number
+          format: double
+          nullable: true
+        loss_variation_coef:
+          type: number
+          format: double
+          nullable: true
+      required:
+      - is_sufficient_sample
+      - loss_stddev
+      - loss_variation_coef
+      - weight_stddev
+      - weight_variation_coef
+    PartyCorrectionMetrics:
+      type: object
+      properties:
+        weight_correction_count:
+          type: integer
+        loss_override_count:
+          type: integer
+        cancel_count:
+          type: integer
+        tickets_with_correction:
+          type: integer
+        correction_rate:
+          type: number
+          format: double
+      required:
+      - cancel_count
+      - correction_rate
+      - loss_override_count
+      - tickets_with_correction
+      - weight_correction_count
+    PartyDetailAnalytics:
+      type: object
+      properties:
+        party:
+          type: object
+          additionalProperties: {}
+        profile:
+          $ref: '#/components/schemas/PartyAnalyticsProfile'
+        discrepancy_metrics:
+          $ref: '#/components/schemas/PartyDiscrepancyMetrics'
+        loss_metrics:
+          $ref: '#/components/schemas/PartyLossMetrics'
+        monitoring_metrics:
+          $ref: '#/components/schemas/PartyMonitoringMetrics'
+        turnaround_metrics:
+          $ref: '#/components/schemas/PartyTurnaroundMetrics'
+        correction_metrics:
+          $ref: '#/components/schemas/PartyCorrectionMetrics'
+        consistency_metrics:
+          $ref: '#/components/schemas/PartyConsistencyMetrics'
+        score:
+          $ref: '#/components/schemas/PartyScoreResponse'
+      required:
+      - consistency_metrics
+      - correction_metrics
+      - discrepancy_metrics
+      - loss_metrics
+      - monitoring_metrics
+      - party
+      - profile
+      - score
+      - turnaround_metrics
+    PartyDiscrepancyMetrics:
+      type: object
+      properties:
+        total_discrepancy_kg:
+          type: number
+          format: double
+        average_signed_discrepancy_kg:
+          type: number
+          format: double
+        average_absolute_discrepancy_kg:
+          type: number
+          format: double
+        median_absolute_discrepancy_kg:
+          type: number
+          format: double
+        maximum_absolute_discrepancy_kg:
+          type: number
+          format: double
+        average_discrepancy_percent:
+          type: number
+          format: double
+        discrepancy_stddev:
+          type: number
+          format: double
+        tickets_with_discrepancy:
+          type: integer
+        discrepancy_rate:
+          type: number
+          format: double
+        tickets_with_sent_weight:
+          type: integer
+        missing_sent_weight_rate:
+          type: number
+          format: double
+      required:
+      - average_absolute_discrepancy_kg
+      - average_discrepancy_percent
+      - average_signed_discrepancy_kg
+      - discrepancy_rate
+      - discrepancy_stddev
+      - maximum_absolute_discrepancy_kg
+      - median_absolute_discrepancy_kg
+      - missing_sent_weight_rate
+      - tickets_with_discrepancy
+      - tickets_with_sent_weight
+      - total_discrepancy_kg
+    PartyLossMetrics:
+      type: object
+      properties:
+        total_loss_weight:
+          type: number
+          format: double
+        average_loss_weight:
+          type: number
+          format: double
+        average_loss_percent:
+          type: number
+          format: double
+        median_loss_percent:
+          type: number
+          format: double
+        maximum_loss_percent:
+          type: number
+          format: double
+        loss_stddev:
+          type: number
+          format: double
+        tickets_with_loss:
+          type: integer
+        loss_rate:
+          type: number
+          format: double
+        missing_loss_data_rate:
+          type: number
+          format: double
+      required:
+      - average_loss_percent
+      - average_loss_weight
+      - loss_rate
+      - loss_stddev
+      - maximum_loss_percent
+      - median_loss_percent
+      - missing_loss_data_rate
+      - tickets_with_loss
+      - total_loss_weight
+    PartyMonitoringMetrics:
+      type: object
+      properties:
+        total_alerts:
+          type: integer
+        open_alerts:
+          type: integer
+        reviewed_alerts:
+          type: integer
+        resolved_alerts:
+          type: integer
+        ignored_alerts:
+          type: integer
+        low_alerts:
+          type: integer
+        medium_alerts:
+          type: integer
+        high_alerts:
+          type: integer
+        critical_alerts:
+          type: integer
+        alerts_per_100_tickets:
+          type: number
+          format: double
+        breakdown_by_type:
+          type: object
+          additionalProperties: {}
+      required:
+      - alerts_per_100_tickets
+      - breakdown_by_type
+      - critical_alerts
+      - high_alerts
+      - ignored_alerts
+      - low_alerts
+      - medium_alerts
+      - open_alerts
+      - resolved_alerts
+      - reviewed_alerts
+      - total_alerts
+    PartyRankingItem:
+      type: object
+      properties:
+        rank:
+          type: integer
+        percentile:
+          type: number
+          format: double
+        party_id:
+          type: integer
+        party_name:
+          type: string
+        party_code:
+          type: string
+          nullable: true
+        party_type:
+          type: string
+        party_type_fa:
+          type: string
+        overall_score:
+          type: number
+          format: double
+          nullable: true
+        score_level:
+          type: string
+        score_level_fa:
+          type: string
+        confidence:
+          type: string
+        confidence_fa:
+          type: string
+        completed_tickets:
+          type: integer
+        total_tonnage:
+          type: number
+          format: double
+        avg_discrepancy_kg:
+          type: number
+          format: double
+        avg_loss_percent:
+          type: number
+          format: double
+        alert_rate:
+          type: number
+          format: double
+        avg_turnaround_min:
+          type: number
+          format: double
+        weight_accuracy_score:
+          type: number
+          format: double
+        loss_performance_score:
+          type: number
+          format: double
+        consistency_score:
+          type: number
+          format: double
+        monitoring_quality_score:
+          type: number
+          format: double
+        operational_efficiency_score:
+          type: number
+          format: double
+        data_reliability_score:
+          type: number
+          format: double
+        explanation:
+          $ref: '#/components/schemas/PartyScoreExplanation'
+      required:
+      - alert_rate
+      - avg_discrepancy_kg
+      - avg_loss_percent
+      - avg_turnaround_min
+      - completed_tickets
+      - confidence
+      - confidence_fa
+      - consistency_score
+      - data_reliability_score
+      - explanation
+      - loss_performance_score
+      - monitoring_quality_score
+      - operational_efficiency_score
+      - overall_score
+      - party_code
+      - party_id
+      - party_name
+      - party_type
+      - party_type_fa
+      - percentile
+      - rank
+      - score_level
+      - score_level_fa
+      - total_tonnage
+      - weight_accuracy_score
+    PartyRankingResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+        minimum_tickets_applied:
+          type: integer
+        ordering:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartyRankingItem'
+      required:
+      - count
+      - minimum_tickets_applied
+      - ordering
+      - results
     PartyRequest:
       type: object
       properties:
@@ -5027,6 +5832,186 @@ components:
           title: فعال / معتبر
       required:
       - name
+    PartyScoreExplanation:
+      type: object
+      properties:
+        positive_points:
+          type: array
+          items:
+            type: string
+        attention_points:
+          type: array
+          items:
+            type: string
+      required:
+      - attention_points
+      - positive_points
+    PartyScoreResponse:
+      type: object
+      properties:
+        overall_score:
+          type: number
+          format: double
+          nullable: true
+        raw_score:
+          type: number
+          format: double
+        level:
+          type: string
+        level_fa:
+          type: string
+        confidence:
+          type: string
+        confidence_fa:
+          type: string
+        is_score_reliable:
+          type: boolean
+        dimension_scores:
+          type: object
+          additionalProperties: {}
+        dimension_weights:
+          type: object
+          additionalProperties: {}
+        calculation_version:
+          type: string
+        explanation:
+          $ref: '#/components/schemas/PartyScoreExplanation'
+      required:
+      - calculation_version
+      - confidence
+      - confidence_fa
+      - dimension_scores
+      - dimension_weights
+      - explanation
+      - is_score_reliable
+      - level
+      - level_fa
+      - overall_score
+      - raw_score
+    PartyScoringConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        enabled:
+          type: boolean
+          title: فعال بودن سیستم امتیازدهی
+        minimum_history_days:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: حداقل دوره تاریخی (روز)
+        minimum_tickets_for_ranking:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: حداقل قبوض برای ورود به رتبه‌بندی
+        dimension_weights:
+          title: وزن ابعاد ۶ گانه امتیازدهی (درصد)
+        score_thresholds:
+          title: آستانه سطوح کیفی امتیاز
+        confidence_thresholds:
+          title: آستانه سطوح اطمینان نمونه
+        trend_threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: آستانه تغییر روند (%)
+        calculation_version:
+          type: string
+          title: نسخه فرمول امتیازدهی
+          maxLength: 50
+        updated_by_username:
+          type: string
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: زمان آخرین ویرایش
+      required:
+      - id
+      - updated_at
+      - updated_by_username
+    PartyScoringConfigRequest:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          title: فعال بودن سیستم امتیازدهی
+        minimum_history_days:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: حداقل دوره تاریخی (روز)
+        minimum_tickets_for_ranking:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: حداقل قبوض برای ورود به رتبه‌بندی
+        dimension_weights:
+          title: وزن ابعاد ۶ گانه امتیازدهی (درصد)
+        score_thresholds:
+          title: آستانه سطوح کیفی امتیاز
+        confidence_thresholds:
+          title: آستانه سطوح اطمینان نمونه
+        trend_threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: آستانه تغییر روند (%)
+        calculation_version:
+          type: string
+          minLength: 1
+          title: نسخه فرمول امتیازدهی
+          maxLength: 50
+    PartyTrendResponse:
+      type: object
+      properties:
+        period:
+          type: object
+          additionalProperties: {}
+        kpi_comparison:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/MetricComparison'
+        current_analysis:
+          $ref: '#/components/schemas/PartyDetailAnalytics'
+        previous_analysis:
+          $ref: '#/components/schemas/PartyDetailAnalytics'
+      required:
+      - current_analysis
+      - kpi_comparison
+      - period
+      - previous_analysis
+    PartyTurnaroundMetrics:
+      type: object
+      properties:
+        average_turnaround_minutes:
+          type: number
+          format: double
+        median_turnaround_minutes:
+          type: number
+          format: double
+        max_turnaround_minutes:
+          type: number
+          format: double
+        turnaround_stddev:
+          type: number
+          format: double
+        long_waiting_ticket_count:
+          type: integer
+        long_waiting_rate:
+          type: number
+          format: double
+      required:
+      - average_turnaround_minutes
+      - long_waiting_rate
+      - long_waiting_ticket_count
+      - max_turnaround_minutes
+      - median_turnaround_minutes
+      - turnaround_stddev
     PartyTypeEnum:
       enum:
       - customer

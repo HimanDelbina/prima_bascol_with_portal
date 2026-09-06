@@ -251,3 +251,391 @@ def export_management_csv(curr_qs, title="Management_Report"):
         ])
 
     return response
+
+
+def export_party_ranking_excel(ranked_items, title="رتبه‌بندی طرف‌های حساب و تأمین‌کنندگان"):
+    """
+    خروجی فایل اکسل جدول رتبه‌بندی طرف‌حساب‌ها همراه با رتبه، امتیاز، اطمینان و شاخص‌ها.
+    """
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    ws = wb.create_sheet(title="رتبه‌بندی")
+    ws.views.sheetView[0].rightToLeft = True
+
+    header_font = Font(name="Tahoma", size=11, bold=True, color="FFFFFF")
+    title_font = Font(name="Tahoma", size=14, bold=True, color="1E3A8A")
+    data_font = Font(name="Tahoma", size=10)
+    bold_data_font = Font(name="Tahoma", size=10, bold=True)
+
+    header_fill = PatternFill(start_color="1E40AF", end_color="1E40AF", fill_type="solid")
+    zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1')
+    )
+
+    settings_obj = SystemSetting.get_settings()
+    company_name = settings_obj.company_name or "مجتمع صنعتی و معدنی فولاد پریما"
+
+    ws.cell(row=1, column=1, value=company_name).font = title_font
+    ws.cell(row=2, column=1, value=f"{title} - تاریخ گزارش: {get_today_jalali()}").font = Font(name="Tahoma", size=10, italic=True, color="475569")
+
+    headers = [
+        "رتبه", "صدک", "نام طرف حساب", "کد", "نوع", "امتیاز کل (۰-۱۰۰)", "سطح کیفی",
+        "سطح اطمینان", "تعداد بار", "مجموع تناژ", "میانگین مغایرت (Kg)", "میانگین افت (%)",
+        "نرخ هشدار (در ۱۰۰)", "میانگین توقف (دقیقه)", "دقت وزن", "عملکرد افت", "ثبات", "پایش", "بهره‌وری"
+    ]
+
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    ws.row_dimensions[4].height = 28
+
+    for r_idx, item in enumerate(ranked_items, 5):
+        row_vals = [
+            item.get('rank', '-'),
+            item.get('percentile', '-'),
+            item.get('party_name', '-'),
+            item.get('party_code', '') or '-',
+            item.get('party_type_fa', '-'),
+            item.get('overall_score', '-'),
+            item.get('score_level_fa', '-'),
+            item.get('confidence_fa', '-'),
+            item.get('completed_tickets', 0),
+            item.get('total_tonnage', 0.0),
+            item.get('avg_discrepancy_kg', 0.0),
+            item.get('avg_loss_percent', 0.0),
+            item.get('alert_rate', 0.0),
+            item.get('avg_turnaround_min', 0.0),
+            item.get('weight_accuracy_score', 0.0),
+            item.get('loss_performance_score', 0.0),
+            item.get('consistency_score', 0.0),
+            item.get('monitoring_quality_score', 0.0),
+            item.get('operational_efficiency_score', 0.0),
+        ]
+        is_even = (r_idx % 2 == 0)
+        for c_idx, val in enumerate(row_vals, 1):
+            c = ws.cell(row=r_idx, column=c_idx, value=val)
+            c.font = bold_data_font if c_idx in [1, 6] else data_font
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border = thin_border
+            if is_even:
+                c.fill = zebra_fill
+
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    filename = f"party_ranking_{get_today_jalali().replace('/', '-')}.xlsx"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+def export_party_analytics_excel(party, analysis, trend_data=None):
+    """
+    خروجی جامع اکسل چندبرگه (Multi-Sheet) برای تحلیل یک طرف‌حساب خاص شامل:
+    Sheet 1: Summary & Score
+    Sheet 2: Tickets
+    Sheet 3: Discrepancies
+    Sheet 4: Losses
+    Sheet 5: Alerts
+    Sheet 6: Trend
+    """
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    header_font = Font(name="Tahoma", size=11, bold=True, color="FFFFFF")
+    title_font = Font(name="Tahoma", size=14, bold=True, color="1E3A8A")
+    kpi_title_font = Font(name="Tahoma", size=10, bold=True, color="475569")
+    kpi_val_font = Font(name="Tahoma", size=12, bold=True, color="0F172A")
+    data_font = Font(name="Tahoma", size=10)
+    bold_font = Font(name="Tahoma", size=10, bold=True)
+
+    header_fill = PatternFill(start_color="1E40AF", end_color="1E40AF", fill_type="solid")
+    kpi_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1')
+    )
+
+    settings_obj = SystemSetting.get_settings()
+    company_name = settings_obj.company_name or "مجتمع صنعتی و معدنی فولاد پریما"
+
+    # --- Sheet 1: خلاصه امتیاز و عملکرد ---
+    ws1 = wb.create_sheet(title="خلاصه ارزیابی و امتیاز")
+    ws1.views.sheetView[0].rightToLeft = True
+
+    ws1.cell(row=1, column=1, value=company_name).font = title_font
+    ws1.cell(row=2, column=1, value=f"شناسنامه و تحلیل عملکرد: {party.name} ({party.get_party_type_display()})").font = Font(name="Tahoma", size=12, bold=True, color="1E293B")
+    ws1.cell(row=3, column=1, value=f"تاریخ گزارش: {get_today_jalali()} | نسخه الگوریتم: {analysis['score']['calculation_version']}").font = Font(name="Tahoma", size=9, italic=True, color="64748B")
+
+    score_info = analysis['score']
+    prof = analysis['profile']
+
+    ws1.cell(row=5, column=1, value="امتیاز کل عملکرد").font = kpi_title_font
+    ws1.cell(row=5, column=2, value=score_info['overall_score'] if score_info['overall_score'] is not None else "داده ناکافی").font = kpi_val_font
+    ws1.cell(row=6, column=1, value="سطح کیفی").font = kpi_title_font
+    ws1.cell(row=6, column=2, value=score_info['level_fa']).font = bold_font
+    ws1.cell(row=7, column=1, value="سطح اطمینان آماری").font = kpi_title_font
+    ws1.cell(row=7, column=2, value=score_info['confidence_fa']).font = bold_font
+
+    ws1.cell(row=9, column=1, value="ابعاد ۶ گانه ارزیابی").font = Font(name="Tahoma", size=11, bold=True, color="1E40AF")
+    ws1.cell(row=10, column=1, value="بُعد ارزیابی").font = header_font
+    ws1.cell(row=10, column=1).fill = header_fill
+    ws1.cell(row=10, column=2, value="وزن فرمول (%)").font = header_font
+    ws1.cell(row=10, column=2).fill = header_fill
+    ws1.cell(row=10, column=3, value="امتیاز کسب‌شده (۰-۱۰۰)").font = header_font
+    ws1.cell(row=10, column=3).fill = header_fill
+
+    dim_names_fa = {
+        'weight_accuracy': 'دقت اوزان و مغایرت',
+        'loss_performance': 'عملکرد افت محموله (نرمال‌شده)',
+        'consistency': 'ثبات و یکنواختی عملکرد',
+        'monitoring_quality': 'کیفیت پایش و عدم هشدار',
+        'operational_efficiency': 'بهره‌وری عملیاتی و معطلی',
+        'data_reliability': 'اعتبار و کفایت نمونه آماری',
+    }
+
+    cur_row = 11
+    dims = score_info['dimension_scores']
+    weights = score_info['dimension_weights']
+    for d_key, d_label in dim_names_fa.items():
+        ws1.cell(row=cur_row, column=1, value=d_label).font = data_font
+        ws1.cell(row=cur_row, column=1).border = thin_border
+        ws1.cell(row=cur_row, column=2, value=weights.get(d_key, 0)).font = data_font
+        ws1.cell(row=cur_row, column=2).border = thin_border
+        ws1.cell(row=cur_row, column=3, value=dims.get(d_key, 0.0)).font = bold_font
+        ws1.cell(row=cur_row, column=3).border = thin_border
+        cur_row += 1
+
+    cur_row += 2
+    ws1.cell(row=cur_row, column=1, value="توضیحات و دلایل تحلیلی (نقاط مثبت)").font = Font(name="Tahoma", size=11, bold=True, color="166534")
+    cur_row += 1
+    for p in score_info['explanation']['positive_points']:
+        ws1.cell(row=cur_row, column=1, value=f"• {p}").font = data_font
+        cur_row += 1
+
+    cur_row += 1
+    ws1.cell(row=cur_row, column=1, value="موارد نیازمند توجه و بهبود").font = Font(name="Tahoma", size=11, bold=True, color="991B1B")
+    cur_row += 1
+    for a in score_info['explanation']['attention_points']:
+        ws1.cell(row=cur_row, column=1, value=f"• {a}").font = data_font
+        cur_row += 1
+
+    for col in ws1.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws1.column_dimensions[col_letter].width = max(max_len + 4, 16)
+
+    # --- Sheet 2: قبوض محموله‌ها ---
+    ws2 = wb.create_sheet(title="قبوض محموله‌ها")
+    ws2.views.sheetView[0].rightToLeft = True
+
+    t_headers = [
+        "ردیف", "شماره قبض", "تاریخ", "کالا", "پلاک خودرو", "وزن ارسالی (Kg)",
+        "وزن پر (Kg)", "وزن خالی (Kg)", "وزن خالص (Kg)", "اختلاف وزن (Kg)", "درصد افت (%)",
+        "وزن نهایی (Kg)", "مغایرت غیرمجاز", "وضعیت"
+    ]
+    for col_idx, h in enumerate(t_headers, 1):
+        cell = ws2.cell(row=1, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    tickets = WeighTicket.objects.filter(party=party).order_by('-first_weight_date', '-id')[:300]
+    for r_idx, t in enumerate(tickets, 2):
+        is_even = (r_idx % 2 == 0)
+        row_data = [
+            r_idx - 1,
+            t.serial_number,
+            format_jalali_date(t.first_weight_date) if t.first_weight_date else '-',
+            t.product.name if t.product else '-',
+            t.license_plate_display,
+            float(t.sent_weight or 0),
+            float(t.gross_weight or 0),
+            float(t.tare_weight or 0),
+            float(t.net_weight or 0),
+            float(t.weight_difference or 0),
+            float(t.loss_percent or 0),
+            float(t.final_weight or 0),
+            "بله" if t.is_tolerance_exceeded else "خیر",
+            t.get_status_display()
+        ]
+        for c_idx, val in enumerate(row_data, 1):
+            c = ws2.cell(row=r_idx, column=c_idx, value=val)
+            c.font = data_font
+            c.border = thin_border
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            if is_even:
+                c.fill = zebra_fill
+
+    for col in ws2.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws2.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    safe_name = "".join(c for c in party.name if c.isalnum() or c in (' ', '_', '-')).strip()
+    filename = f"party_{safe_name}_{get_today_jalali().replace('/', '-')}.xlsx"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+def export_party_ranking_csv(ranked_items):
+    """
+    خروجی فایل CSV استاندارد با UTF-8 BOM جهت رتبه‌بندی طرف‌حساب‌ها.
+    """
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    filename = f"party_ranking_{get_today_jalali().replace('/', '-')}.csv"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response.write('\ufeff')  # BOM
+
+    writer = csv.writer(response)
+    writer.writerow([
+        "Rank", "Percentile", "Party Name", "Code", "Type", "Overall Score",
+        "Level", "Confidence", "Trips", "Tonnage", "Avg Discrepancy Kg",
+        "Avg Loss Pct", "Alert Rate", "Avg Turnaround Min"
+    ])
+
+    for item in ranked_items:
+        writer.writerow([
+            item.get('rank', ''),
+            item.get('percentile', ''),
+            item.get('party_name', ''),
+            item.get('party_code', ''),
+            item.get('party_type_fa', ''),
+            item.get('overall_score', ''),
+            item.get('score_level_fa', ''),
+            item.get('confidence_fa', ''),
+            item.get('completed_tickets', 0),
+            item.get('total_tonnage', 0.0),
+            item.get('avg_discrepancy_kg', 0.0),
+            item.get('avg_loss_percent', 0.0),
+            item.get('alert_rate', 0.0),
+            item.get('avg_turnaround_min', 0.0),
+        ])
+
+    return response
+
+
+def export_party_analytics_pdf(party, analysis, trend_data=None):
+    """
+    تولید گزارش رسمی مدیریتی PDF طرف‌حساب با ReportLab.
+    """
+    from reportlab.lib.pagesizes import letter, landscape, A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=25,
+        leftMargin=25,
+        topMargin=25,
+        bottomMargin=25
+    )
+    elements = []
+    styles = getSampleStyleSheet()
+
+    settings_obj = SystemSetting.get_settings()
+    company_name = settings_obj.company_name or "مجتمع صنعتی و معدنی فولاد پریما"
+
+    title_text = f"{company_name} - کارنامه عملکرد طرف‌حساب"
+    elements.append(Paragraph(title_text, styles['Title']))
+    elements.append(Paragraph(f"Party: {party.name} ({party.get_party_type_display()}) | Code: {party.code or '-'} | Date: {get_today_jalali()}", styles['Normal']))
+    elements.append(Spacer(1, 15))
+
+    score_info = analysis['score']
+    prof = analysis['profile']
+
+    sc_str = str(score_info['overall_score']) if score_info['overall_score'] is not None else "Insufficient Data"
+
+    summary_table_data = [
+        ["Overall Score", sc_str, "Quality Level", score_info['level_fa']],
+        ["Confidence", score_info['confidence_fa'], "Algorithm Version", score_info['calculation_version']],
+        ["Total Trips", str(prof['completed_tickets']), "Total Tonnage (Ton)", str(prof['total_net_weight_ton'])],
+        ["Avg Discrepancy (Kg)", str(analysis['discrepancy_metrics']['average_absolute_discrepancy_kg']), "Avg Loss (%)", str(analysis['loss_metrics']['average_loss_percent'])],
+        ["Alerts Per 100", str(analysis['monitoring_metrics']['alerts_per_100_tickets']), "Critical Alerts", str(analysis['monitoring_metrics']['critical_alerts'])],
+        ["Avg Turnaround (Min)", str(analysis['turnaround_metrics']['average_turnaround_minutes']), "Weight Overrides", str(analysis['correction_metrics']['weight_correction_count'])],
+    ]
+
+    t = Table(summary_table_data, colWidths=[140, 130, 140, 130])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.whitesmoke),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+    ]))
+    elements.append(t)
+    elements.append(Spacer(1, 15))
+
+    elements.append(Paragraph("<b>Score Dimensions Breakdown (0 - 100):</b>", styles['Heading3']))
+    dims = score_info['dimension_scores']
+    dim_rows = [
+        ["Dimension", "Score", "Formula Weight"],
+        ["Weight Accuracy", str(dims['weight_accuracy']), "30%"],
+        ["Loss Performance (Normalized)", str(dims['loss_performance']), "20%"],
+        ["Consistency", str(dims['consistency']), "15%"],
+        ["Monitoring Quality", str(dims['monitoring_quality']), "20%"],
+        ["Operational Efficiency", str(dims['operational_efficiency']), "10%"],
+        ["Data Reliability", str(dims['data_reliability']), "5%"],
+    ]
+    t_dims = Table(dim_rows, colWidths=[240, 150, 150])
+    t_dims.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+    ]))
+    elements.append(t_dims)
+    elements.append(Spacer(1, 15))
+
+    elements.append(Paragraph("<b>Analytical Evaluation & Observations:</b>", styles['Heading3']))
+    for p in score_info['explanation']['positive_points']:
+        elements.append(Paragraph(f"[+] {p}", styles['Normal']))
+    for a in score_info['explanation']['attention_points']:
+        elements.append(Paragraph(f"[-] {a}", styles['Normal']))
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    safe_name = "".join(c for c in party.name if c.isalnum() or c in (' ', '_', '-')).strip()
+    response['Content-Disposition'] = f'attachment; filename="party_analytics_{safe_name}.pdf"'
+    return response

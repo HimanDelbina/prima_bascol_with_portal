@@ -110,3 +110,61 @@ class CanManageMonitoring(BasePermission):
             return True
         profile = getattr(request.user, "profile", None)
         return bool(profile and profile.is_admin_or_manager)
+
+
+class CanViewPartyAnalytics(BasePermission):
+    """Permission to view party analytics and profile."""
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        if request.user.is_superuser:
+            return True
+        profile = getattr(request.user, "profile", None)
+        return bool(profile and (profile.is_executive_manager or profile.is_admin_or_manager))
+
+
+class CanViewPartyScore(BasePermission):
+    """Permission to view party scores and performance breakdowns."""
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        if request.user.is_superuser:
+            return True
+        profile = getattr(request.user, "profile", None)
+        return bool(profile and (profile.is_executive_manager or profile.is_admin_or_manager))
+
+
+class CanViewPartyRanking(BasePermission):
+    """Permission to view party rankings and peer comparisons."""
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        if request.user.is_superuser:
+            return True
+        profile = getattr(request.user, "profile", None)
+        return bool(profile and (profile.is_executive_manager or profile.is_admin_or_manager))
+
+
+class CanExportPartyAnalytics(BasePermission):
+    """Permission to export party analytics in Excel, CSV, or PDF format."""
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        if request.user.is_superuser:
+            return True
+        profile = getattr(request.user, "profile", None)
+        return bool(profile and (profile.is_executive_manager or profile.is_admin_or_manager))
+
+
+class CanManagePartyScoringConfig(BasePermission):
+    """Permission required to modify party scoring configurations and weights."""
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        if request.method in SAFE_METHODS:
+            profile = getattr(request.user, "profile", None)
+            return bool(request.user.is_superuser or (profile and (profile.is_executive_manager or profile.is_admin_or_manager)))
+        if request.user.is_superuser:
+            return True
+        profile = getattr(request.user, "profile", None)
+        return bool(profile and (profile.is_admin_or_manager or profile.can_manage_settings))
