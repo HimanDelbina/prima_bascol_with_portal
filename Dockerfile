@@ -33,9 +33,10 @@ WORKDIR /app
 
 # Copy requirements and install dependencies
 COPY requirements.txt /app/
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+ARG PIP_INDEX_URL=https://pypi.org/simple
 
+RUN pip install --no-cache-dir --upgrade pip -i "${PIP_INDEX_URL}" && \
+    pip install --no-cache-dir -i "${PIP_INDEX_URL}" -r requirements.txt
 # Copy application source code
 COPY . /app/
 
