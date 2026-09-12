@@ -43,6 +43,17 @@ staticfiles/
 *~
 .DS_Store
 
-# Backups
+# Environment variables and secrets
+.env
+.env.*
+.env.local
+!.env.example
+
+# Backups and Archives
 backups/*.dump
 backups/*.sql
+backups/*.json
+*.tar.gz
+*.dump
+*.sql
+

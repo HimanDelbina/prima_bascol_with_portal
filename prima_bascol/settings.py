@@ -5,17 +5,42 @@ Comprehensive Industrial Weighbridge Management System (سامانه جامع ب
 
 from pathlib import Path
 import os
+from datetime import timedelta
+
+# Try loading environment variables from .env if present
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / '.env')
+except ImportError:
+    pass
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-=y$+k=y&1v8urdlo#y+l7f_k1f0&(ad4sx6)025l*kiv#$(qob'
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    os.environ.get('SECRET_KEY', 'django-insecure-=y$+k=y&1v8urdlo#y+l7f_k1f0&(ad4sx6)025l*kiv#$(qob')
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = ['*']
+# Allowed Hosts configuration
+raw_allowed_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', os.environ.get('ALLOWED_HOSTS', ''))
+if raw_allowed_hosts:
+    ALLOWED_HOSTS = [h.strip() for h in raw_allowed_hosts.split(',') if h.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ['*']
+else:
+    ALLOWED_HOSTS = [
+        'bascol.ferion.ir',
+        'www.bascol.ferion.ir',
+        'localhost',
+        '127.0.0.1',
+        'web',
+        'testserver',
+    ]
 
 # Application definition
 INSTALLED_APPS = [
@@ -51,6 +76,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -82,17 +108,32 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'prima_bascol.wsgi.application'
 
-# Database
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql_psycopg2",
-        "NAME": "prima_bascol",
-        "USER": "postgres",
-        "PASSWORD": "11193",
-        "HOST": "localhost",
-        "PORT": "5432",
+# Database Configuration (PostgreSQL with psycopg 3)
+db_url = os.environ.get('DATABASE_URL', '')
+if db_url:
+    import urllib.parse
+    parsed_db_url = urllib.parse.urlparse(db_url)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': parsed_db_url.path[1:],
+            'USER': parsed_db_url.username or '',
+            'PASSWORD': parsed_db_url.password or '',
+            'HOST': parsed_db_url.hostname or 'localhost',
+            'PORT': str(parsed_db_url.port or 5432),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('POSTGRES_DB', os.environ.get('DB_NAME', 'prima_bascol')),
+            'USER': os.environ.get('POSTGRES_USER', os.environ.get('DB_USER', 'postgres')),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', os.environ.get('DB_PASSWORD', '11193')),
+            'HOST': os.environ.get('POSTGRES_HOST', os.environ.get('DB_HOST', 'localhost')),
+            'PORT': str(os.environ.get('POSTGRES_PORT', os.environ.get('DB_PORT', '5432'))),
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -116,7 +157,18 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Media files
+# WhiteNoise storage: compress and hash static files for caching in production
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+WHITENOISE_MANIFEST_STRICT = False
+
+# Media files (Persistent user uploaded files)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -172,7 +224,7 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
+    'SIGNING_KEY': os.environ.get('DJANGO_JWT_SECRET_KEY', SECRET_KEY),
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
     'USER_ID_FIELD': 'id',
@@ -204,15 +256,104 @@ SPECTACULAR_SETTINGS = {
 }
 
 # ==========================================
-# CORS Configuration
+# CORS & CSRF Configuration
 # ==========================================
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://192.168.1.105:8000",
-    "http://2.184.55.37:5500",
-]
+
+raw_cors = os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', os.environ.get('CORS_ALLOWED_ORIGINS', ''))
+if raw_cors:
+    CORS_ALLOWED_ORIGINS = [c.strip() for c in raw_cors.split(',') if c.strip()]
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "https://bascol.ferion.ir",
+        "https://www.bascol.ferion.ir",
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
+
+raw_csrf = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', os.environ.get('CSRF_TRUSTED_ORIGINS', ''))
+if raw_csrf:
+    CSRF_TRUSTED_ORIGINS = [c.strip() for c in raw_csrf.split(',') if c.strip()]
+else:
+    CSRF_TRUSTED_ORIGINS = [
+        "https://bascol.ferion.ir",
+        "https://www.bascol.ferion.ir",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
+
+# ==========================================
+# Security & Reverse Proxy Settings
+# ==========================================
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+    X_FRAME_OPTIONS = 'DENY'
+    
+    # HSTS: Safe default value (1 hour), easily configurable via env without locking domain
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '3600'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', 'False').lower() in ('true', '1')
+    SECURE_HSTS_PRELOAD = False
+    
+    # Reverse proxy (NPM/Nginx) handles SSL redirect by default
+    SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', 'False').lower() in ('true', '1')
+
+# ==========================================
+# Logging Configuration (12-Factor stdout/stderr)
+# ==========================================
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} [{name}:{lineno}] {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': os.environ.get('DJANGO_LOG_LEVEL', 'INFO'),
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': os.environ.get('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'gunicorn.error': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
 

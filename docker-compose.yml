@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: bascol_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-prima_bascol}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-prima_bascol}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - bascol_network
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bascol_web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+    ports:
+      - "${WEB_BIND_PORT:-127.0.0.1:8000:8000}"
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - backups_volume:/app/backups
+    networks:
+      - bascol_network
+
+volumes:
+  postgres_data:
+    name: bascol_postgres_data
+  static_volume:
+    name: bascol_static_volume
+  media_volume:
+    name: bascol_media_volume
+  backups_volume:
+    name: bascol_backups_volume
+
+networks:
+  bascol_network:
+    name: bascol_network
+    driver: bridge
