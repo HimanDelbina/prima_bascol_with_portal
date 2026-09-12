@@ -8,15 +8,8 @@ from masterdata.models import (
 )
 from core.jalali import get_today_jalali, jalali_to_gregorian, format_jalali_date, get_today_gregorian
 from core.models import SystemSetting
+from core.constants import IRAN_PLATE_LETTERS
 
-IRAN_PLATE_LETTERS = [
-    ("", "حرف"),
-    ("الف", "الف"), ("ب", "ب"), ("پ", "پ"), ("ت", "ت"), ("ث", "ث"), 
-    ("ج", "ج"), ("د", "د"), ("ز", "ز"), ("س", "س"), ("ش", "ش"), 
-    ("ص", "ص"), ("ط", "ط"), ("ع", "ع"), ("ف", "ف"), ("ق", "ق"), 
-    ("ک", "ک"), ("گ", "گ"), ("ل", "ل"), ("م", "م"), ("ن", "ن"), 
-    ("و", "و"), ("ه", "ه"), ("ی", "ی"), ("ژ", "ژ (معلولین)"), ("D", "D (دیپلمات)")
-]
 
 class TicketCreateForm(forms.ModelForm):
     plate_part1 = forms.CharField(max_length=5, required=False, widget=forms.TextInput(attrs={"class": "form-control iran-plate-part iran-plate-part1", "placeholder": "۱۲", "id": "plate_part1"}))
@@ -76,13 +69,13 @@ class TicketCreateForm(forms.ModelForm):
             "unload_location": forms.Select(attrs={"class": "form-select"}),
             "load_count": forms.NumberInput(attrs={"class": "form-control", "min": "1"}),
             
-            "first_weight": forms.NumberInput(attrs={"class": "form-control form-control-lg fw-bold text-primary", "id": "id_first_weight", "step": "any"}),
-            "second_weight": forms.NumberInput(attrs={"class": "form-control form-control-lg fw-bold text-primary", "id": "id_second_weight", "step": "any"}),
-            "sent_weight": forms.NumberInput(attrs={"class": "form-control", "id": "id_sent_weight", "step": "any"}),
+            "first_weight": forms.NumberInput(attrs={"class": "form-control form-control-lg fw-bold text-primary", "id": "id_first_weight", "step": "any", "placeholder": "۰"}),
+            "second_weight": forms.NumberInput(attrs={"class": "form-control form-control-lg fw-bold text-primary", "id": "id_second_weight", "step": "any", "placeholder": "۰"}),
+            "sent_weight": forms.NumberInput(attrs={"class": "form-control", "id": "id_sent_weight", "step": "any", "placeholder": "۰"}),
             
             "loss_type": forms.Select(attrs={"class": "form-select", "id": "id_loss_type"}),
-            "loss_percent": forms.NumberInput(attrs={"class": "form-control", "id": "id_loss_percent", "step": "0.01"}),
-            "loss_weight": forms.NumberInput(attrs={"class": "form-control", "id": "id_loss_weight", "step": "any", "readonly": "readonly"}),
+            "loss_percent": forms.NumberInput(attrs={"class": "form-control", "id": "id_loss_percent", "step": "0.01", "placeholder": "۰"}),
+            "loss_weight": forms.NumberInput(attrs={"class": "form-control", "id": "id_loss_weight", "step": "any", "readonly": "readonly", "placeholder": "۰"}),
             "is_loss_overridden": forms.CheckboxInput(attrs={"class": "form-check-input", "id": "id_is_loss_overridden"}),
             "loss_override_reason": forms.TextInput(attrs={"class": "form-control", "placeholder": "دلیل تغییر دستی افت (اجباری در صورت اورراید)", "id": "id_loss_override_reason"}),
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "توضیحات اختیاری سند"}),
@@ -114,6 +107,12 @@ class TicketCreateForm(forms.ModelForm):
         if not self.instance.pk:
             self.fields["first_weight_date_jalali"].initial = get_today_jalali()
             self.fields["first_weight_time_str"].initial = datetime.now().strftime("%H:%M")
+            self.initial["first_weight"] = ""
+            self.initial["second_weight"] = ""
+            self.initial["sent_weight"] = ""
+            self.initial["loss_percent"] = ""
+            self.initial["loss_weight"] = ""
+
 
         # Dynamic requirements based on system settings
         sys_settings = SystemSetting.get_settings()
@@ -179,11 +178,11 @@ class SecondWeightForm(forms.ModelForm):
             "loss_weight", "is_loss_overridden", "loss_override_reason", "notes"
         ]
         widgets = {
-            "second_weight": forms.NumberInput(attrs={"class": "form-control form-control-lg fw-bold text-success", "id": "id_second_weight", "step": "any", "autofocus": True}),
-            "sent_weight": forms.NumberInput(attrs={"class": "form-control", "id": "id_sent_weight", "step": "any"}),
+            "second_weight": forms.NumberInput(attrs={"class": "form-control form-control-lg fw-bold text-success", "id": "id_second_weight", "step": "any", "autofocus": True, "placeholder": "۰"}),
+            "sent_weight": forms.NumberInput(attrs={"class": "form-control", "id": "id_sent_weight", "step": "any", "placeholder": "۰"}),
             "loss_type": forms.Select(attrs={"class": "form-select", "id": "id_loss_type"}),
-            "loss_percent": forms.NumberInput(attrs={"class": "form-control", "id": "id_loss_percent", "step": "0.01"}),
-            "loss_weight": forms.NumberInput(attrs={"class": "form-control", "id": "id_loss_weight", "step": "any", "readonly": "readonly"}),
+            "loss_percent": forms.NumberInput(attrs={"class": "form-control", "id": "id_loss_percent", "step": "0.01", "placeholder": "۰"}),
+            "loss_weight": forms.NumberInput(attrs={"class": "form-control", "id": "id_loss_weight", "step": "any", "readonly": "readonly", "placeholder": "۰"}),
             "is_loss_overridden": forms.CheckboxInput(attrs={"class": "form-check-input", "id": "id_is_loss_overridden"}),
             "loss_override_reason": forms.TextInput(attrs={"class": "form-control", "placeholder": "دلیل تغییر دستی افت (اجباری در صورت اورراید)", "id": "id_loss_override_reason"}),
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "توضیحات اختیاری سند"}),
@@ -199,6 +198,15 @@ class SecondWeightForm(forms.ModelForm):
         self.fields["is_loss_overridden"].required = False
         self.fields["loss_override_reason"].required = False
         self.fields["notes"].required = False
+
+        if not self.instance.second_weight:
+            self.initial["second_weight"] = ""
+        if self.instance.sent_weight == 0:
+            self.initial["sent_weight"] = ""
+        if self.instance.loss_percent == 0:
+            self.initial["loss_percent"] = ""
+        if self.instance.loss_weight == 0:
+            self.initial["loss_weight"] = ""
 
         if not self.instance.second_weight_date:
             self.fields["second_weight_date_jalali"].initial = get_today_jalali()

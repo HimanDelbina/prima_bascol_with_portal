@@ -58,7 +58,18 @@ class VehicleTypeForm(forms.ModelForm):
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
+from core.constants import IRAN_PLATE_LETTERS
+
 class VehicleForm(forms.ModelForm):
+    plate_letter = forms.ChoiceField(
+        choices=IRAN_PLATE_LETTERS,
+        required=False,
+        widget=forms.Select(attrs={
+            "class": "form-select text-center iran-plate-part iran-plate-letter",
+            "id": "id_plate_letter",
+        })
+    )
+
     class Meta:
         model = Vehicle
         fields = [
@@ -66,17 +77,17 @@ class VehicleForm(forms.ModelForm):
             "plate_display", "vehicle_type", "default_driver", "empty_weight", "description", "is_active"
         ]
         widgets = {
-            "plate_part1": forms.TextInput(attrs={"class": "form-control text-center", "maxlength": "2"}),
-            "plate_letter": forms.TextInput(attrs={"class": "form-control text-center", "maxlength": "5"}),
-            "plate_part2": forms.TextInput(attrs={"class": "form-control text-center", "maxlength": "3"}),
-            "plate_iran": forms.TextInput(attrs={"class": "form-control text-center", "maxlength": "2"}),
-            "plate_display": forms.TextInput(attrs={"class": "form-control"}),
+            "plate_part1": forms.TextInput(attrs={"class": "form-control text-center iran-plate-part iran-plate-part1", "maxlength": "2", "id": "id_plate_part1"}),
+            "plate_part2": forms.TextInput(attrs={"class": "form-control text-center iran-plate-part iran-plate-part2", "maxlength": "3", "id": "id_plate_part2"}),
+            "plate_iran": forms.TextInput(attrs={"class": "form-control text-center iran-plate-part iran-plate-iran", "maxlength": "2", "id": "id_plate_iran"}),
+            "plate_display": forms.TextInput(attrs={"class": "form-control", "id": "id_plate_display"}),
             "vehicle_type": forms.Select(attrs={"class": "form-select"}),
             "default_driver": forms.Select(attrs={"class": "form-select"}),
             "empty_weight": forms.NumberInput(attrs={"class": "form-control", "step": "any"}),
             "description": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
+
 
 class LocationForm(forms.ModelForm):
     class Meta:

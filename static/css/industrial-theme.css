@@ -325,7 +325,7 @@ body.operator-fullscreen .operator-exit-fullscreen-btn {
 }
 
 .iran-plate-letter-select, .iran-plate-input-letter {
-  width: 52px;
+  width: 54px;
   text-align: center;
   font-size: 1.35rem;
   font-weight: 900;
@@ -334,6 +334,7 @@ body.operator-fullscreen .operator-exit-fullscreen-btn {
   background: #f8fafc;
   color: #1e293b;
   cursor: pointer;
+  padding: 0 2px;
 }
 
 .iran-plate-input-part2 {

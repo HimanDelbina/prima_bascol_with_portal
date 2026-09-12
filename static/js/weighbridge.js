@@ -137,7 +137,7 @@ function initLiveCalculations() {
         lossKg = (net * lossPct) / 100;
       }
       if (lossWeightInput && (!isLossOverridden || !isLossOverridden.checked)) {
-        lossWeightInput.value = lossKg > 0 ? (Math.round(lossKg * 100) / 100) : 0;
+        lossWeightInput.value = lossKg > 0 ? (Math.round(lossKg * 100) / 100) : "";
       }
     }
 

@@ -320,7 +320,7 @@
           lossKg = (net * lossPct) / 100;
         }
         if (lossWeightInput && (!isLossOverridden || !isLossOverridden.checked)) {
-          lossWeightInput.value = lossKg > 0 ? Math.round(lossKg * 100) / 100 : 0;
+          lossWeightInput.value = lossKg > 0 ? Math.round(lossKg * 100) / 100 : "";
         }
       }
 
@@ -466,12 +466,98 @@
     }
   }
 
+  // 7. Auto-Clear Default & Zero Numbers on Weight Inputs Click/Focus
+  function initAutoClearWeightInputs() {
+    const weightSelector = [
+      "#id_first_weight",
+      "#id_second_weight",
+      "#id_sent_weight",
+      "#id_loss_percent",
+      "#id_loss_weight",
+      "#id_empty_weight",
+      "#id_standard_tare_weight",
+      "#id_standard_tolerance_kg",
+      "#id_default_loss_percent",
+      ".weight-hero-box input",
+      ".weight-input",
+      "input.weight-auto-clear",
+      "input[name='first_weight']",
+      "input[name='second_weight']",
+      "input[name='sent_weight']",
+      "input[name='loss_percent']",
+      "input[name='loss_weight']",
+      "input[name='empty_weight']"
+    ].join(",");
+
+    function isDefaultZero(val) {
+      if (val === null || val === undefined) return false;
+      const str = String(val).trim();
+      if (!str) return false;
+      const clean = str.replace(/,/g, "")
+        .replace(/۰/g, "0").replace(/۱/g, "1").replace(/۲/g, "2")
+        .replace(/۳/g, "3").replace(/۴/g, "4").replace(/۵/g, "5")
+        .replace(/۶/g, "6").replace(/۷/g, "7").replace(/۸/g, "8").replace(/۹/g, "9");
+      const num = parseFloat(clean);
+      return !isNaN(num) && num === 0;
+    }
+
+    function processClearOrSelect(input) {
+      if (!input || input.readOnly || input.disabled) return;
+      if (isDefaultZero(input.value)) {
+        input.value = "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        try {
+          input.select();
+        } catch (e) {}
+      }
+    }
+
+    // Auto clear zero on initial load for new forms
+    document.querySelectorAll(weightSelector).forEach(function (el) {
+      if (!el.readOnly && !el.disabled && isDefaultZero(el.value)) {
+        if (!document.querySelector("input[name=ticket_id]") && (window.location.pathname.includes("/create/") || window.location.pathname.includes("/second-weight/"))) {
+          el.value = "";
+        }
+      }
+    });
+
+    // Event delegation on focusin
+    document.addEventListener("focusin", function (e) {
+      const target = e.target;
+      if (target && target.matches && target.matches(weightSelector)) {
+        processClearOrSelect(target);
+      }
+    });
+
+    // Event delegation on click
+    document.addEventListener("click", function (e) {
+      const target = e.target;
+      if (target && target.matches && target.matches(weightSelector)) {
+        if (isDefaultZero(target.value)) {
+          processClearOrSelect(target);
+        }
+      }
+    });
+
+    // Auto clear zero on first keypress so numbers don't start with 0
+    document.addEventListener("keydown", function (e) {
+      const target = e.target;
+      if (target && target.matches && target.matches(weightSelector)) {
+        if (isDefaultZero(target.value) && e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          target.value = "";
+        }
+      }
+    });
+  }
+
   // DOM Ready Initializations
   document.addEventListener("DOMContentLoaded", function () {
     initKeyboardUX();
     initDoubleSubmitPrevention();
     initPlateWidget();
     initLiveWeightCalculations();
+    initAutoClearWeightInputs();
     initLiveClock();
     initSidebarActiveNav();
 
@@ -480,3 +566,4 @@
     if (savedDensity) setTableDensity(savedDensity);
   });
 })();
+

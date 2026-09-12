@@ -76,3 +76,42 @@
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const p1 = document.getElementById("id_plate_part1");
+    const pL = document.getElementById("id_plate_letter");
+    const p2 = document.getElementById("id_plate_part2");
+    const pI = document.getElementById("id_plate_iran");
+    const disp = document.getElementById("id_plate_display");
+
+    if (p1 && pL && p2 && pI && disp) {
+        function updateDisplay() {
+            const v1 = p1.value.trim();
+            const vL = pL.value.trim();
+            const v2 = p2.value.trim();
+            const vI = pI.value.trim();
+            if (v1 && vL && v2 && vI) {
+                disp.value = `${v1} ${vL} ${v2} - ایران ${vI}`;
+            }
+        }
+        [p1, p2, pI].forEach(el => {
+            el.addEventListener("input", function() {
+                this.value = this.value.replace(/[^0-9۰-۹]/g, "");
+                updateDisplay();
+            });
+        });
+        pL.addEventListener("change", updateDisplay);
+
+        p1.addEventListener("input", function() {
+            if (this.value.length >= 2) pL.focus();
+        });
+        p2.addEventListener("input", function() {
+            if (this.value.length >= 3) pI.focus();
+        });
+    }
+});
+</script>
+{% endblock %}
+

@@ -1,9 +1,10 @@
 from core.models import SystemSetting
 from core.jalali import get_today_jalali, to_persian_digits
+from core.constants import IRAN_PLATE_LETTERS
 from datetime import datetime
 
 def global_context(request):
-    """Context processor for settings, Persian date/time, and user role."""
+    """Context processor for settings, Persian date/time, user role, and license plate letters."""
     settings_obj = SystemSetting.get_settings()
     now = datetime.now()
     
@@ -30,4 +31,6 @@ def global_context(request):
         "current_time_str": now.strftime("%H:%M"),
         "user_role_display": user_role,
         "user_role_code": user_role_code,
+        "iran_plate_letters": IRAN_PLATE_LETTERS,
     }
+
