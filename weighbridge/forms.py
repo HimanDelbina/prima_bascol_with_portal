@@ -46,7 +46,7 @@ class TicketCreateForm(forms.ModelForm):
             "weight_mode", "operation_type", "party", "product", 
             "vehicle", "vehicle_type", "vehicle_type_custom",
             "driver", "driver_name_custom", "driver_mobile_custom",
-            "license_plate_display", "waybill_number", "origin", "destination", 
+            "license_plate_display", "waybill_number", "freight_amount", "origin", "destination",
             "unload_location", "load_count", "first_weight", "second_weight",
             "sent_weight", "loss_type", "loss_percent", "loss_weight",
             "is_loss_overridden", "loss_override_reason", "notes"
@@ -64,6 +64,7 @@ class TicketCreateForm(forms.ModelForm):
             "driver_mobile_custom": forms.TextInput(attrs={"class": "form-control", "placeholder": "۰۹۱۲۳۴۵۶۷۸۹"}),
             "license_plate_display": forms.TextInput(attrs={"class": "form-control", "id": "license_plate_display", "placeholder": "مثلاً ۱۲ ج ۳۴۵ - ایران ۶۷"}),
             "waybill_number": forms.TextInput(attrs={"class": "form-control", "placeholder": "شماره بارنامه / حواله"}),
+            "freight_amount": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "مبلغ به تومان", "inputmode": "numeric"}),
             "origin": forms.Select(attrs={"class": "form-select"}),
             "destination": forms.Select(attrs={"class": "form-select"}),
             "unload_location": forms.Select(attrs={"class": "form-select"}),
@@ -103,6 +104,7 @@ class TicketCreateForm(forms.ModelForm):
         self.fields["driver_name_custom"].required = False
         self.fields["driver_mobile_custom"].required = False
         self.fields["waybill_number"].required = False
+        self.fields["license_plate_display"].required = False
 
         if not self.instance.pk:
             self.fields["first_weight_date_jalali"].initial = get_today_jalali()
@@ -129,6 +131,15 @@ class TicketCreateForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        for field in ("sent_weight", "loss_percent", "loss_weight"):
+            if cleaned_data.get(field) is None and field not in self.errors:
+                cleaned_data[field] = Decimal("0")
+        first_date = cleaned_data.get("first_weight_date_jalali")
+        parsed_date = jalali_to_gregorian(first_date) if first_date else get_today_gregorian()
+        if not parsed_date:
+            self.add_error("first_weight_date_jalali", "تاریخ وزن اول معتبر نیست.")
+        else:
+            self.instance.first_weight_date = parsed_date
         plate = cleaned_data.get("license_plate_display", "").strip()
         if not plate:
             # Try construct from parts
@@ -146,6 +157,15 @@ class TicketCreateForm(forms.ModelForm):
         w1 = cleaned_data.get("first_weight")
         if w1 is None or w1 <= 0:
             self.add_error("first_weight", "وزن اول باید مقداری بزرگتر از صفر باشد.")
+        w2 = cleaned_data.get("second_weight")
+        if w2 is not None and w2 <= 0:
+            self.add_error("second_weight", "وزن دوم باید بزرگتر از صفر باشد یا خالی بماند.")
+        if cleaned_data.get("weight_mode") == WeightMode.DIRECT and w2 is None:
+            self.add_error("second_weight", "برای ثبت مستقیم، وزن دوم را وارد کنید.")
+        if (cleaned_data.get("sent_weight") or 0) < 0:
+            self.add_error("sent_weight", "وزن ارسالی نمی‌تواند منفی باشد.")
+        if (cleaned_data.get("loss_weight") or 0) < 0:
+            self.add_error("loss_weight", "وزن افت نمی‌تواند منفی باشد.")
 
         loss_pct = cleaned_data.get("loss_percent") or 0
         if loss_pct < 0 or loss_pct > 100:
@@ -219,6 +239,14 @@ class SecondWeightForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         w2 = cleaned_data.get("second_weight")
+        for field in ("sent_weight", "loss_percent", "loss_weight"):
+            if cleaned_data.get(field) is None and field not in self.errors:
+                cleaned_data[field] = Decimal("0")
+        if (cleaned_data.get("sent_weight") or 0) < 0:
+            self.add_error("sent_weight", "وزن ارسالی نمی‌تواند منفی باشد.")
+        second_date = cleaned_data.get("second_weight_date_jalali")
+        if second_date and not jalali_to_gregorian(second_date):
+            self.add_error("second_weight_date_jalali", "تاریخ وزن دوم معتبر نیست.")
         if w2 is None or w2 <= 0:
             self.add_error("second_weight", "وزن دوم باید مقداری بزرگتر از صفر باشد.")
 
@@ -246,7 +274,7 @@ class TicketEditManagerForm(forms.ModelForm):
         fields = [
             "operation_type", "party", "product", "vehicle", "vehicle_type", 
             "driver", "driver_name_custom", "driver_mobile_custom",
-            "license_plate_display", "waybill_number", "origin", "destination", 
+            "license_plate_display", "waybill_number", "freight_amount", "origin", "destination",
             "unload_location", "load_count", "first_weight", "second_weight", 
             "sent_weight", "loss_type", "loss_percent", "loss_weight", 
             "is_loss_overridden", "loss_override_reason", "notes"
@@ -262,6 +290,7 @@ class TicketEditManagerForm(forms.ModelForm):
             "driver_mobile_custom": forms.TextInput(attrs={"class": "form-control"}),
             "license_plate_display": forms.TextInput(attrs={"class": "form-control"}),
             "waybill_number": forms.TextInput(attrs={"class": "form-control"}),
+            "freight_amount": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "1", "inputmode": "numeric"}),
             "origin": forms.Select(attrs={"class": "form-select"}),
             "destination": forms.Select(attrs={"class": "form-select"}),
             "unload_location": forms.Select(attrs={"class": "form-select"}),

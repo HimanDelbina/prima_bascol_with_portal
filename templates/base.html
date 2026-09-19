@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     
     <!-- Industrial Design System CSS -->
-    <link rel="stylesheet" href="/static/css/industrial-theme.css">
+    <link rel="stylesheet" href="/static/css/industrial-theme.css?v=20260915">
     {% block extra_css %}{% endblock %}
 </head>
 <body data-max-tolerance-kg="{{ sys_settings.max_tolerance_kg|default:50 }}">
@@ -165,6 +165,11 @@
                 <i class="bi bi-chevron-down ms-0 me-auto" style="font-size: 0.75rem;"></i>
             </a>
             <div class="collapse {% if request.resolver_match.app_name == 'weighbridge' %}show{% endif %}" id="menuWeighbridge">
+                {% if user.is_superuser or user.profile.can_edit_completed_ticket %}
+                <a href="{% url 'weighbridge:plate_exceptions' %}" class="nav-link {% if request.resolver_match.url_name == 'plate_exceptions' %}active{% endif %}">
+                    <i class="bi bi-shield-check"></i><span>استثناهای ثبت روزانه پلاک</span>
+                </a>
+                {% endif %}
                 <a href="{% url 'weighbridge:ticket_create' %}" class="nav-link text-warning fw-bold {% if request.resolver_match.app_name == 'weighbridge' and request.resolver_match.url_name == 'ticket_create' %}active{% endif %}">
                     <i class="bi bi-plus-circle-fill text-warning"></i>
                     <span>ثبت باسکول جدید</span>
@@ -195,31 +200,35 @@
                 <i class="bi bi-chevron-down ms-0 me-auto" style="font-size: 0.75rem;"></i>
             </a>
             <div class="collapse {% if request.resolver_match.app_name == 'reports' %}show{% endif %}" id="menuReports">
+                <a href="{% url 'reports:freight_report' %}" class="nav-link {% if request.resolver_match.url_name == 'freight_report' %}active{% endif %}">
+                    <i class="bi bi-cash-stack"></i>
+                    <span>گزارش مبالغ کرایه</span>
+                </a>
                 <a href="{% url 'reports:report_builder' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.url_name == 'report_builder' %}active{% endif %}">
                     <i class="bi bi-sliders"></i>
                     <span>گزارش‌ساز پیشرفته</span>
                 </a>
-                <a href="{% url 'reports:preset_report_view' 'daily' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.kwargs.preset_type == 'daily' %}active{% endif %}">
+                <a href="{% url 'reports:preset_report_view' 'daily' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.kwargs.code == 'daily' %}active{% endif %}">
                     <i class="bi bi-calendar2-day"></i>
                     <span>گزارش روزانه</span>
                 </a>
-                <a href="{% url 'reports:preset_report_view' 'monthly' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.kwargs.preset_type == 'monthly' %}active{% endif %}">
+                <a href="{% url 'reports:preset_report_view' 'monthly' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.kwargs.code == 'monthly' %}active{% endif %}">
                     <i class="bi bi-calendar3"></i>
                     <span>گزارش ماهانه</span>
                 </a>
-                <a href="{% url 'reports:preset_report_view' 'product' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.kwargs.preset_type == 'product' %}active{% endif %}">
+                <a href="{% url 'reports:preset_report_view' 'by_product' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.kwargs.code == 'by_product' %}active{% endif %}">
                     <i class="bi bi-box-seam"></i>
                     <span>گزارش محصولات</span>
                 </a>
-                <a href="{% url 'reports:preset_report_view' 'party' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.kwargs.preset_type == 'party' %}active{% endif %}">
+                <a href="{% url 'reports:preset_report_view' 'by_party' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.kwargs.code == 'by_party' %}active{% endif %}">
                     <i class="bi bi-building"></i>
                     <span>گزارش طرف حساب</span>
                 </a>
-                <a href="{% url 'reports:preset_report_view' 'driver' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.kwargs.preset_type == 'driver' %}active{% endif %}">
+                <a href="{% url 'reports:preset_report_view' 'by_driver' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.kwargs.code == 'by_driver' %}active{% endif %}">
                     <i class="bi bi-person-badge"></i>
                     <span>گزارش رانندگان</span>
                 </a>
-                <a href="{% url 'reports:preset_report_view' 'discrepancy' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.kwargs.preset_type == 'discrepancy' %}active{% endif %}">
+                <a href="{% url 'reports:preset_report_view' 'variance_analysis' %}" class="nav-link {% if request.resolver_match.app_name == 'reports' and request.resolver_match.kwargs.code == 'variance_analysis' %}active{% endif %}">
                     <i class="bi bi-exclamation-triangle"></i>
                     <span>گزارش مغایرت وزن</span>
                 </a>
@@ -284,17 +293,17 @@
     <div id="app-main">
         <!-- Persistent Top Header -->
         <header id="app-header">
-            <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-3 flex-grow-1" style="min-width: 0;">
                 <button class="btn btn-sm btn-light border d-lg-none" type="button" onclick="document.getElementById('app-sidebar').classList.toggle('show')">
                     <i class="bi bi-list fs-5"></i>
                 </button>
-                <div class="d-flex align-items-center gap-2">
-                    <span class="fw-bold text-dark fs-6">{{ sys_settings.company_name }}</span>
-                    <span class="badge bg-light text-muted border font-monospace small d-none d-md-inline-block">نسخه عملیاتی 2.5</span>
+                <div class="d-flex align-items-center gap-2" style="min-width: 0;">
+                    <span class="fw-bold text-dark fs-6 text-truncate" title="{{ sys_settings.company_name }}">{{ sys_settings.company_name }}</span>
+                    <span class="badge bg-light text-muted border font-monospace small d-none d-xxl-inline-block">نسخه عملیاتی 2.5</span>
                 </div>
             </div>
 
-            <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-2 gap-xl-3 flex-shrink-0 text-nowrap">
                 <!-- Jalali Live Date & Clock -->
                 <div class="d-none d-md-flex align-items-center gap-2 bg-light px-3 py-1 rounded border">
                     <i class="bi bi-calendar3 text-primary"></i>
@@ -409,7 +418,7 @@
 <!-- Core Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/js/industrial-app.js"></script>
+<script src="/static/js/industrial-app.js?v=20260915"></script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

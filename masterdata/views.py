@@ -1,3 +1,4 @@
+from django.views.decorators.http import require_POST
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -68,6 +69,7 @@ def product_edit(request, pk):
 
 @login_required
 @role_required("super_admin", "system_admin", "weighbridge_manager")
+@require_POST
 def product_toggle(request, pk):
     obj = get_object_or_404(Product, pk=pk)
     obj.is_active = not obj.is_active
@@ -115,6 +117,7 @@ def party_edit(request, pk):
 
 @login_required
 @role_required("super_admin", "system_admin", "weighbridge_manager")
+@require_POST
 def party_toggle(request, pk):
     obj = get_object_or_404(Party, pk=pk)
     obj.is_active = not obj.is_active
@@ -161,6 +164,7 @@ def driver_edit(request, pk):
 
 @login_required
 @role_required("super_admin", "system_admin", "weighbridge_manager")
+@require_POST
 def driver_toggle(request, pk):
     obj = get_object_or_404(Driver, pk=pk)
     obj.is_active = not obj.is_active
@@ -207,6 +211,7 @@ def vehicle_edit(request, pk):
 
 @login_required
 @role_required("super_admin", "system_admin", "weighbridge_manager")
+@require_POST
 def vehicle_toggle(request, pk):
     obj = get_object_or_404(Vehicle, pk=pk)
     obj.is_active = not obj.is_active
@@ -252,6 +257,7 @@ def vehicle_type_edit(request, pk):
 
 @login_required
 @role_required("super_admin", "system_admin", "weighbridge_manager")
+@require_POST
 def vehicle_type_toggle(request, pk):
     obj = get_object_or_404(VehicleType, pk=pk)
     obj.is_active = not obj.is_active
@@ -295,6 +301,7 @@ def location_edit(request, pk):
 
 @login_required
 @role_required("super_admin", "system_admin", "weighbridge_manager")
+@require_POST
 def location_toggle(request, pk):
     obj = get_object_or_404(Location, pk=pk)
     obj.is_active = not obj.is_active
@@ -338,6 +345,7 @@ def unload_location_edit(request, pk):
 
 @login_required
 @role_required("super_admin", "system_admin", "weighbridge_manager")
+@require_POST
 def unload_location_toggle(request, pk):
     obj = get_object_or_404(UnloadLocation, pk=pk)
     obj.is_active = not obj.is_active
@@ -381,6 +389,7 @@ def operation_type_edit(request, pk):
 
 @login_required
 @role_required("super_admin", "system_admin", "weighbridge_manager")
+@require_POST
 def operation_type_toggle(request, pk):
     obj = get_object_or_404(OperationType, pk=pk)
     obj.is_active = not obj.is_active
@@ -424,6 +433,7 @@ def loss_type_edit(request, pk):
 
 @login_required
 @role_required("super_admin", "system_admin", "weighbridge_manager")
+@require_POST
 def loss_type_toggle(request, pk):
     obj = get_object_or_404(LossType, pk=pk)
     obj.is_active = not obj.is_active

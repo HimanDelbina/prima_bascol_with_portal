@@ -4,6 +4,37 @@ from django.db.models import (
 )
 from core.jalali import jalali_to_gregorian, gregorian_to_jalali, format_jalali_date
 from weighbridge.models import WeighTicket, TicketStatus
+from django.db.models.functions import Coalesce, TruncDate
+
+
+class FreightReportService:
+    @staticmethod
+    def filter_tickets(params):
+        qs = WeighTicket.objects.select_related("party", "product", "driver").annotate(
+            report_date=Coalesce("first_weight_date", TruncDate("created_at")),
+        )
+        for field, lookup in (("start_date", "report_date__gte"), ("end_date", "report_date__lte"),
+                              ("party", "party"), ("product", "product"), ("plate", "license_plate_display__icontains")):
+            if params.get(field):
+                qs = qs.filter(**{lookup: params[field]})
+        if params.get("driver_search"):
+            qs = qs.filter(Q(driver__full_name__icontains=params["driver_search"]) |
+                           Q(driver_name_custom__icontains=params["driver_search"]))
+        status = params.get("status")
+        if not status:
+            qs = qs.exclude(status=TicketStatus.CANCELLED)
+        elif status != "all":
+            qs = qs.filter(status=status)
+        if params.get("amount_status") in ("recorded", "missing"):
+            qs = qs.filter(freight_amount__isnull=params["amount_status"] == "missing")
+        return qs.order_by("-report_date", "-id")
+
+    @staticmethod
+    def summarize(qs):
+        result = qs.aggregate(total_tickets=Count("id"), recorded_count=Count("freight_amount"),
+                              total_amount=Sum("freight_amount", default=Decimal("0")))
+        result["missing_count"] = result["total_tickets"] - result["recorded_count"]
+        return result
 
 class ReportService:
     """
@@ -14,11 +45,13 @@ class ReportService:
         """
         Filter tickets based on dictionary of filter criteria.
         """
+        from reports.forms import validate_report_params
+        validate_report_params(params)
         qs = WeighTicket.objects.select_related(
             "operation_type", "party", "product", "vehicle", "driver", 
             "origin", "destination", "unload_location", "loss_type",
             "first_weight_operator", "second_weight_operator", "cancelled_by"
-        ).all()
+        ).annotate(report_date=Coalesce("first_weight_date", TruncDate("created_at")))
 
         # Date range filtering (supports both Jalali string inputs and Gregorian dates)
         start_date_j = params.get("start_date")
@@ -26,12 +59,12 @@ class ReportService:
         if start_date_j:
             g_start = jalali_to_gregorian(start_date_j)
             if g_start:
-                qs = qs.filter(Q(first_weight_date__gte=g_start) | Q(created_at__date__gte=g_start))
+                qs = qs.filter(report_date__gte=g_start)
         
         if end_date_j:
             g_end = jalali_to_gregorian(end_date_j)
             if g_end:
-                qs = qs.filter(Q(first_weight_date__lte=g_end) | Q(created_at__date__lte=g_end))
+                qs = qs.filter(report_date__lte=g_end)
 
         # Time range
         start_time = params.get("start_time")
@@ -53,10 +86,10 @@ class ReportService:
         status = params.get("status")
         if status and status != "all":
             qs = qs.filter(status=status)
-        elif not params.get("include_cancelled"):
+        elif not params.get("include_cancelled") and params.get("record_type") != "cancelled":
             # By default include only active/completed unless cancelled explicitly requested or filtered
             if status != "cancelled":
-                pass
+                qs = qs.exclude(status=TicketStatus.CANCELLED)
 
         # Specific status quick filters
         record_type = params.get("record_type")

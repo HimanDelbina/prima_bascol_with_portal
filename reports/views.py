@@ -15,6 +15,31 @@ from reports.exports import export_excel, export_csv
 from core.jalali import get_today_jalali, get_jalali_range_gregorian, format_jalali_date
 from accounts.decorators import role_required
 from django.contrib.auth.models import User
+from django.urls import reverse
+from django.core.exceptions import ValidationError
+from reports.forms import FreightReportForm
+from reports.services import FreightReportService
+from reports.exports import export_freight_report
+
+
+@login_required
+@role_required("super_admin", "system_admin", "weighbridge_manager", "report_manager", "viewer", "weighbridge_operator", "financial_manager", "ceo", "factory_manager", "commercial_manager")
+def freight_report(request):
+    form = FreightReportForm(request.GET)
+    valid = form.is_valid()
+    qs = FreightReportService.filter_tickets(form.cleaned_data) if valid else WeighTicket.objects.none()
+    summaries = FreightReportService.summarize(qs)
+    export_format = request.GET.get("export")
+    if valid and export_format in ("excel", "csv"):
+        return export_freight_report(qs, summaries, export_format)
+    params = request.GET.copy()
+    params.pop("page", None)
+    params.pop("export", None)
+    page_obj = Paginator(qs, 25).get_page(request.GET.get("page"))
+    return render(request, "reports/freight_report.html", {
+        "title": "گزارش مبالغ کرایه", "form": form, "summaries": summaries,
+        "page_obj": page_obj, "params": params,
+    })
 
 @login_required
 @role_required("super_admin", "system_admin", "weighbridge_manager", "report_manager", "viewer", "weighbridge_operator")
@@ -28,7 +53,12 @@ def report_builder(request):
     # Check if export requested
     export_format = request.GET.get("export")
     
-    qs = ReportService.filter_tickets(params)
+    try:
+        qs = ReportService.filter_tickets(params)
+    except ValidationError as exc:
+        messages.error(request, "خطا در فیلتر گزارش: " + " ".join(exc.messages))
+        qs = WeighTicket.objects.none()
+        export_format = None
     summaries = ReportService.get_summary_metrics(qs)
     
     group_by = request.GET.get("group_by", "none")
@@ -52,10 +82,16 @@ def report_builder(request):
         })
 
     # Pagination for table view
-    per_page = int(request.GET.get("per_page", 25))
+    try:
+        per_page = min(500, max(1, int(request.GET.get("per_page", 25))))
+    except (TypeError, ValueError):
+        per_page = 25
     paginator = Paginator(qs, per_page)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
+
+    params.pop("page", None)
+    params.pop("export", None)
 
     # Filter dropdown data
     products = Product.objects.filter(is_active=True)
@@ -116,6 +152,11 @@ def preset_report_view(request, code):
     if not report_meta:
         raise Http404("گزارش یافت نشد.")
 
+    if code != report_meta["code"]:
+        url = reverse("reports:preset_report_view", args=[report_meta["code"]])
+        query = request.GET.urlencode()
+        return redirect(f"{url}?{query}" if query else url)
+
     # Combine preset defaults with request GET params
     combined_params = request.GET.copy()
     for k, v in report_meta.get("default_params", {}).items():
@@ -129,7 +170,13 @@ def preset_report_view(request, code):
         combined_params["start_date"] = format_jalali_date(g_start)
         combined_params["end_date"] = format_jalali_date(g_end)
 
-    qs = ReportService.filter_tickets(combined_params)
+    filter_error = False
+    try:
+        qs = ReportService.filter_tickets(combined_params)
+    except ValidationError as exc:
+        messages.error(request, "خطا در فیلتر گزارش: " + " ".join(exc.messages))
+        qs = WeighTicket.objects.none()
+        filter_error = True
     summaries = ReportService.get_summary_metrics(qs)
 
     group_by = combined_params.get("group_by", "none")
@@ -138,7 +185,7 @@ def preset_report_view(request, code):
         group_data = ReportService.group_by_field(qs, group_by)
 
     # Export handling
-    export_format = request.GET.get("export")
+    export_format = None if filter_error else request.GET.get("export")
     if export_format == "excel":
         return export_excel(qs, summaries, title=report_meta["title"])
     elif export_format == "csv":
@@ -157,6 +204,9 @@ def preset_report_view(request, code):
     paginator = Paginator(qs, 25)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
+
+    combined_params.pop("page", None)
+    combined_params.pop("export", None)
 
     return render(request, "reports/preset_report_detail.html", {
         "report_meta": report_meta,

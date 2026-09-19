@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.validators import MinValueValidator
 from django.contrib.auth.models import User
 from decimal import Decimal
 from core.models import BaseModel
@@ -22,6 +23,11 @@ class WeightMode(models.TextChoices):
     DIRECT = "direct", "ثبت مستقیم هر دو وزن همزمان"
 
 class WeighTicket(BaseModel):
+    normalized_plate = models.CharField(max_length=60, db_index=True, editable=False, default="")
+    duplicate_exception = models.ForeignKey(
+        "PlateRegistrationException", null=True, blank=True, editable=False,
+        on_delete=models.PROTECT, related_name="tickets", verbose_name="مجوز ثبت تکراری روزانه",
+    )
     # Serial & Status
     serial_number = models.CharField(max_length=50, unique=True, db_index=True, verbose_name="شماره قبض / سریال")
     status = models.CharField(
@@ -95,6 +101,11 @@ class WeighTicket(BaseModel):
     license_plate_display = models.CharField(max_length=60, db_index=True, verbose_name="شماره پلاک")
     
     # Logistics
+    freight_amount = models.DecimalField(
+        max_digits=15, decimal_places=0, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        verbose_name="مبلغ کرایه (تومان)",
+    )
     waybill_number = models.CharField(max_length=60, blank=True, db_index=True, verbose_name="شماره بارنامه")
     origin = models.ForeignKey(
         Location, 
@@ -217,6 +228,19 @@ class WeighTicket(BaseModel):
     def __str__(self):
         return f"قبض {self.serial_number} - {self.license_plate_display} ({self.get_status_display()})"
 
+    def clean(self):
+        super().clean()
+        from weighbridge.plate_policy import DailyPlatePolicy
+        with DailyPlatePolicy.locked(self):
+            DailyPlatePolicy.check(self)
+
+    def save(self, *args, **kwargs):
+        from weighbridge.plate_policy import normalize_plate
+        self.normalized_plate = normalize_plate(self.license_plate_display)
+        if kwargs.get("update_fields") is not None and "license_plate_display" in kwargs["update_fields"]:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"normalized_plate"}
+        return super().save(*args, **kwargs)
+
     @property
     def jalali_first_date(self):
         return format_jalali_date(self.first_weight_date)
@@ -307,3 +331,31 @@ class WeighTicket(BaseModel):
     @property
     def jalali_tare_date(self):
         return format_jalali_date(self.tare_date)
+
+
+class PlateRegistrationException(BaseModel):
+    license_plate_display = models.CharField(max_length=60, verbose_name="پلاک خودرو")
+    normalized_plate = models.CharField(max_length=60, unique=True, editable=False)
+    reason = models.TextField(verbose_name="دلیل مجوز ثبت چندباره در روز")
+    approved_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="plate_registration_exceptions", verbose_name="سرپرست تأییدکننده")
+
+    class Meta:
+        verbose_name = "استثنای ثبت روزانه پلاک"
+        verbose_name_plural = "استثناهای ثبت روزانه پلاک"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return self.license_plate_display
+
+    def save(self, *args, **kwargs):
+        from weighbridge.plate_policy import normalize_plate
+        self.normalized_plate = normalize_plate(self.license_plate_display)
+        super().save(*args, **kwargs)
+
+
+class PlateDayLock(models.Model):
+    plate = models.CharField(max_length=60)
+    date = models.DateField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["plate", "date"], name="unique_plate_day_lock")]

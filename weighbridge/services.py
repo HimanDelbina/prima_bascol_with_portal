@@ -86,11 +86,12 @@ class SerialNumberService:
     def get_next_serial_number(cls) -> str:
         with transaction.atomic():
             settings_obj = SystemSetting.get_settings()
+            settings_obj = SystemSetting.objects.select_for_update().get(pk=settings_obj.pk)
             prefix = settings_obj.serial_prefix.strip() if settings_obj.serial_prefix else ""
             start_num = settings_obj.serial_start_number
 
             # Query highest existing ticket ID or serial
-            tickets = WeighTicket.objects.select_for_update().all()
+            tickets = WeighTicket.objects.all()
             
             # Find max numeric serial
             highest_num = 0

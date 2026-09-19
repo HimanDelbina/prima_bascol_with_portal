@@ -10,6 +10,71 @@ from accounts.models import UserProfile, RoleChoices
 from core.models import SystemSetting
 from core.weight_provider import ManualWeightProvider, WeightUnit
 from audit.models import AuditLog
+from django.urls import reverse
+
+
+class FreightAmountTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(username="freight_admin", password="test-password")
+        self.client.force_login(self.user)
+        SystemSetting.objects.create(require_driver=False)
+        self.payload = {
+            "weight_mode": WeightMode.EMPTY_FIRST,
+            "license_plate_display": "12 ج 345 - ایران 67",
+            "first_weight": "12000", "load_count": "1",
+            "sent_weight": "0", "loss_percent": "0", "loss_weight": "0",
+        }
+
+    def create_ticket(self, amount):
+        response = self.client.post(reverse("weighbridge:ticket_create"), {
+            **self.payload, "freight_amount": amount,
+            "license_plate_display": f"12 ج {345 + WeighTicket.objects.count()} - ایران 67",
+        })
+        self.assertEqual(response.status_code, 302)
+        return WeighTicket.objects.latest("id")
+
+    def test_amount_persists_and_is_displayed(self):
+        ticket = self.create_ticket("1250000")
+        self.assertEqual(ticket.freight_amount, Decimal("1250000"))
+        response = self.client.get(reverse("weighbridge:ticket_detail", args=[ticket.pk]))
+        self.assertContains(response, "1,250,000")
+        self.assertContains(response, "مبلغ کرایه (تومان)")
+
+    def test_blank_is_distinct_from_zero(self):
+        self.assertIsNone(self.create_ticket("").freight_amount)
+        self.assertEqual(self.create_ticket("0").freight_amount, Decimal("0"))
+
+    def test_invalid_amounts_do_not_create_tickets(self):
+        for amount in ("-1", "1.5", "invalid", "1000000000000000"):
+            with self.subTest(amount=amount):
+                response = self.client.post(reverse("weighbridge:ticket_create"), {
+                    **self.payload, "freight_amount": amount,
+                })
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("freight_amount", response.context["form"].errors)
+        self.assertFalse(WeighTicket.objects.exists())
+
+    def test_manager_can_edit_amount_and_audit_records_change(self):
+        ticket = self.create_ticket("1250000")
+        response = self.client.post(reverse("weighbridge:ticket_edit", args=[ticket.pk]), {
+            **self.payload, "freight_amount": "1500000", "manager_reason": "اصلاح کرایه",
+        })
+        self.assertEqual(response.status_code, 302)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.freight_amount, Decimal("1500000"))
+        audit = AuditLog.objects.filter(record_id=str(ticket.pk), action="override_weight").latest("id")
+        self.assertEqual(audit.old_values["freight_amount"], "1250000")
+        self.assertEqual(audit.new_values["freight_amount"], "1500000")
+
+    def test_second_weight_preserves_amount(self):
+        ticket = self.create_ticket("1250000")
+        response = self.client.post(reverse("weighbridge:ticket_second_weight", args=[ticket.pk]), {
+            "second_weight": "30000", "sent_weight": "18000", "loss_percent": "0",
+        })
+        self.assertEqual(response.status_code, 302)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, TicketStatus.COMPLETED)
+        self.assertEqual(ticket.freight_amount, Decimal("1250000"))
 
 class WeighbridgeCalculationTests(TestCase):
     def setUp(self):

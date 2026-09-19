@@ -11,13 +11,13 @@ def role_required(*allowed_roles):
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
-            if not request.user.is_authenticated:
+            if not request.user.is_authenticated or not request.user.is_active:
                 return redirect("accounts:login")
             if request.user.is_superuser:
                 return view_func(request, *args, **kwargs)
             
             profile = getattr(request.user, "profile", None)
-            if profile and profile.role in allowed_roles:
+            if profile and profile.is_active and profile.role in allowed_roles:
                 return view_func(request, *args, **kwargs)
             
             messages.error(request, "شما دسترسی لازم برای مشاهده این بخش را ندارید.")

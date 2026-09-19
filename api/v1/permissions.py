@@ -44,7 +44,17 @@ class IsExecutiveManager(BasePermission):
 class CanManageTicket(BasePermission):
     """Allows creating/viewing for operators, but sensitive edits/cancels only for managers."""
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated)
+        if not (request.user and request.user.is_authenticated and request.user.is_active):
+            return False
+        profile = getattr(request.user, "profile", None)
+        if profile and not profile.is_active:
+            return False
+        if request.method in SAFE_METHODS or request.user.is_superuser:
+            return True
+        return bool(profile and profile.role in (
+            RoleChoices.SUPER_ADMIN, RoleChoices.SYSTEM_ADMIN,
+            RoleChoices.WEIGHBRIDGE_MANAGER, RoleChoices.WEIGHBRIDGE_OPERATOR,
+        ))
 
     def has_object_permission(self, request, view, obj):
         if request.method in SAFE_METHODS:

@@ -10,7 +10,7 @@ from decimal import Decimal
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 
 from weighbridge.models import WeighTicket, TicketStatus, WeightMode
-from weighbridge.services import TicketCalculationService, SerialNumberService
+from weighbridge.services import TicketCalculationService
 from audit.services import log_audit
 from audit.models import AuditAction
 from monitoring.services.anomaly_engine import AnomalyDetectionEngine
@@ -27,6 +27,10 @@ from api.v1.permissions import (
 )
 from api.v1.utils import api_success_response, get_client_ip
 from core.jalali import get_today_gregorian
+from weighbridge.plate_policy import DailyPlatePolicy
+from django.shortcuts import get_object_or_404
+from masterdata.models import Product, Party, Driver, Vehicle
+from rest_framework.exceptions import ValidationError
 
 
 @extend_schema_view(
@@ -47,6 +51,7 @@ from core.jalali import get_today_gregorian
     ),
 )
 class WeighTicketViewSet(viewsets.ModelViewSet):
+    http_method_names = ["get", "post", "head", "options"]
     queryset = WeighTicket.objects.select_related(
         "operation_type", "party", "product", "driver", "vehicle", "vehicle_type",
         "origin", "destination", "unload_location", "loss_type",
@@ -88,8 +93,8 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
         validated = serializer.validated_data
 
         with transaction.atomic():
-            ticket = serializer.save(
-                serial_number=SerialNumberService.get_next_serial_number(),
+            ticket = WeighTicket(
+                **validated,
                 first_weight_operator=request.user
             )
 
@@ -128,7 +133,7 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             ticket.weight_difference = calc["weight_difference"]
             ticket.weight_difference_percent = calc["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc["is_tolerance_exceeded"]
-            ticket.save()
+            DailyPlatePolicy.save(ticket, user=request.user, assign_serial=True)
 
             # Audit log
             log_audit(
@@ -170,9 +175,11 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
         w_time = serializer.validated_data.get('time') or timezone.localtime().time()
 
         with transaction.atomic():
-            ticket = WeighTicket.objects.select_for_update().get(pk=pk)
+            ticket = get_object_or_404(WeighTicket.objects.select_for_update(), pk=pk)
 
-            if ticket.status == TicketStatus.COMPLETED and not request.user.profile.is_admin_or_manager:
+            if ticket.status == TicketStatus.CANCELLED:
+                raise ValidationError("امکان ثبت وزن برای قبض ابطال‌شده وجود ندارد.")
+            if ticket.status == TicketStatus.COMPLETED and not (request.user.is_superuser or request.user.profile.can_edit_completed_ticket):
                 return Response(
                     {
                         "success": False,
@@ -211,7 +218,7 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             ticket.weight_difference = calc["weight_difference"]
             ticket.weight_difference_percent = calc["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc["is_tolerance_exceeded"]
-            ticket.save()
+            DailyPlatePolicy.save(ticket, user=request.user)
 
             log_audit(
                 action=AuditAction.OVERRIDE_WEIGHT if old_w1 > 0 else AuditAction.UPDATE,
@@ -250,7 +257,7 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
         loss_type = serializer.validated_data.get('loss_type')
 
         with transaction.atomic():
-            ticket = WeighTicket.objects.select_for_update().get(pk=pk)
+            ticket = get_object_or_404(WeighTicket.objects.select_for_update(), pk=pk)
 
             if ticket.status == TicketStatus.CANCELLED:
                 return Response(
@@ -264,7 +271,7 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            if ticket.status == TicketStatus.COMPLETED and not request.user.profile.is_admin_or_manager:
+            if ticket.status == TicketStatus.COMPLETED and not (request.user.is_superuser or request.user.profile.can_edit_completed_ticket):
                 return Response(
                     {
                         "success": False,
@@ -319,7 +326,7 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             ticket.weight_difference = calc["weight_difference"]
             ticket.weight_difference_percent = calc["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc["is_tolerance_exceeded"]
-            ticket.save()
+            DailyPlatePolicy.save(ticket, user=request.user)
 
             log_audit(
                 action=AuditAction.STATUS_CHANGE,
@@ -357,8 +364,10 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='complete')
     def complete_ticket(self, request, pk=None):
         with transaction.atomic():
-            ticket = WeighTicket.objects.select_for_update().get(pk=pk)
+            ticket = get_object_or_404(WeighTicket.objects.select_for_update(), pk=pk)
 
+            if ticket.status == TicketStatus.CANCELLED:
+                raise ValidationError("امکان تکمیل قبض ابطال‌شده وجود ندارد.")
             if ticket.status == TicketStatus.COMPLETED:
                 return api_success_response(
                     data=WeighTicketDetailSerializer(ticket).data,
@@ -382,7 +391,7 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                 ticket.notes = (ticket.notes + "\n" + notes).strip()
 
             ticket.status = TicketStatus.COMPLETED
-            ticket.save()
+            DailyPlatePolicy.save(ticket, user=request.user)
 
             log_audit(
                 action=AuditAction.STATUS_CHANGE,
@@ -414,7 +423,7 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
         reason = serializer.validated_data['reason']
 
         with transaction.atomic():
-            ticket = WeighTicket.objects.select_for_update().get(pk=pk)
+            ticket = get_object_or_404(WeighTicket.objects.select_for_update(), pk=pk)
             if ticket.status == TicketStatus.CANCELLED:
                 return Response(
                     {
@@ -427,18 +436,19 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            old_status = ticket.status
             ticket.status = TicketStatus.CANCELLED
             ticket.cancellation_reason = reason
             ticket.cancelled_by = request.user
             ticket.cancelled_at = timezone.now()
-            ticket.save()
+            DailyPlatePolicy.save(ticket, user=request.user)
 
             log_audit(
                 action=AuditAction.CANCEL,
                 model_name="WeighTicket",
                 record_id=ticket.id,
                 record_repr=f"قبض شماره {ticket.serial_number}",
-                old_values={"status": ticket.status},
+                old_values={"status": old_status},
                 new_values={"status": TicketStatus.CANCELLED, "reason": reason},
                 reason=reason,
                 user=request.user,
@@ -467,7 +477,7 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
         reason = serializer.validated_data['reason']
 
         with transaction.atomic():
-            ticket = WeighTicket.objects.select_for_update().get(pk=pk)
+            ticket = get_object_or_404(WeighTicket.objects.select_for_update(), pk=pk)
 
             old_values = {
                 "field": field,
@@ -484,13 +494,13 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                     ticket.is_loss_overridden = True
                     ticket.loss_override_reason = reason
             elif field == 'product':
-                ticket.product = Product.objects.get(pk=new_val)
+                ticket.product = get_object_or_404(Product, pk=new_val)
             elif field == 'party':
-                ticket.party = Party.objects.get(pk=new_val)
+                ticket.party = get_object_or_404(Party, pk=new_val)
             elif field == 'driver':
-                ticket.driver = Driver.objects.get(pk=new_val)
+                ticket.driver = get_object_or_404(Driver, pk=new_val)
             elif field == 'vehicle':
-                ticket.vehicle = Vehicle.objects.get(pk=new_val)
+                ticket.vehicle = get_object_or_404(Vehicle, pk=new_val)
             else:
                 setattr(ticket, field, str(new_val))
 
@@ -517,7 +527,7 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             ticket.weight_difference = calc["weight_difference"]
             ticket.weight_difference_percent = calc["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc["is_tolerance_exceeded"]
-            ticket.save()
+            DailyPlatePolicy.save(ticket, user=request.user)
 
             new_values = {
                 "field": field,

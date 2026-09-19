@@ -53,9 +53,9 @@
                                 <i class="bi bi-pencil"></i>
                             </a>
                             {% if u != request.user %}
-                            <a href="{% url 'accounts:user_toggle_status' u.id %}" class="btn btn-sm {% if u.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}" title="تغییر وضعیت فعال/غیرفعال">
+                            <form method="post" action="{% url 'accounts:user_toggle_status' u.id %}" class="d-inline">{% csrf_token %}<button type="submit" class="btn btn-sm {% if u.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}" title="تغییر وضعیت فعال/غیرفعال">
                                 {% if u.is_active %}<i class="bi bi-person-x"></i>{% else %}<i class="bi bi-person-check"></i>{% endif %}
-                            </a>
+                            </button></form>
                             {% endif %}
                         </td>
                     </tr>

@@ -273,7 +273,16 @@ PRESET_REPORTS = [
     },
 ]
 
+PRESET_REPORT_ALIASES = {
+    "product": "by_product",
+    "party": "by_party",
+    "driver": "by_driver",
+    "discrepancy": "variance_analysis",
+}
+
+
 def get_preset_report_by_code(code: str):
+    code = PRESET_REPORT_ALIASES.get(code, code)
     for r in PRESET_REPORTS:
         if r["code"] == code:
             return r

@@ -6,6 +6,7 @@ from rest_framework.exceptions import (
 from rest_framework.response import Response
 from rest_framework import status
 import logging
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,8 @@ def custom_exception_handler(exc, context):
         }
     }
     """
+    if isinstance(exc, DjangoValidationError):
+        exc = ValidationError(exc.message_dict if hasattr(exc, "message_dict") else exc.messages)
     response = exception_handler(exc, context)
 
     if response is not None:

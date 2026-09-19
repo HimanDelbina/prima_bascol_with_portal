@@ -47,9 +47,9 @@
                             <a href="{% url 'masterdata:loss_type_edit' lt.id %}" class="btn btn-sm btn-outline-primary me-1" title="ویرایش">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            <a href="{% url 'masterdata:loss_type_toggle' lt.id %}" class="btn btn-sm {% if lt.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}" title="تغییر وضعیت">
+                            <form method="post" action="{% url 'masterdata:loss_type_toggle' lt.id %}" class="d-inline">{% csrf_token %}<button type="submit" class="btn btn-sm {% if lt.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}" title="تغییر وضعیت">
                                 {% if lt.is_active %}<i class="bi bi-toggle-on"></i>{% else %}<i class="bi bi-toggle-off"></i>{% endif %}
-                            </a>
+                            </button></form>
                         </td>
                     </tr>
                     {% empty %}

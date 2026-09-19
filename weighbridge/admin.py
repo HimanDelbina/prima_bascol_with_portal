@@ -3,6 +3,10 @@ from weighbridge.models import WeighTicket
 
 @admin.register(WeighTicket)
 class WeighTicketAdmin(admin.ModelAdmin):
+    def save_model(self, request, obj, form, change):
+        from weighbridge.plate_policy import DailyPlatePolicy
+        DailyPlatePolicy.save(obj, user=request.user)
+
     list_display = [
         "serial_number", "status", "party", "product", "license_plate_display",
         "driver_display", "gross_weight", "tare_weight", "net_weight", "final_weight",

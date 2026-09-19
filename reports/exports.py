@@ -9,6 +9,72 @@ from openpyxl.utils import get_column_letter
 from core.jalali import format_jalali_date, get_today_jalali
 from core.models import SystemSetting
 
+
+def export_freight_report(queryset, summaries, export_format):
+    headers = ["شماره قبض", "تاریخ", "طرف حساب", "محصول", "پلاک", "راننده",
+               "شماره بارنامه", "وضعیت", "مبلغ کرایه (تومان)"]
+
+    def rows():
+        for ticket in queryset.iterator():
+            yield [ticket.serial_number, format_jalali_date(ticket.report_date),
+                   ticket.party.name if ticket.party else "-",
+                   ticket.product.name if ticket.product else "-",
+                   ticket.license_plate_display, ticket.driver_display, ticket.waybill_number,
+                   ticket.get_status_display(),
+                   int(ticket.freight_amount) if ticket.freight_amount is not None else "ثبت نشده"]
+        yield ["مجموع کرایه", "", "", "", "", "", "", "", int(summaries["total_amount"])]
+
+    if export_format == "csv":
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="freight-report.csv"'
+        response.write("\ufeff")
+        writer = csv.writer(response)
+        writer.writerow(headers)
+        for row in rows():
+            writer.writerow([
+                "'" + value if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")) else value
+                for value in row
+            ])
+        return response
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "مبالغ کرایه"
+    ws.sheet_view.rightToLeft = True
+    ws.merge_cells("A1:I1")
+    ws["A1"] = "گزارش مبالغ کرایه (تومان)"
+    ws["A1"].font = Font(name="Tahoma", size=15, bold=True)
+    ws["A1"].alignment = Alignment(horizontal="center")
+    ws.merge_cells("A2:I2")
+    ws["A2"] = (f"تعداد قبوض: {summaries['total_tickets']} | مبلغ ثبت‌شده: {summaries['recorded_count']}"
+                f" | بدون مبلغ: {summaries['missing_count']}")
+    ws["A2"].alignment = Alignment(horizontal="center")
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(4, col, header)
+        cell.fill = PatternFill("solid", fgColor="1E3A8A")
+        cell.font = Font(name="Tahoma", bold=True, color="FFFFFF")
+    for row_index, row in enumerate(rows(), 5):
+        for col, value in enumerate(row, 1):
+            cell = ws.cell(row_index, col, value)
+            if isinstance(value, str):
+                cell.data_type = "s"
+            cell.font = Font(name="Tahoma", size=10)
+            cell.alignment = Alignment(horizontal="right", vertical="center")
+            if col == 9:
+                cell.number_format = "#,##0"
+    for cell in ws[ws.max_row]:
+        cell.font = Font(name="Tahoma", bold=True)
+        cell.fill = PatternFill("solid", fgColor="E2E8F0")
+    ws.freeze_panes = "A5"
+    ws.auto_filter.ref = f"A4:I{max(4, ws.max_row - 1)}"
+    for col, width in enumerate([20, 16, 32, 26, 28, 25, 24, 30, 24], 1):
+        ws.column_dimensions[get_column_letter(col)].width = width
+    output = io.BytesIO()
+    wb.save(output)
+    response = HttpResponse(output.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = 'attachment; filename="freight-report.xlsx"'
+    return response
+
 def export_excel(queryset, summaries=None, title="گزارش باسکول"):
     """
     Generate a beautifully formatted Excel (.xlsx) file in Persian RTL with styling.
@@ -282,4 +348,3 @@ def export_pdf(queryset, summaries=None, title="گزارش باسکول"):
     response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
     response['Content-Disposition'] = 'attachment; filename="weighbridge_report.pdf"'
     return response
-

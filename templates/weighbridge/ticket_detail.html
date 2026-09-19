@@ -4,6 +4,9 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
+{% if ticket.duplicate_exception_id %}
+<div class="alert alert-info">این قبض با مجوز استثنای ثبت روزانه پلاک ثبت شده است. مشخصات مجوز در سوابق تغییرات قبض موجود است.</div>
+{% endif %}
 <!-- Top Header & Actions -->
 <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 pb-2 border-bottom gap-2">
     <div>
@@ -193,6 +196,10 @@
                     <tr>
                         <td class="text-muted">شماره بارنامه / حواله:</td>
                         <td class="font-monospace fw-bold">{{ ticket.waybill_number|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">مبلغ کرایه (تومان):</td>
+                        <td class="font-monospace fw-bold">{{ ticket.freight_amount|weight_fmt:0 }}</td>
                     </tr>
                     <tr>
                         <td class="text-muted">مبدأ بار:</td>

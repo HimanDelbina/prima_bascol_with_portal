@@ -22,6 +22,7 @@
 
                 <form method="post">
                     {% csrf_token %}
+                    {% if form.errors %}<div class="alert alert-danger">{{ form.errors }}</div>{% endif %}
                     
                     <div class="p-3 bg-danger-subtle rounded-3 border border-danger mb-4">
                         <label class="form-label fw-bold text-danger">{{ form.manager_reason.label }} <span class="text-danger">*</span></label>
@@ -54,6 +55,11 @@
                         <div class="col-md-4">
                             <label class="form-label fw-bold">شماره بارنامه</label>
                             {{ form.waybill_number }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.freight_amount.id_for_label }}" class="form-label fw-bold">{{ form.freight_amount.label }}</label>
+                            {{ form.freight_amount }}
+                            {% if form.freight_amount.errors %}<div class="text-danger small">{{ form.freight_amount.errors }}</div>{% endif %}
                         </div>
 
                         <div class="col-md-4">

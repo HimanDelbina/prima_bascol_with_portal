@@ -6,10 +6,11 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import datetime, time
 from decimal import Decimal
+import re
 
 from weighbridge.models import WeighTicket, TicketStatus, WeightMode
 from weighbridge.forms import TicketCreateForm, SecondWeightForm, TicketEditManagerForm
-from weighbridge.services import TicketCalculationService, SerialNumberService
+from weighbridge.services import TicketCalculationService
 from core.weight_provider import get_active_weight_provider
 from core.jalali import jalali_to_gregorian, get_today_jalali, format_jalali_date, get_today_gregorian
 from core.models import SystemSetting
@@ -18,8 +19,11 @@ from accounts.decorators import role_required, manager_or_admin_required
 from audit.services import log_audit
 from audit.models import AuditAction, AuditLog
 from monitoring.services.anomaly_engine import AnomalyDetectionEngine
+from django.core.exceptions import ValidationError
+from weighbridge.plate_policy import DailyPlatePolicy, can_manage_plate_exceptions, normalize_plate
 
 @login_required
+@role_required("super_admin", "system_admin", "weighbridge_manager", "weighbridge_operator")
 def ticket_create(request):
     """
     Main high-speed weighbridge registration view.
@@ -31,9 +35,6 @@ def ticket_create(request):
         form = TicketCreateForm(request.POST)
         if form.is_valid():
             ticket = form.save(commit=False)
-            
-            # Auto-generate serial number
-            ticket.serial_number = SerialNumberService.get_next_serial_number()
             
             # Dates and Times
             first_date_j = form.cleaned_data.get("first_weight_date_jalali")
@@ -101,7 +102,14 @@ def ticket_create(request):
             ticket.weight_difference_percent = calc_results["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc_results["is_tolerance_exceeded"]
 
-            ticket.save()
+            try:
+                DailyPlatePolicy.save(ticket, user=request.user, assign_serial=True)
+            except ValidationError as exc:
+                form.add_error(None, exc)
+                return render(request, "weighbridge/ticket_create.html", {
+                    "form": form, "title": "ثبت باسکول و توزین جدید", "settings": SystemSetting.get_settings(),
+                    "can_manage_plate_exceptions": can_manage_plate_exceptions(request.user),
+                })
 
             # Audit Log
             log_audit(
@@ -111,6 +119,7 @@ def ticket_create(request):
                 record_repr=f"قبض شماره {ticket.serial_number}",
                 new_values={
                     "serial": ticket.serial_number,
+                    "freight_amount": str(ticket.freight_amount) if ticket.freight_amount is not None else None,
                     "plate": ticket.license_plate_display,
                     "first_weight": float(ticket.first_weight),
                     "status": ticket.status
@@ -152,6 +161,9 @@ def ticket_create(request):
                     "destination": orig.destination,
                     "unload_location": orig.unload_location,
                 }
+                parts = re.fullmatch(r"(\d{2})(.+?)(\d{3})(\d{2})", normalize_plate(orig.license_plate_display))
+                if parts:
+                    initial_data.update(dict(zip(("plate_part1", "plate_letter", "plate_part2", "plate_iran"), parts.groups())))
             except WeighTicket.DoesNotExist:
                 pass
 
@@ -162,17 +174,22 @@ def ticket_create(request):
         "form": form,
         "title": "ثبت باسکول و توزین جدید",
         "settings": settings_obj,
+        "can_manage_plate_exceptions": can_manage_plate_exceptions(request.user),
     })
 
 
 @login_required
+@role_required("super_admin", "system_admin", "weighbridge_manager", "weighbridge_operator")
 def ticket_second_weight(request, pk):
     """
     Second weight registration view for completing an open weigh ticket.
     """
     ticket = get_object_or_404(WeighTicket, pk=pk)
 
-    if ticket.status == TicketStatus.COMPLETED and not request.user.profile.is_admin_or_manager:
+    if ticket.status == TicketStatus.CANCELLED:
+        messages.error(request, "امکان ثبت وزن برای قبض ابطال‌شده وجود ندارد.")
+        return redirect("weighbridge:ticket_detail", pk=ticket.pk)
+    if ticket.status == TicketStatus.COMPLETED and not (request.user.is_superuser or request.user.profile.can_edit_completed_ticket):
         messages.error(request, "این قبض قبلاً تکمیل شده است و فقط مدیر باسکول مجاز به ویرایش آن می‌باشد.")
         return redirect("weighbridge:ticket_detail", pk=ticket.id)
 
@@ -396,6 +413,7 @@ def ticket_edit(request, pk):
 
     if request.method == "POST":
         old_values = {
+            "freight_amount": str(ticket.freight_amount) if ticket.freight_amount is not None else None,
             "first_weight": float(ticket.first_weight),
             "second_weight": float(ticket.second_weight or 0),
             "gross_weight": float(ticket.gross_weight),
@@ -438,9 +456,16 @@ def ticket_edit(request, pk):
             ticket.weight_difference_percent = calc_results["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc_results["is_tolerance_exceeded"]
 
-            ticket.save()
+            try:
+                DailyPlatePolicy.save(ticket, user=request.user)
+            except ValidationError as exc:
+                form.add_error(None, exc)
+                return render(request, "weighbridge/ticket_edit.html", {
+                    "form": form, "ticket": ticket, "title": "اصلاح و ویرایش مدیریتی قبض",
+                })
 
             new_values = {
+                "freight_amount": str(ticket.freight_amount) if ticket.freight_amount is not None else None,
                 "first_weight": float(ticket.first_weight),
                 "second_weight": float(ticket.second_weight or 0),
                 "gross_weight": float(ticket.gross_weight),
@@ -637,4 +662,3 @@ def ajax_plate_lookup(request):
         }
 
     return JsonResponse(response_data)
-

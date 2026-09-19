@@ -6,6 +6,12 @@
 (function () {
   "use strict";
 
+  function escapeHtml(value) {
+    const node = document.createElement("span");
+    node.textContent = String(value ?? "");
+    return node.innerHTML;
+  }
+
   // 1. Toast Notification Service
   window.showToast = function (message, type = "success") {
     let container = document.querySelector(".industrial-toast-container");
@@ -24,7 +30,7 @@
 
     toast.innerHTML = `
       <i class="bi ${icon} fs-5"></i>
-      <div class="flex-grow-1 font-medium">${message}</div>
+      <div class="flex-grow-1 font-medium">${escapeHtml(message)}</div>
       <button type="button" class="btn-close btn-close-sm" style="font-size: 0.7rem;"></button>
     `;
 
@@ -188,7 +194,7 @@
                       <strong>سوابق خودرو:</strong> این خودرو قبلاً <strong>${data.trip_count} بار</strong> وارد مجموعه شده است. 
                       ${data.last_visit ? `<span class="text-muted ms-2">(آخرین ورود: ${data.last_visit})</span>` : ""}
                     </div>
-                    ${data.driver_name ? `<span class="badge bg-primary">راننده متداول: ${data.driver_name}</span>` : ""}
+                    ${data.driver_name ? `<span class="badge bg-primary">راننده متداول: ${escapeHtml(data.driver_name)}</span>` : ""}
                   </div>
                 `;
               }
@@ -214,7 +220,7 @@
                   <div class="alert alert-warning border-warning shadow-sm d-flex align-items-center justify-content-between mb-0">
                     <div>
                       <i class="bi bi-exclamation-triangle-fill fs-4 text-warning me-2"></i>
-                      <strong>هشدار قبض باز:</strong> این خودرو در حال حاضر یک قبض باز با شماره <strong>#${data.open_ticket.serial_number}</strong> در کارخانه دارد (ورود ساعت ${data.open_ticket.time} - کالا: ${data.open_ticket.product}).
+                      <strong>هشدار قبض باز:</strong> این خودرو در حال حاضر یک قبض باز با شماره <strong>#${escapeHtml(data.open_ticket.serial_number)}</strong> در کارخانه دارد (ورود ساعت ${escapeHtml(data.open_ticket.time)} - کالا: ${escapeHtml(data.open_ticket.product)}).
                     </div>
                     <a href="/weighbridge/tickets/${data.open_ticket.id}/second-weight/" class="btn btn-warning btn-sm fw-bold px-3">
                       ثبت وزن دوم همین قبض
@@ -566,4 +572,3 @@
     if (savedDensity) setTableDensity(savedDensity);
   });
 })();
-

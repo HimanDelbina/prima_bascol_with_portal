@@ -1,3 +1,4 @@
+from django.views.decorators.http import require_POST
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required
@@ -114,6 +115,7 @@ def user_edit_view(request, user_id):
 
 @login_required
 @admin_only_required
+@require_POST
 def user_toggle_status_view(request, user_id):
     target_user = get_object_or_404(User, id=user_id)
     if target_user == request.user:
