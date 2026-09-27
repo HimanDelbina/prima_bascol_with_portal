@@ -32,7 +32,7 @@ def login_view(request):
                 request.session.set_expiry(0)  # On browser close
                 
             log_audit(
-                action=AuditAction.VIEW,
+                action=AuditAction.LOGIN,
                 model_name="User",
                 record_id=user.id,
                 record_repr=f"کاربر {user.username}",
