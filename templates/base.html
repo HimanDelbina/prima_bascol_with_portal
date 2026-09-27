@@ -393,21 +393,21 @@
 <!-- Shortcuts Modal Include -->
 {% include 'components/shortcuts_modal.html' %}
 {% else %}
-<div class="auth-page-wrapper min-vh-100 d-flex flex-column justify-content-center align-items-center py-4 px-3 position-relative">
-    <!-- Django Global Messages Container -->
+<div class="auth-page-wrapper min-vh-100 d-flex flex-column position-relative">
+    <!-- Django Global Messages Floating Container -->
     {% if messages %}
-    <div class="container mb-3" style="max-width: 520px; z-index: 10;">
+    <div class="auth-messages-container position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 9999; max-width: 520px; width: 92%;">
         {% for message in messages %}
-        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow d-flex align-items-center rounded-3 border-0" role="alert">
+        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow-lg d-flex align-items-center rounded-4 border-0 mb-2" role="alert" style="backdrop-filter: blur(12px); background: rgba(255,255,255,0.95); border-right: 4px solid {% if message.tags == 'success' %}#059669{% elif message.tags == 'danger' or message.tags == 'error' %}#dc2626{% else %}#2563eb{% endif %} !important;">
             <i class="bi {% if message.tags == 'success' %}bi-check-circle-fill text-success{% elif message.tags == 'danger' or message.tags == 'error' %}bi-exclamation-triangle-fill text-danger{% else %}bi-info-circle-fill text-primary{% endif %} fs-5 me-2"></i>
-            <div class="flex-grow-1 fw-bold">{{ message }}</div>
+            <div class="flex-grow-1 fw-bold small text-dark">{{ message }}</div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         {% endfor %}
     </div>
     {% endif %}
 
-    <div class="w-100 position-relative" style="z-index: 5;">
+    <div class="flex-grow-1 d-flex flex-column w-100 position-relative" style="z-index: 5;">
         {% block auth_content %}{% endblock %}
     </div>
 </div>
