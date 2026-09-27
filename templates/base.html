@@ -339,6 +339,7 @@
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
                         <li><a class="dropdown-item" href="{% url 'accounts:profile' %}"><i class="bi bi-person me-2"></i>پروفایل کاربری</a></li>
+                        <li><a class="dropdown-item" href="{% url 'accounts:password_change' %}"><i class="bi bi-key me-2"></i>تغییر کلمه عبور</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
                             <form method="post" action="{% url 'accounts:logout' %}">
@@ -392,12 +393,12 @@
 <!-- Shortcuts Modal Include -->
 {% include 'components/shortcuts_modal.html' %}
 {% else %}
-<div class="min-vh-100 d-flex flex-column justify-content-center align-items-center bg-light py-5 px-3">
+<div class="auth-page-wrapper min-vh-100 d-flex flex-column justify-content-center align-items-center py-4 px-3 position-relative">
     <!-- Django Global Messages Container -->
     {% if messages %}
-    <div class="container mb-3" style="max-width: 500px;">
+    <div class="container mb-3" style="max-width: 520px; z-index: 10;">
         {% for message in messages %}
-        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow-sm d-flex align-items-center" role="alert">
+        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow d-flex align-items-center rounded-3 border-0" role="alert">
             <i class="bi {% if message.tags == 'success' %}bi-check-circle-fill text-success{% elif message.tags == 'danger' or message.tags == 'error' %}bi-exclamation-triangle-fill text-danger{% else %}bi-info-circle-fill text-primary{% endif %} fs-5 me-2"></i>
             <div class="flex-grow-1 fw-bold">{{ message }}</div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -406,7 +407,7 @@
     </div>
     {% endif %}
 
-    <div class="w-100">
+    <div class="w-100 position-relative" style="z-index: 5;">
         {% block auth_content %}{% endblock %}
     </div>
 </div>

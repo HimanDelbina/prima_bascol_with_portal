@@ -38,7 +38,12 @@
                             <input type="email" name="email" class="form-control" value="{{ user.email }}">
                         </div>
                         <div class="col-md-12">
-                            <label class="form-label fw-bold">تغییر رمز عبور (اختیاری)</label>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label fw-bold mb-0">تغییر رمز عبور (اختیاری)</label>
+                                <a href="{% url 'accounts:password_change' %}" class="small text-primary text-decoration-none fw-bold">
+                                    <i class="bi bi-shield-lock me-1"></i> صفحه اختصاصی تغییر رمز عبور
+                                </a>
+                            </div>
                             <input type="password" name="password" class="form-control" placeholder="برای عدم تغییر رمز عبور، این فیلد را خالی بگذارید">
                         </div>
                     </div>

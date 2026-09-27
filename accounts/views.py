@@ -1,10 +1,15 @@
 from django.views.decorators.http import require_POST
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import login, logout, authenticate
+from django.contrib.auth import login, logout, authenticate, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
-from accounts.forms import PersianAuthenticationForm, UserForm
+from accounts.forms import (
+    PersianAuthenticationForm, 
+    UserForm, 
+    PasswordChangeDirectForm, 
+    PasswordResetVerifyForm
+)
 from accounts.models import UserProfile, RoleChoices
 from accounts.decorators import admin_only_required, role_required
 from audit.services import log_audit
@@ -19,6 +24,21 @@ def login_view(request):
         if form.is_valid():
             user = form.get_user()
             login(request, user)
+            
+            # Remember me logic
+            if form.cleaned_data.get("remember_me"):
+                request.session.set_expiry(1209600)  # 14 days
+            else:
+                request.session.set_expiry(0)  # On browser close
+                
+            log_audit(
+                action=AuditAction.VIEW,
+                model_name="User",
+                record_id=user.id,
+                record_repr=f"کاربر {user.username}",
+                reason="ورود موفق به سامانه باسکول",
+                user=user
+            )
             messages.success(request, f"خوش آمدید، {user.get_full_name() or user.username}")
             next_url = request.GET.get("next")
             if next_url and not next_url.startswith("/accounts/logout"):
@@ -29,7 +49,87 @@ def login_view(request):
     else:
         form = PersianAuthenticationForm()
     
-    return render(request, "accounts/login.html", {"form": form})
+    change_form = PasswordChangeDirectForm()
+    reset_form = PasswordResetVerifyForm()
+    
+    return render(request, "accounts/login.html", {
+        "form": form,
+        "change_form": change_form,
+        "reset_form": reset_form,
+    })
+
+def password_change_view(request):
+    """
+    Direct password change view (requires username + current password + new password).
+    Accessible to both authenticated users and users at the login page.
+    """
+    initial_user = request.user if request.user.is_authenticated else None
+    
+    if request.method == "POST":
+        form = PasswordChangeDirectForm(request.POST, user=initial_user)
+        if form.is_valid():
+            user = form.save()
+            if request.user.is_authenticated:
+                update_session_auth_hash(request, user)
+            
+            log_audit(
+                action=AuditAction.UPDATE,
+                model_name="User",
+                record_id=user.id,
+                record_repr=f"کاربر {user.username}",
+                reason="تغییر موفقیت‌آمیز رمز عبور با اعتبارسنجی رمز قبلی",
+                user=user
+            )
+            messages.success(request, "رمز عبور با موفقیت تغییر یافت. لطفاً با رمز عبور جدید وارد شوید.")
+            if request.user.is_authenticated:
+                return redirect("accounts:profile")
+            return redirect("accounts:login")
+        else:
+            for error in form.non_field_errors():
+                messages.error(request, error)
+            for field, err_list in form.errors.items():
+                if field != "__all__":
+                    for err in err_list:
+                        messages.error(request, f"{form.fields[field].label}: {err}")
+    else:
+        username_query = request.GET.get("username", "")
+        initial = {"username": username_query} if username_query else None
+        form = PasswordChangeDirectForm(user=initial_user, initial=initial)
+        
+    return render(request, "accounts/password_change.html", {"form": form})
+
+def password_reset_view(request):
+    """
+    Identity-verified password reset view (requires username + registered mobile or personnel code).
+    For users who forgot their existing password.
+    """
+    if request.method == "POST":
+        form = PasswordResetVerifyForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            log_audit(
+                action=AuditAction.UPDATE,
+                model_name="User",
+                record_id=user.id,
+                record_repr=f"کاربر {user.username}",
+                reason="بازیابی موفق رمز عبور با تطبیق شماره موبایل یا کد پرسنلی",
+                user=user
+            )
+            messages.success(request, f"رمز عبور کاربر {user.username} با موفقیت بازنشانی شد. اکنون می‌توانید وارد شوید.")
+            return redirect("accounts:login")
+        else:
+            for error in form.non_field_errors():
+                messages.error(request, error)
+            for field, err_list in form.errors.items():
+                if field != "__all__":
+                    for err in err_list:
+                        messages.error(request, f"{form.fields[field].label}: {err}")
+    else:
+        username_query = request.GET.get("username", "")
+        initial = {"username": username_query} if username_query else None
+        form = PasswordResetVerifyForm(initial=initial)
+        
+    return render(request, "accounts/password_reset.html", {"form": form})
 
 def logout_view(request):
     if request.user.is_authenticated:
