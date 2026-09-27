@@ -274,3 +274,125 @@ class WorkflowAndPermissionTests(TestCase):
         
         # Verify Audit Log exists
         self.assertTrue(AuditLog.objects.filter(record_id=str(ticket.id), action="cancel").exists())
+
+
+class PlateLookupAutoFillTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(username="plate_tester", password="password123")
+        self.client.force_login(self.user)
+        self.v_type = VehicleType.objects.create(name="تریلی لبه‌دار", code="TR-1", standard_tare_weight=Decimal("15000"))
+        self.driver = Driver.objects.create(full_name="علی محمدی", mobile="09129998877")
+        self.vehicle = Vehicle.objects.create(
+            plate_display="34 ج 567 - ایران 88",
+            plate_part1="34",
+            plate_letter="ج",
+            plate_part2="567",
+            plate_iran="88",
+            vehicle_type=self.v_type,
+            default_driver=self.driver,
+            empty_weight=Decimal("14800.00"),
+        )
+
+    def test_lookup_by_english_plate(self):
+        response = self.client.get(reverse("weighbridge:ajax_plate_lookup"), {"plate": "34 ج 567 - ایران 88"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["found"])
+        self.assertTrue(data["is_duplicate"])
+        self.assertEqual(data["driver_name"], "علی محمدی")
+        self.assertEqual(data["driver_mobile"], "09129998877")
+        self.assertEqual(data["vehicle_type_id"], self.v_type.id)
+        self.assertEqual(data["vehicle_type_name"], "تریلی لبه‌دار")
+        self.assertEqual(data["empty_weight"], 14800.0)
+
+    def test_lookup_by_persian_digits_plate(self):
+        # Even if typed with Persian digits, it should match normalized plate
+        response = self.client.get(reverse("weighbridge:ajax_plate_lookup"), {"plate": "۳۴ ج ۵۶۷ - ایران ۸۸"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["found"])
+        self.assertEqual(data["driver_name"], "علی محمدی")
+        self.assertEqual(data["driver_mobile"], "09129998877")
+        self.assertEqual(data["vehicle_type_id"], self.v_type.id)
+
+    def test_lookup_from_previous_ticket_without_masterdata_vehicle(self):
+        # Create ticket for a plate that is NOT in Vehicle master table
+        WeighTicket.objects.create(
+            serial_number="WB-HIST-1",
+            license_plate_display="77 د 123 - ایران 45",
+            driver_name_custom="رضا حسینی",
+            driver_mobile_custom="09351112233",
+            vehicle_type=self.v_type,
+            first_weight=Decimal("25000.00"),
+            status=TicketStatus.COMPLETED
+        )
+
+        response = self.client.get(reverse("weighbridge:ajax_plate_lookup"), {"plate": "۷۷ د ۱۲۳ - ایران ۴۵"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["found"])
+        self.assertEqual(data["driver_name"], "رضا حسینی")
+        self.assertEqual(data["driver_mobile"], "09351112233")
+        self.assertEqual(data["vehicle_type_id"], self.v_type.id)
+        self.assertEqual(data["vehicle_type_name"], "تریلی لبه‌دار")
+
+    def test_auto_register_new_vehicle_and_driver_on_ticket_create(self):
+        # Ensure driver and vehicle do not exist yet
+        self.assertFalse(Driver.objects.filter(full_name="حمید رضایی").exists())
+        self.assertFalse(Vehicle.objects.filter(plate_display="88 ع 999 - ایران 11").exists())
+
+        product = Product.objects.create(name="آهن اسفنجی", code="P-1")
+        party = Party.objects.create(name="شرکت فولاد غرب")
+        op_type = OperationType.objects.create(name="خرید داخلی", code="OP-1")
+
+        response = self.client.post(reverse("weighbridge:ticket_create"), {
+            "weight_mode": WeightMode.EMPTY_FIRST,
+            "operation_type": op_type.id,
+            "party": party.id,
+            "product": product.id,
+            "plate_part1": "88",
+            "plate_letter": "ع",
+            "plate_part2": "999",
+            "plate_iran": "11",
+            "license_plate_display": "88 ع 999 - ایران 11",
+            "vehicle_type": self.v_type.id,
+            "driver_name_custom": "حمید رضایی",
+            "driver_mobile_custom": "09127776655",
+            "first_weight": "15200",
+            "load_count": "1",
+            "sent_weight": "0",
+            "loss_percent": "0",
+            "loss_weight": "0",
+            "submit_action": "save",
+        })
+        self.assertEqual(response.status_code, 302)
+
+        # Verify Driver was automatically created in MasterData
+        driver = Driver.objects.filter(full_name="حمید رضایی").first()
+        self.assertIsNotNone(driver)
+        self.assertEqual(driver.mobile, "09127776655")
+
+        # Verify Vehicle was automatically created in MasterData
+        vehicle = Vehicle.objects.filter(plate_display="88 ع 999 - ایران 11").first()
+        self.assertIsNotNone(vehicle)
+        self.assertEqual(vehicle.vehicle_type, self.v_type)
+        self.assertEqual(vehicle.default_driver, driver)
+        self.assertEqual(vehicle.plate_part1, "88")
+        self.assertEqual(vehicle.plate_letter, "ع")
+
+        # Verify Ticket is linked to newly registered Vehicle and Driver
+        ticket = WeighTicket.objects.latest("id")
+        self.assertEqual(ticket.driver, driver)
+        self.assertEqual(ticket.vehicle, vehicle)
+        self.assertEqual(ticket.vehicle_type, self.v_type)
+
+        # Now verify subsequent lookup finds it as duplicate
+        lookup_resp = self.client.get(reverse("weighbridge:ajax_plate_lookup"), {"plate": "88 ع 999 - ایران 11"})
+        lookup_data = lookup_resp.json()
+        self.assertTrue(lookup_data["found"])
+        self.assertTrue(lookup_data["is_duplicate"])
+        self.assertEqual(lookup_data["driver_name"], "حمید رضایی")
+        self.assertEqual(lookup_data["driver_mobile"], "09127776655")
+        self.assertEqual(lookup_data["vehicle_type_id"], self.v_type.id)
+
+

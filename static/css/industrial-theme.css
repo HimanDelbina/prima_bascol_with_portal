@@ -291,9 +291,11 @@ body.operator-fullscreen .operator-exit-fullscreen-btn {
   user-select: none;
   direction: rtl;
   overflow: hidden;
+  vertical-align: middle;
 }
 
-.iran-plate-blue-band {
+.iran-plate-blue-band,
+.iran-plate-blue {
   background-color: #1e3a8a;
   color: #ffffff;
   width: 42px;
@@ -306,9 +308,11 @@ body.operator-fullscreen .operator-exit-fullscreen-btn {
   font-weight: 800;
   padding: 2px;
   border-left: 2px solid #0f172a;
+  flex-shrink: 0;
 }
 
-.iran-plate-blue-band .flag-icon {
+.iran-plate-blue-band .flag-icon,
+.iran-plate-blue .flag-icon {
   width: 18px;
   height: 11px;
   background: linear-gradient(to bottom, #22c55e 33%, #ffffff 33%, #ffffff 66%, #ef4444 66%);
@@ -316,42 +320,55 @@ body.operator-fullscreen .operator-exit-fullscreen-btn {
   margin-bottom: 2px;
 }
 
-.iran-plate-input-part1 {
+.iran-plate-input-part1,
+.iran-plate-part1 {
   width: 58px;
+  height: 100%;
   text-align: center;
   font-size: 1.45rem;
   font-weight: 900;
-  border: none;
-  outline: none;
-  background: transparent;
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
   color: #0f172a;
+  box-shadow: none !important;
+  padding: 0 !important;
 }
 
-.iran-plate-letter-select, .iran-plate-input-letter {
+.iran-plate-letter-select, 
+.iran-plate-input-letter,
+.iran-plate-letter {
   width: 54px;
+  height: 100%;
   text-align: center;
   font-size: 1.35rem;
   font-weight: 900;
-  border: none;
-  outline: none;
-  background: #f8fafc;
+  border: none !important;
+  outline: none !important;
+  background: #f8fafc !important;
   color: #1e293b;
   cursor: pointer;
-  padding: 0 2px;
+  padding: 0 2px !important;
+  box-shadow: none !important;
 }
 
-.iran-plate-input-part2 {
+.iran-plate-input-part2,
+.iran-plate-part2 {
   width: 78px;
+  height: 100%;
   text-align: center;
   font-size: 1.45rem;
   font-weight: 900;
-  border: none;
-  outline: none;
-  background: transparent;
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
   color: #0f172a;
+  box-shadow: none !important;
+  padding: 0 !important;
 }
 
-.iran-plate-iran-code {
+.iran-plate-iran-code,
+.iran-plate-zone {
   border-right: 2px solid #0f172a;
   width: 62px;
   height: 100%;
@@ -360,25 +377,43 @@ body.operator-fullscreen .operator-exit-fullscreen-btn {
   align-items: center;
   justify-content: center;
   background-color: #f1f5f9;
+  flex-shrink: 0;
 }
 
-.iran-plate-iran-code span {
+.iran-plate-iran-code span,
+.iran-plate-zone span {
   font-size: 0.65rem;
   font-weight: 800;
   color: #475569;
   line-height: 1;
 }
 
-.iran-plate-iran-code input {
+.iran-plate-iran-code input,
+.iran-plate-zone input,
+.iran-plate-iran {
   width: 100%;
+  height: auto;
   text-align: center;
   font-size: 1.35rem;
   font-weight: 900;
-  border: none;
-  outline: none;
-  background: transparent;
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
   color: #0f172a;
+  box-shadow: none !important;
+  padding: 0 !important;
 }
+
+.iran-plate-container .form-control,
+.iran-plate-container .form-select {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
 
 /* Giant Weight Hero Input Boxes */
 .weight-hero-box {
@@ -718,5 +753,16 @@ body.operator-fullscreen .operator-exit-fullscreen-btn {
   border-radius: 16px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
 }
+
+/* ==========================================================================
+   AUTO-FILLED FIELD HIGHLIGHT (PLATE DUPLICATE RECOGNITION)
+   ========================================================================== */
+.auto-filled-success {
+  background-color: #f0fdf4 !important;
+  border-color: #16a34a !important;
+  box-shadow: 0 0 0 0.25rem rgba(22, 163, 74, 0.25) !important;
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
 
 

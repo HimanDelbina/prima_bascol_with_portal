@@ -36,7 +36,6 @@
 
     <!-- Live Plate Warnings & Open Ticket Alerts -->
     <div id="plate-open-ticket-alert" class="mb-3 d-none"></div>
-    <div id="plate-history-banner" class="mb-3 d-none"></div>
 
     <div class="row g-3">
         <!-- Main Form Column (8 or 9 cols on Desktop) -->
@@ -80,31 +79,46 @@
 
             <!-- Card 2: Vehicle & Driver (With Iran Plate Component) -->
             <div class="industrial-card">
-                <div class="industrial-card-header">
-                    <h6 class="industrial-card-title"><i class="bi bi-truck-front-fill text-primary"></i>مشخصات خودرو و راننده</h6>
+                <div class="industrial-card-header d-flex justify-content-between align-items-center">
+                    <h6 class="industrial-card-title mb-0"><i class="bi bi-truck-front-fill text-primary"></i>مشخصات خودرو و راننده</h6>
+                    <span class="badge bg-light text-muted border small fw-normal d-none d-sm-inline" id="plate-autofill-indicator">
+                        <i class="bi bi-magic text-primary me-1"></i>تکمیل خودکار سوابق تکراری فعال است
+                    </span>
                 </div>
                 <div class="industrial-card-body p-3">
-                    <div class="row g-3 align-items-center">
-                        <div class="col-12 col-xxl-5">
+                    <input type="hidden" name="vehicle" id="id_vehicle" value="{{ form.vehicle.value|default:'' }}">
+                    <input type="hidden" name="driver" id="id_driver" value="{{ form.driver.value|default:'' }}">
+
+                    <!-- Real-time Plate Feedback Banner (Duplication / Auto-fill status) -->
+                    <div id="plate-history-banner" class="mb-3 d-none"></div>
+
+                    <div class="row g-3 align-items-start">
+                        <div class="col-12 col-xl-auto col-lg-auto">
                             <label class="form-label fw-bold small text-secondary d-block">پلاک ملی خودرو <span class="key-hint-badge">F2</span> <span class="text-danger">*</span></label>
-                            {% include 'components/iran_plate_input.html' with initial_part1=form.plate_part1.value initial_letter=form.plate_letter.value initial_part2=form.plate_part2.value initial_iran=form.plate_iran.value initial_plate_display=form.license_plate_display.value %}
-                            {% if form.license_plate_display.errors %}<div class="text-danger small">{{ form.license_plate_display.errors }}</div>{% endif %}
+                            <div class="d-inline-block">
+                                {% include 'components/iran_plate_input.html' with initial_part1=form.plate_part1.value initial_letter=form.plate_letter.value initial_part2=form.plate_part2.value initial_iran=form.plate_iran.value initial_plate_display=form.license_plate_display.value %}
+                            </div>
+                            {% if form.license_plate_display.errors %}<div class="text-danger small mt-1">{{ form.license_plate_display.errors }}</div>{% endif %}
                         </div>
-                        <div class="col-md-4 col-xxl-3">
+                        <div class="col-12 col-sm-6 col-md-4 col-lg col-xl">
                             <label class="form-label fw-bold small text-secondary">نوع خودرو</label>
                             {{ form.vehicle_type }}
+                            {% if form.vehicle_type.errors %}<div class="text-danger small mt-1">{{ form.vehicle_type.errors }}</div>{% endif %}
                         </div>
-                        <div class="col-md-4 col-xxl-2">
+                        <div class="col-12 col-sm-6 col-md-4 col-lg col-xl">
                             <label class="form-label fw-bold small text-secondary">نام راننده</label>
                             {{ form.driver_name_custom }}
+                            {% if form.driver_name_custom.errors %}<div class="text-danger small mt-1">{{ form.driver_name_custom.errors }}</div>{% endif %}
                         </div>
-                        <div class="col-md-4 col-xxl-2">
+                        <div class="col-12 col-sm-12 col-md-4 col-lg col-xl">
                             <label class="form-label fw-bold small text-secondary">موبایل راننده</label>
                             {{ form.driver_mobile_custom }}
+                            {% if form.driver_mobile_custom.errors %}<div class="text-danger small mt-1">{{ form.driver_mobile_custom.errors }}</div>{% endif %}
                         </div>
                     </div>
                 </div>
             </div>
+
 
             <!-- Card 3: Route & Logistic Locations -->
             <div class="industrial-card">
@@ -316,7 +330,7 @@
         </div>
 
         <div class="d-flex align-items-center gap-2">
-            <button type="button" class="btn btn-success btn-lg px-4 fw-bold shadow" data-bs-toggle="modal" data-bs-target="#confirmCompleteModal">
+            <button type="button" id="btn-open-confirm-modal" class="btn btn-success btn-lg px-4 fw-bold shadow" data-bs-toggle="modal" data-bs-target="#confirmCompleteModal">
                 <i class="bi bi-check2-circle me-1"></i> ثبت و تکمیل نهایی باسکول <span class="key-hint-badge bg-white text-dark">Ctrl + Enter</span>
             </button>
         </div>
@@ -362,12 +376,27 @@
 {% block extra_js %}
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    // Populate modal previews on open
+    // Blocked plate UI helper integration
+    window.setPlateBlockedState = window.setPlateBlockedState || function(isBlocked, blockReason = "") {};
+
+    // Populate modal previews on open, and prevent open if plate is blocked
     const modal = document.getElementById('confirmCompleteModal');
     if (modal) {
-        modal.addEventListener('show.bs.modal', function () {
-            document.getElementById('modal-gross-preview').textContent = document.getElementById('calc-gross-val').textContent;
-            document.getElementById('modal-net-preview').textContent = document.getElementById('calc-net-val').textContent;
+        modal.addEventListener('show.bs.modal', function (e) {
+            if (document.body.dataset.plateBlocked === "true") {
+                e.preventDefault();
+                if (typeof window.showToast === "function") {
+                    window.showToast("خطا: این پلاک در لیست سیاه مسدود است و امکان ثبت نهایی وجود ندارد.", "danger");
+                }
+                return false;
+            }
+            const modalGross = document.getElementById('modal-gross-preview');
+            const calcGross = document.getElementById('calc-gross-val');
+            if (modalGross && calcGross) modalGross.textContent = calcGross.textContent;
+
+            const modalNet = document.getElementById('modal-net-preview');
+            const calcNet = document.getElementById('calc-net-val');
+            if (modalNet && calcNet) modalNet.textContent = calcNet.textContent;
         });
     }
 });

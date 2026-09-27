@@ -58,10 +58,10 @@ class TicketCreateForm(forms.ModelForm):
             "product": forms.Select(attrs={"class": "form-select", "id": "id_product"}),
             "vehicle": forms.Select(attrs={"class": "form-select", "id": "id_vehicle"}),
             "vehicle_type": forms.Select(attrs={"class": "form-select", "id": "id_vehicle_type"}),
-            "vehicle_type_custom": forms.TextInput(attrs={"class": "form-control", "placeholder": "شرح نوع خودرو در صورت عدم انتخاب از لیست"}),
+            "vehicle_type_custom": forms.TextInput(attrs={"class": "form-control", "id": "id_vehicle_type_custom", "placeholder": "شرح نوع خودرو در صورت عدم انتخاب از لیست"}),
             "driver": forms.Select(attrs={"class": "form-select", "id": "id_driver"}),
-            "driver_name_custom": forms.TextInput(attrs={"class": "form-control", "placeholder": "نام راننده"}),
-            "driver_mobile_custom": forms.TextInput(attrs={"class": "form-control", "placeholder": "۰۹۱۲۳۴۵۶۷۸۹"}),
+            "driver_name_custom": forms.TextInput(attrs={"class": "form-control", "id": "id_driver_name_custom", "placeholder": "نام راننده"}),
+            "driver_mobile_custom": forms.TextInput(attrs={"class": "form-control", "id": "id_driver_mobile_custom", "placeholder": "۰۹۱۲۳۴۵۶۷۸۹"}),
             "license_plate_display": forms.TextInput(attrs={"class": "form-control", "id": "license_plate_display", "placeholder": "مثلاً ۱۲ ج ۳۴۵ - ایران ۶۷"}),
             "waybill_number": forms.TextInput(attrs={"class": "form-control", "placeholder": "شماره بارنامه / حواله"}),
             "freight_amount": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "مبلغ به تومان", "inputmode": "numeric"}),
@@ -153,6 +153,13 @@ class TicketCreateForm(forms.ModelForm):
 
         if not plate:
             self.add_error("license_plate_display", "شماره پلاک خودرو الزامی است.")
+        else:
+            from weighbridge.models import BlockedPlate
+            from weighbridge.plate_policy import normalize_plate
+            norm = normalize_plate(plate)
+            blocked = BlockedPlate.objects.filter(normalized_plate=norm, is_active=True).first()
+            if blocked:
+                self.add_error("license_plate_display", f"⛔ این خودرو در لیست سیاه پلاک‌های مسدود قرار دارد و امکان بارگیری ندارد! علت مسدودی: {blocked.reason}")
 
         w1 = cleaned_data.get("first_weight")
         if w1 is None or w1 <= 0:

@@ -10,7 +10,7 @@ import re
 
 from weighbridge.models import WeighTicket, TicketStatus, WeightMode
 from weighbridge.forms import TicketCreateForm, SecondWeightForm, TicketEditManagerForm
-from weighbridge.services import TicketCalculationService
+from weighbridge.services import TicketCalculationService, VehicleDriverRegistrationService
 from core.weight_provider import get_active_weight_provider
 from core.jalali import jalali_to_gregorian, get_today_jalali, format_jalali_date, get_today_gregorian
 from core.models import SystemSetting
@@ -101,6 +101,9 @@ def ticket_create(request):
             ticket.weight_difference = calc_results["weight_difference"]
             ticket.weight_difference_percent = calc_results["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc_results["is_tolerance_exceeded"]
+
+            # Auto-register or link Vehicle and Driver into system MasterData
+            VehicleDriverRegistrationService.resolve_or_create(ticket, form.cleaned_data)
 
             try:
                 DailyPlatePolicy.save(ticket, user=request.user, assign_serial=True)
@@ -237,6 +240,11 @@ def ticket_second_weight(request, pk):
             ticket.is_tolerance_exceeded = calc_results["is_tolerance_exceeded"]
 
             ticket.save()
+
+            # Update vehicle empty weight in masterdata if not previously set
+            if ticket.vehicle and (not ticket.vehicle.empty_weight or ticket.vehicle.empty_weight == 0) and ticket.tare_weight and ticket.tare_weight > 0:
+                ticket.vehicle.empty_weight = ticket.tare_weight
+                ticket.vehicle.save(update_fields=["empty_weight"])
 
             log_audit(
                 action=AuditAction.STATUS_CHANGE,
@@ -610,39 +618,137 @@ from django.http import JsonResponse
 def ajax_plate_lookup(request):
     """
     Lookup vehicle history and check for active open tickets by license plate.
+    Supports plate normalization (Persian/English digits, spaces) and returns
+    auto-fill data for vehicle type, driver name, mobile, etc.
     """
     plate = request.GET.get("plate", "").strip()
     if not plate:
-        return JsonResponse({"found": False, "message": "پلاک وارد نشده است."})
+        return JsonResponse({"found": False, "is_duplicate": False, "message": "پلاک وارد نشده است."})
 
-    # Find vehicle record
+    norm_plate = normalize_plate(plate)
+
+    # 0. Check if plate is blacklisted / blocked
+    from weighbridge.models import BlockedPlate
+    blocked = BlockedPlate.objects.filter(normalized_plate=norm_plate, is_active=True).first() if norm_plate else None
+    if blocked:
+        return JsonResponse({
+            "is_blocked": True,
+            "block_reason": blocked.reason,
+            "blocked_at": format_jalali_date(blocked.created_at.date()) if blocked.created_at else "",
+            "blocked_by": blocked.blocked_by.get_full_name() or blocked.blocked_by.username,
+            "found": False,
+            "is_duplicate": False,
+            "plate_display": blocked.license_plate_display,
+        })
+
+    # 1. Find vehicle record by exact display, partial display, or normalized plate
+
     vehicle = Vehicle.objects.filter(
         Q(plate_display__iexact=plate) |
         Q(plate_display__icontains=plate)
     ).select_related("vehicle_type", "default_driver").first()
 
-    # Search ticket history
-    tickets_qs = WeighTicket.objects.filter(license_plate_display__icontains=plate).order_by("-id")
+    if not vehicle and norm_plate:
+        for v in Vehicle.objects.select_related("vehicle_type", "default_driver").all():
+            if normalize_plate(v.plate_display) == norm_plate:
+                vehicle = v
+                break
+
+    # 2. Search ticket history using both textual match and normalized plate
+    ticket_q = Q(license_plate_display__iexact=plate) | Q(license_plate_display__icontains=plate)
+    if norm_plate:
+        ticket_q |= Q(normalized_plate=norm_plate)
+    tickets_qs = WeighTicket.objects.filter(ticket_q).order_by("-id")
     trip_count = tickets_qs.count()
 
-    last_ticket = tickets_qs.select_related("driver", "product", "party").first()
+    last_ticket = tickets_qs.select_related("driver", "product", "party", "vehicle_type", "vehicle").first()
 
-    # Check for open / in-progress tickets (waiting for second weight or first weight)
+    # 3. Check for open / in-progress tickets (waiting for second weight or first weight)
     open_ticket = tickets_qs.filter(
         status__in=[TicketStatus.WAITING_SECOND, TicketStatus.WAITING_FIRST]
     ).first()
 
+    # 4. Determine driver info (avoid placeholder text like 'نامشخص' or '-')
+    driver_id = None
+    driver_name = ""
+    driver_mobile = ""
+
+    if vehicle and vehicle.default_driver:
+        driver_id = vehicle.default_driver.id
+        driver_name = vehicle.default_driver.full_name or ""
+        driver_mobile = vehicle.default_driver.mobile or ""
+
+    if not driver_name and tickets_qs.exists():
+        ticket_with_driver = tickets_qs.filter(
+            Q(driver__isnull=False) | (~Q(driver_name_custom="") & ~Q(driver_name_custom__isnull=True))
+        ).select_related("driver").first()
+
+        if ticket_with_driver:
+            if ticket_with_driver.driver:
+                driver_id = ticket_with_driver.driver.id
+                driver_name = ticket_with_driver.driver.full_name or ""
+                driver_mobile = ticket_with_driver.driver.mobile or ""
+            else:
+                driver_name = ticket_with_driver.driver_name_custom or ""
+                driver_mobile = ticket_with_driver.driver_mobile_custom or ""
+
+    if not driver_mobile and tickets_qs.exists():
+        ticket_with_mob = tickets_qs.exclude(driver_mobile_custom="").exclude(driver_mobile_custom__isnull=True).first()
+        if ticket_with_mob:
+            driver_mobile = ticket_with_mob.driver_mobile_custom or ""
+
+    # 5. Determine vehicle type info
+    vehicle_type_id = None
+    vehicle_type_name = ""
+    vehicle_type_custom = ""
+
+    if vehicle and vehicle.vehicle_type:
+        vehicle_type_id = vehicle.vehicle_type.id
+        vehicle_type_name = vehicle.vehicle_type.name
+    elif tickets_qs.exists():
+        ticket_with_vtype = tickets_qs.filter(vehicle_type__isnull=False).select_related("vehicle_type").first()
+        if ticket_with_vtype and ticket_with_vtype.vehicle_type:
+            vehicle_type_id = ticket_with_vtype.vehicle_type.id
+            vehicle_type_name = ticket_with_vtype.vehicle_type.name
+        else:
+            ticket_with_vcustom = tickets_qs.exclude(vehicle_type_custom="").exclude(vehicle_type_custom__isnull=True).first()
+            if ticket_with_vcustom:
+                vehicle_type_custom = ticket_with_vcustom.vehicle_type_custom or ""
+
+    # 6. Determine vehicle id
+    vehicle_id = None
+    if vehicle:
+        vehicle_id = vehicle.id
+    elif last_ticket and last_ticket.vehicle_id:
+        vehicle_id = last_ticket.vehicle_id
+
+    # 7. Determine empty / tare weight
+    empty_weight = None
+    if vehicle and vehicle.empty_weight and vehicle.empty_weight > 0:
+        empty_weight = float(vehicle.empty_weight)
+    elif tickets_qs.exists():
+        ticket_with_tare = tickets_qs.filter(tare_weight__gt=0).first()
+        if ticket_with_tare and ticket_with_tare.tare_weight:
+            empty_weight = float(ticket_with_tare.tare_weight)
+
+    is_duplicate = (vehicle is not None) or (trip_count > 0)
+
     response_data = {
-        "found": True if (vehicle or trip_count > 0) else False,
+        "is_blocked": False,
+        "found": is_duplicate,
+        "is_duplicate": is_duplicate,
+
         "trip_count": trip_count,
-        "plate_display": vehicle.plate_display if vehicle else plate,
-        "vehicle_id": vehicle.id if vehicle else None,
-        "vehicle_type_id": vehicle.vehicle_type.id if (vehicle and vehicle.vehicle_type) else None,
-        "vehicle_type_name": vehicle.vehicle_type.name if (vehicle and vehicle.vehicle_type) else (last_ticket.vehicle_type.name if (last_ticket and last_ticket.vehicle_type) else ""),
-        "driver_id": vehicle.default_driver.id if (vehicle and vehicle.default_driver) else (last_ticket.driver.id if (last_ticket and last_ticket.driver) else None),
-        "driver_name": vehicle.default_driver.full_name if (vehicle and vehicle.default_driver) else (last_ticket.driver_display if last_ticket else ""),
-        "driver_mobile": vehicle.default_driver.mobile if (vehicle and vehicle.default_driver) else (last_ticket.driver_mobile_display if last_ticket else ""),
-        "empty_weight": float(vehicle.empty_weight) if (vehicle and vehicle.empty_weight) else None,
+        "plate_display": vehicle.plate_display if vehicle else (last_ticket.license_plate_display if last_ticket else plate),
+        "normalized_plate": norm_plate,
+        "vehicle_id": vehicle_id,
+        "vehicle_type_id": vehicle_type_id,
+        "vehicle_type_name": vehicle_type_name,
+        "vehicle_type_custom": vehicle_type_custom,
+        "driver_id": driver_id,
+        "driver_name": driver_name,
+        "driver_mobile": driver_mobile,
+        "empty_weight": empty_weight,
         "last_product": last_ticket.product.name if (last_ticket and last_ticket.product) else "",
         "last_party": last_ticket.party.name if (last_ticket and last_ticket.party) else "",
         "last_visit": last_ticket.jalali_first_date if last_ticket else "",

@@ -1,12 +1,15 @@
 from django.urls import path
 from weighbridge.exception_views import plate_exceptions
+from weighbridge.blocked_plate_views import blocked_plates
 from weighbridge import views
 
 app_name = "weighbridge"
 
 urlpatterns = [
     path("plate-exceptions/", plate_exceptions, name="plate_exceptions"),
+    path("blocked-plates/", blocked_plates, name="blocked_plates"),
     path("tickets/create/", views.ticket_create, name="ticket_create"),
+
     path("tickets/<int:pk>/second-weight/", views.ticket_second_weight, name="ticket_second_weight"),
     path("trucks-in-yard/", views.trucks_in_yard, name="trucks_in_yard"),
     path("tickets/", views.ticket_list, name="ticket_list"),

@@ -24,6 +24,16 @@ def can_manage_plate_exceptions(user):
     ))
 
 
+def can_manage_blocked_plates(user):
+    """فقط مدیر ارشد و مدیر باسکول مجاز به مدیریت لیست سیاه پلاک‌ها هستند."""
+    profile = getattr(user, "profile", None)
+    return bool(user and user.is_authenticated and user.is_active and (
+        user.is_superuser or (profile and profile.is_active and profile.role in (
+            "super_admin", "weighbridge_manager",
+        ))
+    ))
+
+
 class DailyPlatePolicy:
     @staticmethod
     def registration_date(ticket):
@@ -42,13 +52,22 @@ class DailyPlatePolicy:
 
     @classmethod
     def check(cls, ticket):
-        from weighbridge.models import WeighTicket, TicketStatus, PlateRegistrationException
+        from weighbridge.models import WeighTicket, TicketStatus, PlateRegistrationException, BlockedPlate
         plate = normalize_plate(ticket.license_plate_display)
         day = cls.registration_date(ticket)
         if not plate:
             raise ValidationError({"license_plate_display": "پلاک معتبر وارد کنید."})
         if ticket.status == TicketStatus.CANCELLED:
             return None
+
+        # 1. Enforcement: Blocked / Blacklisted Plates
+        blocked = BlockedPlate.objects.filter(normalized_plate=plate, is_active=True).first()
+        if blocked:
+            raise ValidationError({"license_plate_display": (
+                f"⛔ پلاک «{ticket.license_plate_display}» در لیست سیاه مسدود شده است و مجاز به بارگیری و ورود نمی‌باشد. "
+                f"دلیل مسدودسازی: {blocked.reason}"
+            )})
+
         old = WeighTicket.objects.filter(pk=ticket.pk).first() if ticket.pk else None
         if old and normalize_plate(old.license_plate_display) == plate and cls.registration_date(old) == day and old.status != TicketStatus.CANCELLED:
             return None  # Completing an existing ticket, including historical duplicates, remains valid.

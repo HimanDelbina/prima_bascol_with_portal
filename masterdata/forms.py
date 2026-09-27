@@ -65,8 +65,16 @@ class VehicleForm(forms.ModelForm):
         choices=IRAN_PLATE_LETTERS,
         required=False,
         widget=forms.Select(attrs={
-            "class": "form-select text-center iran-plate-part iran-plate-letter",
+            "class": "iran-plate-letter-select",
             "id": "id_plate_letter",
+        })
+    )
+    plate_display = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={
+            "class": "form-control bg-light font-monospace fw-bold",
+            "id": "id_plate_display",
+            "placeholder": "شماره کامل پلاک پس از ورود اجزا محاسبه می‌شود"
         })
     )
 
@@ -77,16 +85,32 @@ class VehicleForm(forms.ModelForm):
             "plate_display", "vehicle_type", "default_driver", "empty_weight", "description", "is_active"
         ]
         widgets = {
-            "plate_part1": forms.TextInput(attrs={"class": "form-control text-center iran-plate-part iran-plate-part1", "maxlength": "2", "id": "id_plate_part1"}),
-            "plate_part2": forms.TextInput(attrs={"class": "form-control text-center iran-plate-part iran-plate-part2", "maxlength": "3", "id": "id_plate_part2"}),
-            "plate_iran": forms.TextInput(attrs={"class": "form-control text-center iran-plate-part iran-plate-iran", "maxlength": "2", "id": "id_plate_iran"}),
-            "plate_display": forms.TextInput(attrs={"class": "form-control", "id": "id_plate_display"}),
+            "plate_part1": forms.TextInput(attrs={"class": "iran-plate-input-part1", "maxlength": "2", "id": "id_plate_part1", "placeholder": "12", "autocomplete": "off"}),
+            "plate_part2": forms.TextInput(attrs={"class": "iran-plate-input-part2", "maxlength": "3", "id": "id_plate_part2", "placeholder": "345", "autocomplete": "off"}),
+            "plate_iran": forms.TextInput(attrs={"class": "iran-plate-iran", "maxlength": "2", "id": "id_plate_iran", "placeholder": "64", "autocomplete": "off"}),
             "vehicle_type": forms.Select(attrs={"class": "form-select"}),
             "default_driver": forms.Select(attrs={"class": "form-select"}),
-            "empty_weight": forms.NumberInput(attrs={"class": "form-control", "step": "any"}),
-            "description": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "empty_weight": forms.NumberInput(attrs={"class": "form-control", "step": "any", "placeholder": "0.00"}),
+            "description": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "توضیحات و یادداشت‌ها..."}),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        p1 = (cleaned_data.get("plate_part1") or "").strip()
+        pL = (cleaned_data.get("plate_letter") or "").strip()
+        p2 = (cleaned_data.get("plate_part2") or "").strip()
+        pI = (cleaned_data.get("plate_iran") or "").strip()
+        pDisp = (cleaned_data.get("plate_display") or "").strip()
+
+        if p1 and pL and p2 and pI:
+            cleaned_data["plate_display"] = f"{p1} {pL} {p2} - ایران {pI}"
+        elif pDisp:
+            cleaned_data["plate_display"] = pDisp
+        else:
+            cleaned_data["plate_display"] = "بدون پلاک"
+        return cleaned_data
+
 
 
 class LocationForm(forms.ModelForm):

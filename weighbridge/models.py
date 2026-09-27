@@ -353,9 +353,36 @@ class PlateRegistrationException(BaseModel):
         super().save(*args, **kwargs)
 
 
+class BlockedPlate(BaseModel):
+    license_plate_display = models.CharField(max_length=60, verbose_name="شماره پلاک")
+    normalized_plate = models.CharField(max_length=60, unique=True, editable=False)
+    reason = models.TextField(verbose_name="دلیل مسدودسازی")
+    blocked_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="blocked_plates",
+        verbose_name="کاربر مسدودکننده"
+    )
+
+    class Meta:
+        verbose_name = "پلاک مسدود شده"
+        verbose_name_plural = "لیست سیاه پلاک‌ها (مسدودشده)"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        status = "مسدود" if self.is_active else "رفع مسدودی"
+        return f"{self.license_plate_display} ({status})"
+
+    def save(self, *args, **kwargs):
+        from weighbridge.plate_policy import normalize_plate
+        self.normalized_plate = normalize_plate(self.license_plate_display)
+        super().save(*args, **kwargs)
+
+
 class PlateDayLock(models.Model):
     plate = models.CharField(max_length=60)
     date = models.DateField()
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["plate", "date"], name="unique_plate_day_lock")]
+

@@ -13,17 +13,98 @@ from weighbridge.models import PlateRegistrationException
 from weighbridge.plate_policy import can_manage_plate_exceptions, normalize_plate
 
 
-class PlateExceptionForm(forms.Form):
-    license_plate_display = forms.CharField(label="پلاک خودرو", max_length=60,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "۱۲ ع ۳۴۵ - ایران ۶۷"}))
-    reason = forms.CharField(label="دلیل مجوز ثبت چندباره در روز", min_length=3, max_length=1000,
-        widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}))
+from core.constants import IRAN_PLATE_LETTERS
 
-    def clean_license_plate_display(self):
-        value = self.cleaned_data["license_plate_display"]
-        if not normalize_plate(value):
-            raise forms.ValidationError("پلاک معتبر وارد کنید.")
-        return value
+
+class PlateExceptionForm(forms.Form):
+    plate_part1 = forms.CharField(
+        max_length=5,
+        required=False,
+        widget=forms.TextInput(attrs={
+            "class": "iran-plate-input-part1",
+            "maxlength": "2",
+            "id": "plate_part1",
+            "placeholder": "12",
+            "autocomplete": "off",
+            "autofocus": "autofocus",
+        })
+    )
+    plate_letter = forms.ChoiceField(
+        choices=IRAN_PLATE_LETTERS,
+        required=False,
+        widget=forms.Select(attrs={
+            "class": "iran-plate-letter-select",
+            "id": "plate_letter",
+        })
+    )
+    plate_part2 = forms.CharField(
+        max_length=5,
+        required=False,
+        widget=forms.TextInput(attrs={
+            "class": "iran-plate-input-part2",
+            "maxlength": "3",
+            "id": "plate_part2",
+            "placeholder": "345",
+            "autocomplete": "off",
+        })
+    )
+    plate_iran = forms.CharField(
+        max_length=5,
+        required=False,
+        widget=forms.TextInput(attrs={
+            "class": "iran-plate-iran",
+            "maxlength": "2",
+            "id": "plate_iran",
+            "placeholder": "64",
+            "autocomplete": "off",
+        })
+    )
+    license_plate_display = forms.CharField(
+        label="شماره کامل پلاک",
+        max_length=60,
+        required=False,
+        widget=forms.TextInput(attrs={
+            "class": "form-control bg-light font-monospace fw-bold",
+            "id": "license_plate_display",
+            "placeholder": "۱۲ ع ۳۴۵ - ایران ۶۴",
+            "readonly": "readonly",
+        })
+    )
+    reason = forms.CharField(
+        label="دلیل مجوز ثبت چندباره در روز",
+        min_length=3,
+        max_length=1000,
+        widget=forms.Textarea(attrs={
+            "class": "form-control",
+            "rows": 2,
+            "placeholder": "مثلاً: تردد متعدد درون‌کارخانه‌ای، حمل شمش بین‌انبارها، شیفت فشرده و..."
+        })
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        p1 = (cleaned_data.get("plate_part1") or "").strip()
+        pL = (cleaned_data.get("plate_letter") or "").strip()
+        p2 = (cleaned_data.get("plate_part2") or "").strip()
+        pI = (cleaned_data.get("plate_iran") or "").strip()
+        disp = (cleaned_data.get("license_plate_display") or "").strip()
+
+        # If 4 visual parts are provided, construct full string
+        if p1 and pL and p2 and pI:
+            disp = f"{p1} {pL} {p2} - ایران {pI}"
+            cleaned_data["license_plate_display"] = disp
+
+        if not disp:
+            self.add_error("license_plate_display", "لطفاً شماره پلاک را به صورت کامل وارد کنید.")
+            return cleaned_data
+
+        norm = normalize_plate(disp)
+        if not norm:
+            self.add_error("license_plate_display", "پلاک وارد شده معتبر نیست. لطفاً ارقام و حرف پلاک را به درستی وارد نمایید.")
+            return cleaned_data
+
+        cleaned_data["license_plate_display"] = disp
+        return cleaned_data
 
 
 @login_required
@@ -52,13 +133,21 @@ def plate_exceptions(request):
             return redirect("weighbridge:plate_exceptions")
         if action == "save" and form.is_valid():
             with transaction.atomic():
+                plate_disp = form.cleaned_data["license_plate_display"]
+                reason_text = form.cleaned_data["reason"]
+                norm = normalize_plate(plate_disp)
                 obj, created = PlateRegistrationException.objects.select_for_update().get_or_create(
-                    normalized_plate=normalize_plate(form.cleaned_data["license_plate_display"]),
-                    defaults={**form.cleaned_data, "approved_by": request.user},
+                    normalized_plate=norm,
+                    defaults={
+                        "license_plate_display": plate_disp,
+                        "reason": reason_text,
+                        "approved_by": request.user,
+                        "is_active": True,
+                    },
                 )
                 old = {} if created else {"reason": obj.reason, "is_active": obj.is_active, "approved_by": obj.approved_by_id}
-                obj.license_plate_display = form.cleaned_data["license_plate_display"]
-                obj.reason = form.cleaned_data["reason"]
+                obj.license_plate_display = plate_disp
+                obj.reason = reason_text
                 obj.approved_by = request.user
                 obj.is_active = True
                 obj.save()
@@ -66,8 +155,9 @@ def plate_exceptions(request):
                           record_id=obj.pk, record_repr=obj.license_plate_display, user=request.user,
                           old_values=old, new_values={"plate": obj.license_plate_display, "reason": obj.reason,
                                                      "is_active": True, "approved_by": request.user.pk}, reason=obj.reason)
-            messages.success(request, "این پلاک برای ثبت چندباره در یک روز مجاز شد.")
+            messages.success(request, f"پلاک «{plate_disp}» برای ثبت چندباره در یک روز مجاز شد.")
             return redirect("weighbridge:plate_exceptions")
+
     query = request.GET.get("q", "").strip()
     exceptions = PlateRegistrationException.objects.select_related("approved_by").all()
     if query:

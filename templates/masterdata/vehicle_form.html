@@ -3,69 +3,152 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="card shadow-sm border-0 rounded-3">
-            <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
-                <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-truck-front-fill me-2"></i>{{ title }}</h5>
-                <a href="{% url 'masterdata:vehicle_list' %}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-arrow-right me-1"></i> بازگشت
-                </a>
+    <div class="col-lg-9 col-xl-8">
+        <!-- Page Breadcrumb & Header -->
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <div>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-1 small">
+                        <li class="breadcrumb-item"><a href="{% url 'dashboard:index' %}">داشبورد</a></li>
+                        <li class="breadcrumb-item"><a href="{% url 'masterdata:vehicle_list' %}">مدیریت خودروها</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+                    </ol>
+                </nav>
+                <h4 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-truck-front-fill text-primary me-2"></i>{{ title }}
+                </h4>
             </div>
-            <div class="card-body p-4">
-                <form method="post">
+            <a href="{% url 'masterdata:vehicle_list' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-right me-1"></i> بازگشت به فهرست
+            </a>
+        </div>
+
+        <div class="industrial-card">
+            <div class="industrial-card-header d-flex justify-content-between align-items-center">
+                <h6 class="industrial-card-title mb-0">
+                    <i class="bi bi-card-text text-primary"></i>اطلاعات شناسنامه خودرو
+                </h6>
+                <span class="badge bg-light text-muted border small fw-normal">پلاک ملی ایران</span>
+            </div>
+            <div class="industrial-card-body p-4">
+                {% if form.errors %}
+                <div class="alert alert-danger border-danger shadow-sm mb-4">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <i class="bi bi-exclamation-octagon-fill fs-5"></i>
+                        <strong class="fs-6">خطا در ثبت اطلاعات:</strong>
+                    </div>
+                    <ul class="mb-0 small ps-3">
+                        {% for field, errors in form.errors.items %}
+                            {% for error in errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <form method="post" id="vehicle-form">
                     {% csrf_token %}
-                    
-                    <!-- Iranian License Plate Visual Entry -->
-                    <div class="mb-4 text-center">
-                        <label class="form-label fw-bold d-block text-secondary mb-2">شماره پلاک ملی خودرو</label>
-                        <div class="iran-plate-container shadow-sm">
-                            <div class="iran-plate-blue">
-                                <span>I.R.</span>
-                                <span>IRAN</span>
-                            </div>
-                            <div class="iran-plate-input-group">
+
+                    <!-- Iranian License Plate Visual Component -->
+                    <div class="plate-entry-hero mb-4 p-4 text-center bg-light rounded-3 border">
+                        <label class="form-label fw-bold d-block text-secondary mb-3">
+                            <i class="bi bi-credit-card-2-front text-primary me-1"></i>شماره پلاک ملی خودرو <span class="text-danger">*</span>
+                        </label>
+                        
+                        <div class="d-inline-flex justify-content-center">
+                            <div class="iran-plate-container shadow">
+                                <div class="iran-plate-blue-band">
+                                    <div class="flag-icon"></div>
+                                    <div>I.R.</div>
+                                    <div>IRAN</div>
+                                </div>
                                 {{ form.plate_part1 }}
                                 {{ form.plate_letter }}
                                 {{ form.plate_part2 }}
-                            </div>
-                            <div class="iran-plate-divider"></div>
-                            <div class="iran-plate-zone">
-                                <span class="fw-bold text-muted">ایران</span>
-                                {{ form.plate_iran }}
+                                <div class="iran-plate-iran-code">
+                                    <span>ایـران</span>
+                                    {{ form.plate_iran }}
+                                </div>
                             </div>
                         </div>
-                        <div class="mt-2 text-muted small">دو رقم - حرف - سه رقم - کد ایران (مثال: ۱۲ ج ۳۴۵ ایران ۶۷)</div>
+
+                        <div class="mt-2 text-muted small">
+                            <span class="badge bg-white text-secondary border me-1 font-monospace">12</span>
+                            <span class="badge bg-white text-secondary border me-1">ع</span>
+                            <span class="badge bg-white text-secondary border me-1 font-monospace">345</span>
+                            <span class="badge bg-white text-secondary border font-monospace">ایران 64</span>
+                        </div>
                     </div>
 
                     <div class="row g-3">
-                        <div class="col-md-12">
-                            <label class="form-label fw-bold">متن کامل پلاک (جهت نمایش در سیستم)</label>
-                            {{ form.plate_display }}
+                        <!-- Auto-Generated Plate Display -->
+                        <div class="col-12">
+                            <label class="form-label fw-bold small text-secondary">
+                                شماره کامل پلاک (تولید سیستمی)
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-muted"><i class="bi bi-eye"></i></span>
+                                {{ form.plate_display }}
+                            </div>
+                            <div class="form-text small text-muted">این متن به صورت خودکار از اجزای پلاک بالا تولید و در فاکتورها و گزارش‌ها درج می‌گردد.</div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">نوع خودرو</label>
+
+                        <!-- Vehicle Type -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-secondary">
+                                <i class="bi bi-truck me-1"></i>نوع خودرو
+                            </label>
                             {{ form.vehicle_type }}
+                            {% if form.vehicle_type.errors %}<div class="text-danger small mt-1">{{ form.vehicle_type.errors }}</div>{% endif %}
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">راننده پیش‌فرض</label>
+
+                        <!-- Default Driver -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-secondary">
+                                <i class="bi bi-person me-1"></i>راننده پیش‌فرض
+                            </label>
                             {{ form.default_driver }}
+                            {% if form.default_driver.errors %}<div class="text-danger small mt-1">{{ form.default_driver.errors }}</div>{% endif %}
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">وزن خالی استاندارد خودرو (Kg)</label>
-                            {{ form.empty_weight }}
+
+                        <!-- Standard Empty Tare Weight -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-secondary">
+                                <i class="bi bi-speedometer me-1"></i>وزن خالی استاندارد
+                            </label>
+                            <div class="input-group">
+                                {{ form.empty_weight }}
+                                <span class="input-group-text bg-light small">Kg</span>
+                            </div>
+                            {% if form.empty_weight.errors %}<div class="text-danger small mt-1">{{ form.empty_weight.errors }}</div>{% endif %}
                         </div>
+
+                        <!-- Description -->
                         <div class="col-12">
-                            <label class="form-label fw-bold">توضیحات</label>
+                            <label class="form-label fw-bold small text-secondary">
+                                <i class="bi bi-chat-left-text me-1"></i>توضیحات و مشخصات تکمیلی
+                            </label>
                             {{ form.description }}
+                            {% if form.description.errors %}<div class="text-danger small mt-1">{{ form.description.errors }}</div>{% endif %}
                         </div>
+
+                        <!-- Active Switch -->
                         <div class="col-12">
-                            <div class="form-check form-switch mt-2">
+                            <div class="form-check form-switch p-3 bg-light rounded-3 border d-flex align-items-center gap-3">
                                 {{ form.is_active }}
-                                <label class="form-check-label fw-bold" for="id_is_active">خودرو فعال باشد</label>
+                                <label class="form-check-label fw-bold mb-0 text-dark" for="id_is_active">
+                                    خودرو فعال باشد (مجاز به تردد و صدور قبض باسکول)
+                                </label>
                             </div>
                         </div>
                     </div>
-                    <div class="mt-4 pt-3 border-top text-end">
+
+                    <!-- Action Buttons -->
+                    <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
+                        <a href="{% url 'masterdata:vehicle_list' %}" class="btn btn-outline-secondary px-3">
+                            <i class="bi bi-x-circle me-1"></i> انصراف
+                        </a>
                         <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">
                             <i class="bi bi-check2-circle me-1"></i> ذخیره خودرو
                         </button>
@@ -78,40 +161,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-    const p1 = document.getElementById("id_plate_part1");
-    const pL = document.getElementById("id_plate_letter");
-    const p2 = document.getElementById("id_plate_part2");
-    const pI = document.getElementById("id_plate_iran");
-    const disp = document.getElementById("id_plate_display");
-
-    if (p1 && pL && p2 && pI && disp) {
-        function updateDisplay() {
-            const v1 = p1.value.trim();
-            const vL = pL.value.trim();
-            const v2 = p2.value.trim();
-            const vI = pI.value.trim();
-            if (v1 && vL && v2 && vI) {
-                disp.value = `${v1} ${vL} ${v2} - ایران ${vI}`;
-            }
-        }
-        [p1, p2, pI].forEach(el => {
-            el.addEventListener("input", function() {
-                this.value = this.value.replace(/[^0-9۰-۹]/g, "");
-                updateDisplay();
-            });
-        });
-        pL.addEventListener("change", updateDisplay);
-
-        p1.addEventListener("input", function() {
-            if (this.value.length >= 2) pL.focus();
-        });
-        p2.addEventListener("input", function() {
-            if (this.value.length >= 3) pI.focus();
-        });
-    }
-});
-</script>
+{# Plate widget functionality is provided by industrial-app.js #}
 {% endblock %}
-

@@ -59,4 +59,7 @@
         <input type="text" id="plate_iran" name="plate_iran" maxlength="2" placeholder="64" value="{{ initial_iran|default:'' }}">
     </div>
 </div>
+{% if not hide_hidden_input %}
 <input type="hidden" id="license_plate_display" name="license_plate_display" value="{{ initial_plate_display|default:'' }}">
+{% endif %}
+

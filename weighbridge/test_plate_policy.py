@@ -107,6 +107,23 @@ class DailyPlatePolicyTests(TestCase):
         self.client.post(url, {"license_plate_display": self.plate, "reason": "اصلاح دلیل مجوز"})
         self.assertEqual(PlateRegistrationException.objects.count(), 1)
 
+    def test_grant_exception_using_iran_plate_component_parts(self):
+        self.client.force_login(self.supervisor)
+        url = reverse("weighbridge:plate_exceptions")
+        response = self.client.post(url, {
+            "plate_part1": "34",
+            "plate_letter": "ب",
+            "plate_part2": "567",
+            "plate_iran": "89",
+            "reason": "تست ورود پلاک با اجزای کامپوننت ملی",
+        })
+        self.assertEqual(response.status_code, 302)
+        exc = PlateRegistrationException.objects.filter(license_plate_display="34 ب 567 - ایران 89").first()
+        self.assertIsNotNone(exc)
+        self.assertTrue(exc.is_active)
+        self.assertEqual(exc.approved_by, self.supervisor)
+
+
     def test_cancelled_ticket_does_not_prevent_replacement(self):
         WeighTicket.objects.filter(pk=self.first.pk).update(status=TicketStatus.CANCELLED)
         self.assertEqual(self.client.post(reverse("weighbridge:ticket_create"), self.payload).status_code, 302)

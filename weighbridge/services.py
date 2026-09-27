@@ -114,3 +114,112 @@ class SerialNumberService:
             if prefix:
                 return f"{prefix}{next_num}"
             return str(next_num)
+
+
+class VehicleDriverRegistrationService:
+    """
+    Automates vehicle and driver lookup and auto-registration:
+    - If vehicle/driver already exists, retrieves and links them.
+    - If vehicle/driver does not exist, automatically registers them into MasterData.
+    """
+    @classmethod
+    def resolve_or_create(cls, ticket, cleaned_data=None):
+        import re
+        from masterdata.models import Driver, Vehicle
+        from weighbridge.plate_policy import normalize_plate
+
+        cleaned_data = cleaned_data or {}
+        driver_name = (cleaned_data.get("driver_name_custom") or ticket.driver_name_custom or "").strip()
+        driver_mobile = (cleaned_data.get("driver_mobile_custom") or ticket.driver_mobile_custom or "").strip()
+        plate = (cleaned_data.get("license_plate_display") or ticket.license_plate_display or "").strip()
+        v_type = cleaned_data.get("vehicle_type") or ticket.vehicle_type
+
+        # 1. Driver Resolution & Auto-Registration
+        driver = cleaned_data.get("driver") or ticket.driver
+        if not driver and driver_name:
+            driver = Driver.objects.filter(full_name__iexact=driver_name).first()
+            if not driver and driver_mobile:
+                driver = Driver.objects.filter(mobile=driver_mobile).first()
+            if not driver:
+                driver = Driver.objects.create(
+                    full_name=driver_name,
+                    mobile=driver_mobile,
+                    is_active=True,
+                )
+            else:
+                if driver_mobile and not driver.mobile:
+                    driver.mobile = driver_mobile
+                    driver.save(update_fields=["mobile"])
+
+        if driver:
+            ticket.driver = driver
+            if not ticket.driver_name_custom:
+                ticket.driver_name_custom = driver.full_name
+            if not ticket.driver_mobile_custom and driver.mobile:
+                ticket.driver_mobile_custom = driver.mobile
+
+        # 2. Vehicle Resolution & Auto-Registration
+        vehicle = cleaned_data.get("vehicle") or ticket.vehicle
+        norm_p = normalize_plate(plate)
+
+        if not vehicle and plate:
+            vehicle = Vehicle.objects.filter(plate_display__iexact=plate).select_related("vehicle_type", "default_driver").first()
+            if not vehicle and norm_p:
+                for v in Vehicle.objects.select_related("vehicle_type", "default_driver").all():
+                    if normalize_plate(v.plate_display) == norm_p:
+                        vehicle = v
+                        break
+
+            if not vehicle:
+                p1 = (cleaned_data.get("plate_part1") or "").strip()
+                pL = (cleaned_data.get("plate_letter") or "").strip()
+                p2 = (cleaned_data.get("plate_part2") or "").strip()
+                pIran = (cleaned_data.get("plate_iran") or "").strip()
+
+                if not (p1 and pL and p2 and pIran):
+                    match = re.search(
+                        r"(\d{2}|[۰-۹]{2})\s*([^\d\s\-_]+)\s*(\d{3}|[۰-۹]{3})\s*(?:-?\s*(?:ایران|ايران)?\s*(\d{2}|[۰-۹]{2}))?",
+                        plate
+                    )
+                    if match:
+                        p1 = match.group(1) or ""
+                        pL = match.group(2) or ""
+                        p2 = match.group(3) or ""
+                        pIran = match.group(4) or ""
+
+                tare_wt = ticket.tare_weight if (ticket.tare_weight and ticket.tare_weight > 0) else Decimal("0.00")
+
+                vehicle = Vehicle.objects.create(
+                    plate_display=plate,
+                    plate_part1=p1,
+                    plate_letter=pL,
+                    plate_part2=p2,
+                    plate_iran=pIran,
+                    vehicle_type=v_type,
+                    default_driver=driver,
+                    empty_weight=tare_wt,
+                    is_active=True,
+                )
+            else:
+                updated_fields = []
+                if not vehicle.vehicle_type and v_type:
+                    vehicle.vehicle_type = v_type
+                    updated_fields.append("vehicle_type")
+                if not vehicle.default_driver and driver:
+                    vehicle.default_driver = driver
+                    updated_fields.append("default_driver")
+                if (not vehicle.empty_weight or vehicle.empty_weight == 0) and (ticket.tare_weight and ticket.tare_weight > 0):
+                    vehicle.empty_weight = ticket.tare_weight
+                    updated_fields.append("empty_weight")
+                if updated_fields:
+                    vehicle.save(update_fields=updated_fields)
+
+        if vehicle:
+            ticket.vehicle = vehicle
+            if not ticket.vehicle_type and vehicle.vehicle_type:
+                ticket.vehicle_type = vehicle.vehicle_type
+            if not ticket.driver and vehicle.default_driver:
+                ticket.driver = vehicle.default_driver
+
+        return vehicle, driver
+
