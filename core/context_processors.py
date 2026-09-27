@@ -10,6 +10,7 @@ def global_context(request):
     
     user_role = "مهمان"
     user_role_code = "guest"
+    open_tickets_count = 0
     if request.user.is_authenticated:
         if request.user.is_superuser:
             user_role = "مدیر ارشد (Super Admin)"
@@ -24,6 +25,14 @@ def global_context(request):
             user_role = "کاربر عادی"
             user_role_code = "viewer"
 
+        try:
+            from weighbridge.models import WeighTicket, TicketStatus
+            open_tickets_count = WeighTicket.objects.filter(
+                status__in=[TicketStatus.WAITING_SECOND, TicketStatus.FIRST_REGISTERED]
+            ).count()
+        except Exception:
+            open_tickets_count = 0
+
     return {
         "sys_settings": settings_obj,
         "today_jalali": get_today_jalali(),
@@ -32,5 +41,7 @@ def global_context(request):
         "user_role_display": user_role,
         "user_role_code": user_role_code,
         "iran_plate_letters": IRAN_PLATE_LETTERS,
+        "open_tickets_count": open_tickets_count,
+        "waiting_trucks_count": open_tickets_count,
     }
 

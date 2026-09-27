@@ -1,6 +1,6 @@
 import json
 from decimal import Decimal
-from datetime import timedelta
+from datetime import datetime, date, timedelta
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -9,7 +9,10 @@ from django.utils import timezone
 
 from weighbridge.models import WeighTicket, TicketStatus
 from masterdata.models import Product, Party, Driver, Vehicle, OperationType
-from core.jalali import get_today_gregorian, get_today_jalali, format_jalali_date, get_jalali_range_gregorian
+from core.jalali import (
+    get_today_gregorian, get_today_jalali, format_jalali_date,
+    get_jalali_range_gregorian, jalali_to_gregorian
+)
 
 @login_required
 def dashboard_index(request):
@@ -67,10 +70,80 @@ def dashboard_index(request):
         status__in=[AlertStatus.OPEN, AlertStatus.REVIEWED]
     ).count()
 
-    # Recent 8 tickets
-    recent_tickets = WeighTicket.objects.select_related(
+    # Date Filtering for Recent Tickets (Default: Today)
+    period = request.GET.get("period", "today").strip().lower()
+    custom_date_str = request.GET.get("date", "").strip()
+
+    recent_tickets_qs = WeighTicket.objects.select_related(
         "product", "party", "driver"
-    ).order_by("-id")[:8]
+    )
+
+    period_label = "امروز"
+    active_date_val = ""
+
+    if custom_date_str:
+        period = "custom"
+        target_date = jalali_to_gregorian(custom_date_str)
+        if not target_date:
+            try:
+                target_date = datetime.strptime(custom_date_str, "%Y-%m-%d").date()
+            except Exception:
+                target_date = None
+        if target_date:
+            recent_tickets_qs = recent_tickets_qs.filter(
+                Q(first_weight_date=target_date) | Q(created_at__date=target_date)
+            )
+            period_label = f"تاریخ {custom_date_str}"
+            active_date_val = custom_date_str
+        else:
+            # Fallback to today if invalid format
+            start_date, end_date = get_jalali_range_gregorian("today")
+            recent_tickets_qs = recent_tickets_qs.filter(
+                Q(first_weight_date=start_date) | Q(created_at__date=start_date)
+            )
+            period_label = "امروز"
+            period = "today"
+    elif period == "yesterday":
+        start_date, end_date = get_jalali_range_gregorian("yesterday")
+        recent_tickets_qs = recent_tickets_qs.filter(
+            Q(first_weight_date=start_date) | Q(created_at__date=start_date)
+        )
+        period_label = "دیروز"
+    elif period == "week":
+        start_date, end_date = get_jalali_range_gregorian("this_week")
+        recent_tickets_qs = recent_tickets_qs.filter(
+            Q(first_weight_date__range=[start_date, end_date]) | Q(created_at__date__range=[start_date, end_date])
+        )
+        period_label = "هفته جاری"
+    elif period == "month":
+        start_date, end_date = get_jalali_range_gregorian("this_month")
+        recent_tickets_qs = recent_tickets_qs.filter(
+            Q(first_weight_date__range=[start_date, end_date]) | Q(created_at__date__range=[start_date, end_date])
+        )
+        period_label = "ماه جاری"
+    elif period == "year":
+        start_date, end_date = get_jalali_range_gregorian("this_year")
+        recent_tickets_qs = recent_tickets_qs.filter(
+            Q(first_weight_date__range=[start_date, end_date]) | Q(created_at__date__range=[start_date, end_date])
+        )
+        period_label = "سال جاری"
+    elif period == "all":
+        period_label = "همه قبوض"
+    else:  # Default: today
+        period = "today"
+        start_date, end_date = get_jalali_range_gregorian("today")
+        recent_tickets_qs = recent_tickets_qs.filter(
+            Q(first_weight_date=start_date) | Q(created_at__date=start_date)
+        )
+        period_label = "امروز"
+
+    recent_tickets = recent_tickets_qs.order_by("-id")[:50]
+
+    is_operator = (
+        not request.user.is_superuser and
+        hasattr(request.user, "profile") and
+        request.user.profile.role == "weighbridge_operator"
+    )
 
     return render(request, "dashboard/index.html", {
         "open_alerts_count": open_alerts_count,
@@ -94,7 +167,11 @@ def dashboard_index(request):
         "today_discrepancies_count": today_discrepancies_count,
         "waiting_trucks_count": waiting_trucks_count,
         "recent_tickets": recent_tickets,
-        "title": "داشبورد مدیریتی و کنترل توزین",
+        "selected_period": period,
+        "period_label": period_label,
+        "custom_date_val": active_date_val,
+        "is_operator": is_operator,
+        "title": "داشبورد عملیات باسکول" if is_operator else "داشبورد مدیریتی و کنترل توزین",
     })
 
 @login_required

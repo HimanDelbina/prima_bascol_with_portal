@@ -36,7 +36,12 @@ def paginate_and_search(request, queryset, search_fields):
 def product_list(request):
     products = Product.objects.all().order_by("-id")
     page_obj, q = paginate_and_search(request, products, ["name", "code", "description"])
-    return render(request, "masterdata/product_list.html", {"page_obj": page_obj, "q": q})
+    return render(request, "masterdata/product_list.html", {
+        "page_obj": page_obj,
+        "products": page_obj,
+        "q": q,
+        "title": "مدیریت محصولات و کالاهای باسکول",
+    })
 
 @login_required
 @role_required("super_admin", "system_admin", "weighbridge_manager")
@@ -179,7 +184,12 @@ def driver_toggle(request, pk):
 def vehicle_list(request):
     vehicles = Vehicle.objects.select_related("vehicle_type", "default_driver").all().order_by("-id")
     page_obj, q = paginate_and_search(request, vehicles, ["plate_display", "plate_part1", "plate_part2", "description"])
-    return render(request, "masterdata/vehicle_list.html", {"page_obj": page_obj, "q": q})
+    return render(request, "masterdata/vehicle_list.html", {
+        "page_obj": page_obj,
+        "vehicles": page_obj,
+        "q": q,
+        "title": "مدیریت خودروها و ناوگان حمل و نقل",
+    })
 
 @login_required
 def vehicle_create(request):

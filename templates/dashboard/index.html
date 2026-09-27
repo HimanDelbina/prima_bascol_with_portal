@@ -83,7 +83,8 @@
     </div>
 </div>
 
-<!-- Row 2: Charts Grid (6 Industrial Charts) -->
+{% if not is_operator %}
+<!-- Row 2: Charts Grid (6 Industrial Charts) - For Managers/Admins Only -->
 <div class="row g-3 mb-4">
     <!-- Chart 1: 30-Day Tonnage Trend -->
     <div class="col-lg-8">
@@ -156,20 +157,70 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Row 3: Recent Activity Table -->
-<div class="industrial-card">
-    <div class="industrial-card-header">
-        <h6 class="industrial-card-title"><i class="bi bi-clock-history text-secondary"></i>آخرین قبوض ثبت‌شده در سامانه</h6>
+<div class="industrial-card" id="recent-tickets-card">
+    <div class="industrial-card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <h6 class="industrial-card-title mb-0">
+                <i class="bi bi-clock-history text-secondary me-1"></i>آخرین قبوض ثبت‌شده در سامانه
+            </h6>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace">
+                {{ period_label }}: {{ recent_tickets|length }} قبض
+            </span>
+        </div>
         <a href="{% url 'weighbridge:ticket_list' %}" class="btn btn-sm btn-outline-primary fw-bold">مشاهده همه قبوض</a>
     </div>
+
+    <!-- Quick Date Filter Bar -->
+    <div class="p-3 border-bottom bg-light d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <!-- Quick Filter Pills -->
+        <div class="d-flex flex-wrap align-items-center gap-1">
+            <span class="small text-muted fw-bold me-2"><i class="bi bi-calendar-event me-1"></i>بازه زمانی:</span>
+            <a href="?period=today#recent-tickets-card" class="quick-filter-pill {% if selected_period == 'today' %}active{% endif %}">
+                <i class="bi bi-calendar-check me-1"></i>امروز
+            </a>
+            <a href="?period=yesterday#recent-tickets-card" class="quick-filter-pill {% if selected_period == 'yesterday' %}active{% endif %}">
+                <i class="bi bi-clock-history me-1"></i>دیروز
+            </a>
+            <a href="?period=week#recent-tickets-card" class="quick-filter-pill {% if selected_period == 'week' %}active{% endif %}">
+                <i class="bi bi-calendar-week me-1"></i>هفته
+            </a>
+            <a href="?period=month#recent-tickets-card" class="quick-filter-pill {% if selected_period == 'month' %}active{% endif %}">
+                <i class="bi bi-calendar-month me-1"></i>ماه
+            </a>
+            <a href="?period=year#recent-tickets-card" class="quick-filter-pill {% if selected_period == 'year' %}active{% endif %}">
+                <i class="bi bi-calendar3 me-1"></i>سال
+            </a>
+            <a href="?period=all#recent-tickets-card" class="quick-filter-pill {% if selected_period == 'all' %}active{% endif %}">
+                همه قبوض
+            </a>
+        </div>
+
+        <!-- Custom Date Input Form -->
+        <form method="get" action="#recent-tickets-card" class="d-flex align-items-center gap-1">
+            <input type="hidden" name="period" value="custom">
+            <div class="input-group input-group-sm" style="max-width: 250px;">
+                <span class="input-group-text bg-white text-muted"><i class="bi bi-calendar-date"></i></span>
+                <input type="text" name="date" class="form-control font-monospace" placeholder="مثلاً {{ today_jalali }}" value="{{ custom_date_val }}">
+                <button type="submit" class="btn btn-sm btn-primary fw-bold">فیلتر تاریخ</button>
+            </div>
+            {% if selected_period == 'custom' %}
+            <a href="?period=today#recent-tickets-card" class="btn btn-sm btn-outline-secondary" title="بازگشت به امروز">
+                <i class="bi bi-x-lg"></i>
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
     <div class="p-0">
         <div class="table-responsive">
             <table class="table industrial-table align-middle">
                 <thead>
                     <tr>
                         <th>شماره قبض</th>
-                        <th>ساعت</th>
+                        <th>زمان</th>
                         <th>طرف حساب</th>
                         <th>محصول</th>
                         <th>پلاک</th>
@@ -183,12 +234,17 @@
                 <tbody>
                     {% for ticket in recent_tickets %}
                     <tr>
-                        <td class="fw-bold text-primary">
+                        <td class="fw-bold text-primary font-monospace">
                             <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="text-decoration-none">
                                 {{ ticket.serial_number }}
                             </a>
                         </td>
-                        <td class="small">{{ ticket.first_time_str }}</td>
+                        <td class="small">
+                            <div class="fw-bold">{{ ticket.first_time_str|default:"-" }}</div>
+                            {% if selected_period != 'today' %}
+                            <div class="text-muted font-monospace" style="font-size: 0.72rem;">{{ ticket.jalali_first_date }}</div>
+                            {% endif %}
+                        </td>
                         <td>{{ ticket.party.name|default:"-" }}</td>
                         <td><span class="fw-bold">{{ ticket.product.name|default:"-" }}</span></td>
                         <td>
@@ -214,7 +270,10 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="10" class="text-center py-4 text-muted">امروز هنوز قبضی ثبت نشده است.</td>
+                        <td colspan="10" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                            در بازه زمانی انتخابی (<strong>{{ period_label }}</strong>) قبضی ثبت نشده است.
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -225,7 +284,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- Chart.js -->
+{% if not is_operator %}
+<!-- Chart.js - Loaded only for Managers/Admins -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
@@ -342,4 +402,94 @@ document.addEventListener("DOMContentLoaded", function() {
         .catch(err => console.log('Error loading charts:', err));
 });
 </script>
+{% endif %}
+
+<script>
+// Smooth in-place AJAX filtering for Recent Tickets (prevents page jump/scroll to top)
+document.addEventListener("DOMContentLoaded", function() {
+    function initTicketFiltering() {
+        const card = document.getElementById("recent-tickets-card");
+        if (!card) return;
+
+        // Intercept quick filter pills
+        card.querySelectorAll(".quick-filter-pill").forEach(link => {
+            link.addEventListener("click", function(e) {
+                const href = this.getAttribute("href");
+                if (!href || href.startsWith("#")) return;
+                e.preventDefault();
+                loadTicketsAjax(href);
+            });
+        });
+
+        // Intercept custom date form submit
+        const form = card.querySelector("form");
+        if (form) {
+            form.addEventListener("submit", function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                const params = new URLSearchParams(formData);
+                const targetUrl = "?" + params.toString();
+                loadTicketsAjax(targetUrl);
+            });
+        }
+
+        // Intercept clear/reset button
+        const clearBtn = card.querySelector("a[title*='بازگشت']");
+        if (clearBtn) {
+            clearBtn.addEventListener("click", function(e) {
+                e.preventDefault();
+                loadTicketsAjax(this.getAttribute("href"));
+            });
+        }
+    }
+
+    async function loadTicketsAjax(url) {
+        const card = document.getElementById("recent-tickets-card");
+        if (!card) {
+            window.location.href = url;
+            return;
+        }
+
+        // Freeze current scroll position
+        const currentScrollY = window.scrollY;
+
+        // Visual feedback (smooth subtle fade)
+        card.style.transition = "opacity 0.15s ease";
+        card.style.opacity = "0.4";
+
+        try {
+            const resp = await fetch(url, {
+                headers: { "X-Requested-With": "XMLHttpRequest" }
+            });
+            if (!resp.ok) throw new Error("Network error " + resp.status);
+            const text = await resp.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(text, "text/html");
+            const newCard = doc.getElementById("recent-tickets-card");
+            if (newCard) {
+                card.innerHTML = newCard.innerHTML;
+                window.history.pushState(null, "", url);
+                initTicketFiltering();
+                // Ensure page scroll remains exactly where the user is
+                window.scrollTo({ top: currentScrollY, behavior: "instant" });
+            } else {
+                window.location.href = url;
+            }
+        } catch (err) {
+            console.error("AJAX filter failed, reloading:", err);
+            window.location.href = url;
+        } finally {
+            card.style.opacity = "1";
+        }
+    }
+
+    // Support browser back / forward navigation
+    window.addEventListener("popstate", function() {
+        loadTicketsAjax(window.location.href);
+    });
+
+    initTicketFiltering();
+});
+</script>
 {% endblock %}
+

@@ -13,7 +13,7 @@
     <div class="d-flex gap-2">
         <span class="badge bg-warning text-dark fs-6 px-3 py-2 d-flex align-items-center gap-1 shadow-sm">
             <i class="bi bi-truck"></i>
-            <span>تعداد خودروهای حاضر: <strong>{{ count }}</strong> دستگاه</span>
+            <span>تعداد خودروهای حاضر: <strong>{{ count|default:open_tickets_count|default:0 }}</strong> دستگاه</span>
         </span>
         <a href="{% url 'weighbridge:ticket_create' %}" class="btn btn-primary fw-bold shadow-sm">
             <i class="bi bi-plus-circle me-1"></i> پذیرش خودرو جدید [F2]
@@ -24,7 +24,7 @@
 <!-- Trucks In Yard Operational Board Table -->
 <div class="industrial-card">
     <div class="industrial-card-header bg-light d-flex justify-content-between align-items-center">
-        <div class="fw-bold text-dark"><i class="bi bi-card-list me-1 text-primary"></i>فهرست بلادرنگ کامیون‌های در صف توزین خروج</div>
+        <div class="fw-bold text-dark"><i class="bi bi-card-list me-1 text-primary"></i>فهرست بلادرنگ کامیون‌های در صف توزین خروج ({{ count|default:open_tickets_count|default:0 }} دستگاه)</div>
         <div class="d-flex align-items-center gap-2">
             <button class="btn btn-sm btn-outline-secondary" onclick="location.reload()" title="به‌روزرسانی صفحه">
                 <i class="bi bi-arrow-clockwise me-1"></i> بازخوانی
