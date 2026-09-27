@@ -1,249 +1,87 @@
 {% extends 'base.html' %}
-{% block title %}ورود به سامانه جامع باسکول پریما{% endblock %}
+{% block title %}ورود به سامانه باسکول{% endblock %}
 
 {% block auth_content %}
-<div class="container py-2">
+<div class="container py-3">
     <div class="row justify-content-center">
-        <div class="col-12 col-sm-10 col-md-8 col-lg-5 col-xl-4" style="max-width: 480px;">
+        <div class="col-12 col-sm-9 col-md-6 col-lg-4" style="max-width: 420px;">
             
-            <!-- Modern Industrial Login Card -->
-            <div class="card border-0 shadow-lg rounded-4 overflow-hidden bg-white">
+            <!-- Clean Minimalist Login Card -->
+            <div class="bg-white rounded-4 border p-4 p-md-5" style="border-color: #e2e8f0 !important; box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.06), 0 4px 6px -2px rgba(0, 0, 0, 0.04);">
                 
-                <!-- Card Header -->
-                <div class="card-header text-white text-center py-4 px-4 border-0 position-relative" style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);">
-                    <div class="d-inline-flex align-items-center justify-content-center rounded-3 p-3 mb-2 shadow-sm" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);">
-                        <i class="bi bi-speedometer2 text-white fs-2"></i>
+                <!-- Brand & Header -->
+                <div class="text-center mb-4">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-3 mb-3 shadow-sm" style="width: 52px; height: 52px; background: #0f172a; color: #ffffff;">
+                        <i class="bi bi-speedometer2 fs-4"></i>
                     </div>
-                    
-                    <h4 class="fw-bold mb-1 text-white">{{ sys_settings.company_name|default:"سامانه جامع باسکول پریما" }}</h4>
-                    <p class="small text-white-50 mb-2">Prima Bascol Weighbridge System</p>
-                    
-                    <div>
-                        <span class="badge rounded-pill px-3 py-1-5" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; font-size: 0.76rem;">
-                            <i class="bi bi-circle-fill me-1" style="font-size: 0.55rem;"></i>پایانه فعال و متصل به سیستم توزین
-                        </span>
-                    </div>
+                    <h4 class="fw-bold mb-1 text-dark" style="font-size: 1.25rem;">{{ sys_settings.company_name|default:"سامانه باسکول پریما" }}</h4>
+                    <p class="text-muted small mb-0">ورود به پنل مدیریت و عملیات توزین</p>
                 </div>
 
-                <!-- Card Body -->
-                <div class="card-body p-4">
-                    
-                    <!-- Segmented Tabs (Login / Change Password / Reset Password) -->
-                    <ul class="nav nav-pills nav-fill p-1 bg-light rounded-3 mb-4" id="loginCardTabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active fw-bold small py-2" id="pill-login-tab" data-bs-toggle="pill" data-bs-target="#pill-login" type="button" role="tab" aria-selected="true">
-                                <i class="bi bi-box-arrow-in-left me-1"></i> ورود
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link fw-bold small py-2" id="pill-change-tab" data-bs-toggle="pill" data-bs-target="#pill-change" type="button" role="tab" aria-selected="false">
-                                <i class="bi bi-key me-1"></i> تغییر رمز
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link fw-bold small py-2" id="pill-reset-tab" data-bs-toggle="pill" data-bs-target="#pill-reset" type="button" role="tab" aria-selected="false">
-                                <i class="bi bi-shield-check me-1"></i> بازیابی
-                            </button>
-                        </li>
-                    </ul>
+                <!-- Login Form -->
+                <form method="post" action="{% url 'accounts:login' %}" autocomplete="on">
+                    {% csrf_token %}
 
-                    <div class="tab-content" id="loginCardTabsContent">
-                        
-                        <!-- TAB 1: LOGIN -->
-                        <div class="tab-pane fade show active" id="pill-login" role="tabpanel">
-                            <form method="post" action="{% url 'accounts:login' %}" autocomplete="on">
-                                {% csrf_token %}
-                                
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold text-secondary small">نام کاربری</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-person text-muted"></i></span>
-                                        <input type="text" name="username" id="login-username" class="form-control form-control-lg border-start-0" placeholder="نام کاربری خود را وارد کنید" required autofocus autocomplete="username">
-                                    </div>
-                                </div>
-
-                                <div class="mb-3">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <label class="form-label fw-bold text-secondary small mb-0">کلمه عبور</label>
-                                        <a href="javascript:void(0)" class="small text-primary text-decoration-none fw-semibold" onclick="switchToTab('pill-reset-tab')">
-                                            فراموشی رمز؟
-                                        </a>
-                                    </div>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-lock text-muted"></i></span>
-                                        <input type="password" name="password" id="login-password" class="form-control form-control-lg border-start-0" placeholder="کلمه عبور" required autocomplete="current-password">
-                                        <button class="btn btn-outline-secondary border-start-0 bg-white" type="button" onclick="togglePasswordVisibility('login-password', this)">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class="d-flex align-items-center justify-content-between mb-4">
-                                    <div class="form-check form-switch m-0">
-                                        <input class="form-check-input" type="checkbox" name="remember_me" id="remember-me-check" checked>
-                                        <label class="form-check-label text-muted small fw-semibold ms-1" for="remember-me-check">مرا به خاطر بسپار</label>
-                                    </div>
-                                    <span class="text-muted small" style="font-size: 0.78rem;"><i class="bi bi-shield-check text-success me-1"></i>ارتباط امن</span>
-                                </div>
-
-                                <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold py-2-5 shadow-sm d-flex align-items-center justify-content-center gap-2" style="background: linear-gradient(135deg, #1e40af, #2563eb); border: none;">
-                                    <i class="bi bi-box-arrow-in-left fs-5"></i>
-                                    <span>ورود به سامانه باسکول</span>
-                                </button>
-                            </form>
-
-                            <!-- Quick Role Autofill -->
-                            <div class="mt-4 pt-3 border-top">
-                                <div class="text-muted small fw-semibold mb-2" style="font-size: 0.76rem;">ورود سریع (جهت تست و اپراتوری):</div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-sm btn-light border flex-fill text-muted py-1 fw-semibold" style="font-size: 0.75rem;" onclick="quickFill('operator1', 'operator123')">
-                                        <i class="bi bi-person-fill text-primary me-1"></i> اپراتور
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-light border flex-fill text-muted py-1 fw-semibold" style="font-size: 0.75rem;" onclick="quickFill('manager', 'manager123')">
-                                        <i class="bi bi-briefcase-fill text-warning me-1"></i> مدیر باسکول
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-light border flex-fill text-muted py-1 fw-semibold" style="font-size: 0.75rem;" onclick="quickFill('admin', 'admin123')">
-                                        <i class="bi bi-shield-fill text-danger me-1"></i> مدیر سیستم
-                                    </button>
-                                </div>
-                            </div>
+                    <!-- Username Field -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark small">نام کاربری</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-person"></i></span>
+                            <input type="text" name="username" id="login-username" class="form-control border-start-0" placeholder="نام کاربری" required autofocus autocomplete="username" style="height: 46px; font-size: 0.92rem;">
                         </div>
-
-                        <!-- TAB 2: CHANGE PASSWORD -->
-                        <div class="tab-pane fade" id="pill-change" role="tabpanel">
-                            <div class="alert alert-info py-2 px-3 small d-flex align-items-center mb-3">
-                                <i class="bi bi-info-circle-fill fs-5 me-2 flex-shrink-0"></i>
-                                <div>برای تغییر رمز عبور، رمز فعلی و رمز جدید را وارد نمایید:</div>
-                            </div>
-
-                            <form method="post" action="{% url 'accounts:password_change' %}">
-                                {% csrf_token %}
-                                
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold text-secondary small">نام کاربری</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-light"><i class="bi bi-person text-muted"></i></span>
-                                        <input type="text" name="username" class="form-control" placeholder="نام کاربری" required>
-                                    </div>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold text-secondary small">رمز عبور فعلی</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-light"><i class="bi bi-lock text-muted"></i></span>
-                                        <input type="password" name="old_password" id="pill-old-pwd" class="form-control" placeholder="رمز عبور فعلی" required>
-                                        <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('pill-old-pwd', this)">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold text-secondary small">رمز عبور جدید</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-light"><i class="bi bi-key text-muted"></i></span>
-                                        <input type="password" name="new_password" id="pill-new-pwd" class="form-control" placeholder="حداقل ۴ کاراکتر" minlength="4" required>
-                                        <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('pill-new-pwd', this)">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class="mb-4">
-                                    <label class="form-label fw-bold text-secondary small">تکرار رمز عبور جدید</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-light"><i class="bi bi-check2-circle text-muted"></i></span>
-                                        <input type="password" name="confirm_password" id="pill-confirm-pwd" class="form-control" placeholder="تکرار رمز عبور جدید" required>
-                                        <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('pill-confirm-pwd', this)">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <button type="submit" class="btn btn-primary w-100 fw-bold py-2 shadow-sm mb-2">
-                                    <i class="bi bi-check2-circle me-1"></i> ثبت و ذخیره رمز جدید
-                                </button>
-                                
-                                <div class="text-center pt-2">
-                                    <button type="button" class="btn btn-link btn-sm text-decoration-none text-muted" onclick="switchToTab('pill-login-tab')">
-                                        <i class="bi bi-arrow-right me-1"></i> بازگشت به فرم ورود
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-
-                        <!-- TAB 3: RESET PASSWORD -->
-                        <div class="tab-pane fade" id="pill-reset" role="tabpanel">
-                            <div class="alert alert-warning py-2 px-3 small d-flex align-items-center mb-3">
-                                <i class="bi bi-shield-exclamation fs-5 me-2 flex-shrink-0"></i>
-                                <div>در صورت فراموشی رمز، با شماره موبایل پرونده هویت خود را تایید کنید:</div>
-                            </div>
-
-                            <form method="post" action="{% url 'accounts:password_reset' %}">
-                                {% csrf_token %}
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold text-secondary small">نام کاربری</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-light"><i class="bi bi-person text-muted"></i></span>
-                                        <input type="text" name="username" class="form-control" placeholder="نام کاربری حساب" required>
-                                    </div>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold text-secondary small">شماره موبایل یا کد پرسنلی</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-light"><i class="bi bi-phone text-muted"></i></span>
-                                        <input type="text" name="verification_value" class="form-control" placeholder="مثال: 09121000001 یا کد پرسنلی" required>
-                                    </div>
-                                    <div class="form-text text-muted" style="font-size: 0.75rem;">شماره موبایل ثبت‌شده در مشخصات کاربری شما</div>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold text-secondary small">رمز عبور جدید</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-light"><i class="bi bi-key text-muted"></i></span>
-                                        <input type="password" name="new_password" id="pill-reset-new-pwd" class="form-control" placeholder="حداقل ۴ کاراکتر" minlength="4" required>
-                                        <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('pill-reset-new-pwd', this)">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class="mb-4">
-                                    <label class="form-label fw-bold text-secondary small">تکرار رمز عبور جدید</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-light"><i class="bi bi-check2-circle text-muted"></i></span>
-                                        <input type="password" name="confirm_password" id="pill-reset-confirm-pwd" class="form-control" placeholder="تکرار رمز عبور جدید" required>
-                                        <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('pill-reset-confirm-pwd', this)">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <button type="submit" class="btn btn-warning text-dark w-100 fw-bold py-2 shadow-sm mb-2">
-                                    <i class="bi bi-shield-check me-1"></i> تایید هویت و بازنشانی رمز
-                                </button>
-                                
-                                <div class="text-center pt-2">
-                                    <button type="button" class="btn btn-link btn-sm text-decoration-none text-muted" onclick="switchToTab('pill-login-tab')">
-                                        <i class="bi bi-arrow-right me-1"></i> بازگشت به فرم ورود
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-
                     </div>
+
+                    <!-- Password Field -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-bold text-dark small mb-0">کلمه عبور</label>
+                            <a href="{% url 'accounts:password_reset' %}" class="small text-muted text-decoration-none" style="font-size: 0.78rem;">
+                                فراموشی رمز؟
+                            </a>
+                        </div>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-lock"></i></span>
+                            <input type="password" name="password" id="login-password" class="form-control border-start-0 border-end-0" placeholder="کلمه عبور" required autocomplete="current-password" style="height: 46px; font-size: 0.92rem;">
+                            <button class="btn btn-outline-secondary border-start-0 bg-white text-muted" type="button" onclick="togglePasswordVisibility('login-password', this)">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Remember Me -->
+                    <div class="mb-4 d-flex align-items-center justify-content-between">
+                        <div class="form-check m-0">
+                            <input class="form-check-input" type="checkbox" name="remember_me" id="remember-me-check" checked>
+                            <label class="form-check-label text-muted small ms-1" for="remember-me-check">مرا به خاطر بسپار</label>
+                        </div>
+                        <span class="text-muted small" style="font-size: 0.78rem;"><i class="bi bi-shield-check text-success me-1"></i>اتصال امن</span>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" class="btn w-100 fw-bold text-white shadow-sm d-flex align-items-center justify-content-center gap-2" style="background-color: #0f172a; border-radius: 10px; height: 46px;">
+                        <i class="bi bi-box-arrow-in-left fs-5"></i>
+                        <span>ورود به سامانه</span>
+                    </button>
+                </form>
+
+                <!-- Divider & Password Change Link -->
+                <div class="position-relative my-4 text-center">
+                    <hr class="text-muted opacity-25">
+                    <span class="position-absolute top-50 start-50 translate-middle bg-white px-3 text-muted small" style="font-size: 0.76rem;">
+                        امنیت حساب
+                    </span>
                 </div>
 
-                <!-- Card Footer -->
-                <div class="card-footer bg-light text-center py-3 text-muted small border-top">
-                    <div>سامانه جامع کنترل عملیات توزین صنعتی و معدنی</div>
-                    <div class="mt-1 d-flex align-items-center justify-content-center gap-1" style="font-size: 0.8rem;">
-                        <i class="bi bi-code-slash text-primary"></i>
-                        <span>طراحی و پیاده‌سازی سامانه:</span>
-                        <strong class="text-primary fw-bold">سارا حقیری</strong>
-                    </div>
+                <!-- Password Change Button -->
+                <a href="{% url 'accounts:password_change' %}" class="btn btn-outline-secondary w-100 py-2 rounded-3 text-secondary fw-semibold small d-flex align-items-center justify-content-center gap-2">
+                    <i class="bi bi-key"></i>
+                    <span>تغییر کلمه عبور</span>
+                </a>
+
+                <!-- Attribution Footer -->
+                <div class="text-center mt-4 pt-2 text-muted" style="font-size: 0.78rem;">
+                    <div>طراحی و پیاده‌سازی سامانه: <strong class="text-dark">سارا حقیری</strong></div>
+                    <div class="text-muted opacity-75 mt-1" style="font-size: 0.72rem;">نسخه عملیاتی ۲.۵ Enterprise</div>
                 </div>
 
             </div>
@@ -272,33 +110,5 @@ function togglePasswordVisibility(inputId, buttonEl) {
         }
     }
 }
-
-function switchToTab(tabBtnId) {
-    const triggerEl = document.getElementById(tabBtnId);
-    if (triggerEl) {
-        const tab = new bootstrap.Tab(triggerEl);
-        tab.show();
-    }
-}
-
-function quickFill(user, pass) {
-    const userInput = document.getElementById('login-username');
-    const passInput = document.getElementById('login-password');
-    if (userInput && passInput) {
-        userInput.value = user;
-        passInput.value = pass;
-        userInput.focus();
-    }
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tabParam = urlParams.get('tab');
-    if (tabParam === 'change') {
-        switchToTab('pill-change-tab');
-    } else if (tabParam === 'reset') {
-        switchToTab('pill-reset-tab');
-    }
-});
 </script>
 {% endblock %}
