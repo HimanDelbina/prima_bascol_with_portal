@@ -1,0 +1,344 @@
+<!-- Quick Add Masterdata Modal -->
+<div class="modal fade" id="quickAddModal" tabindex="-1" aria-labelledby="quickAddModalLabel" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-slate-900 text-white py-2 px-3" style="background: #0f172a;">
+                <h6 class="modal-title fw-bold text-white d-flex align-items-center" id="quickAddModalLabel">
+                    <i class="bi bi-plus-circle-fill text-primary me-2 fs-5"></i>
+                    <span id="quickAddTitle">افزودن آیتم جدید</span>
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="quickAddForm" autocomplete="off">
+                <input type="hidden" id="quickAddEntity" name="entity" value="">
+                <input type="hidden" id="quickAddTargetId" name="target_id" value="">
+                
+                <div class="modal-body p-3">
+                    <div id="quickAddFeedback" class="alert alert-danger d-none py-2 px-3 mb-3 small fw-bold"></div>
+                    
+                    <div class="mb-3">
+                        <label for="quickAddName" class="form-label fw-bold small text-secondary" id="quickAddNameLabel">
+                            عنوان / نام <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="quickAddName" name="name" required placeholder="عنوان را وارد کنید...">
+                    </div>
+                    
+                    <!-- Dynamic fields populated per entity -->
+                    <div id="quickAddDynamicFields"></div>
+                </div>
+                
+                <div class="modal-footer bg-light py-2 px-3 d-flex justify-content-between">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x me-1"></i>انصراف
+                    </button>
+                    <button type="submit" class="btn btn-sm btn-primary fw-bold px-3" id="quickAddSubmitBtn">
+                        <i class="bi bi-check-lg me-1"></i><span id="quickAddSubmitText">ثبت و انتخاب</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    "use strict";
+
+    const entityConfigs = {
+        party: {
+            title: "افزودن طرف حساب جدید",
+            nameLabel: "نام طرف حساب (مشتری / تامین‌کننده) <span class='text-danger'>*</span>",
+            placeholder: "مثال: شرکت فولاد آریا",
+            renderFields: function() {
+                return `
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-secondary">نوع طرف حساب</label>
+                            <select class="form-select" name="party_type" id="qa_party_type">
+                                <option value="customer" selected>خریدار / مشتری</option>
+                                <option value="supplier">فروشنده / تامین‌کننده</option>
+                                <option value="contractor">پیمانکار حمل و نقل</option>
+                                <option value="internal">واحد داخلی / انبار</option>
+                                <option value="other">سایر</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-secondary">شماره همراه / تماس</label>
+                            <input type="text" class="form-control" name="phone" id="qa_phone" placeholder="۰۹۱۲...">
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-bold small text-secondary">کد حساب / شناسه (اختیاری)</label>
+                        <input type="text" class="form-control" name="code" id="qa_code" placeholder="کد عطف حسابداری">
+                    </div>
+                `;
+            }
+        },
+        product: {
+            title: "افزودن محصول (کالا) جدید",
+            nameLabel: "نام محصول / کالا <span class='text-danger'>*</span>",
+            placeholder: "مثال: گندم، آهن اسفنجی، میلگرد...",
+            renderFields: function() {
+                return `
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-secondary">کد محصول</label>
+                            <input type="text" class="form-control" name="code" id="qa_prod_code" placeholder="کد کالا">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-secondary">درصد افت پیش‌فرض (%)</label>
+                            <input type="number" step="0.01" min="0" max="100" class="form-control" name="default_loss_percent" id="qa_prod_loss" value="0.00">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-secondary">حد مجاز انحراف (Kg)</label>
+                            <input type="number" step="1" min="0" class="form-control" name="standard_tolerance_kg" id="qa_prod_tol" value="50">
+                        </div>
+                    </div>
+                `;
+            }
+        },
+        operation_type: {
+            title: "افزودن نوع عملیات جدید",
+            nameLabel: "عنوان نوع عملیات <span class='text-danger'>*</span>",
+            placeholder: "مثال: بارگیری محصول، تخلیه مواد اولیه...",
+            renderFields: function() {
+                return `
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-secondary">جهت عملیات</label>
+                            <select class="form-select" name="direction" id="qa_direction">
+                                <option value="inbound" selected>وارده (خرید / ورود)</option>
+                                <option value="outbound">صادره (فروش / خروج)</option>
+                                <option value="internal">داخلی</option>
+                                <option value="transfer">انتقال بین‌واحدی</option>
+                                <option value="other">سایر</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-secondary">کد عملیات (اختیاری)</label>
+                            <input type="text" class="form-control" name="code" id="qa_op_code" placeholder="کد سیستم">
+                        </div>
+                    </div>
+                `;
+            }
+        },
+        vehicle_type: {
+            title: "افزودن نوع خودرو جدید",
+            nameLabel: "شرح / نوع خودرو <span class='text-danger'>*</span>",
+            placeholder: "مثال: تریلی کمپرسی، ده چرخ، خاور، نیسان...",
+            renderFields: function() {
+                return `
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-secondary">میانگین وزن خالی استاندارد (Kg)</label>
+                            <input type="number" step="any" min="0" class="form-control" name="standard_tare_weight" id="qa_tare_weight" placeholder="مثال: ۱۴۵۰۰">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-secondary">کد نوع خودرو (اختیاری)</label>
+                            <input type="text" class="form-control" name="code" id="qa_vtype_code" placeholder="کد عطف">
+                        </div>
+                    </div>
+                `;
+            }
+        },
+        origin: {
+            title: "افزودن مبدأ بار جدید",
+            nameLabel: "نام محل مبدأ <span class='text-danger'>*</span>",
+            placeholder: "مثال: معدن چادرملو، انبار مرکزی اهواز، تهران...",
+            renderFields: function() {
+                return `
+                    <div class="mb-2">
+                        <label class="form-label fw-bold small text-secondary">توضیحات یا آدرس (اختیاری)</label>
+                        <input type="text" class="form-control" name="description" id="qa_origin_desc" placeholder="توضیحات موقعیت...">
+                    </div>
+                `;
+            }
+        },
+        destination: {
+            title: "افزودن مقصد بار جدید",
+            nameLabel: "نام محل مقصد <span class='text-danger'>*</span>",
+            placeholder: "مثال: کارخانه اصفهان، بندرعباس، سایت تولید...",
+            renderFields: function() {
+                return `
+                    <div class="mb-2">
+                        <label class="form-label fw-bold small text-secondary">توضیحات یا آدرس (اختیاری)</label>
+                        <input type="text" class="form-control" name="description" id="qa_dest_desc" placeholder="توضیحات موقعیت...">
+                    </div>
+                `;
+            }
+        },
+        unload_location: {
+            title: "افزودن جایگاه تخلیه / بارگیری جدید",
+            nameLabel: "نام جایگاه تخلیه یا بارگیری <span class='text-danger'>*</span>",
+            placeholder: "مثال: سیلوی شماره ۲، بارانداز غربی، انبار مواد اولیه...",
+            renderFields: function() {
+                return `
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-secondary">کد جایگاه (اختیاری)</label>
+                            <input type="text" class="form-control" name="code" id="qa_unload_code" placeholder="کد جایگاه">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-secondary">توضیحات (اختیاری)</label>
+                            <input type="text" class="form-control" name="description" id="qa_unload_desc" placeholder="توضیحات موقعیت">
+                        </div>
+                    </div>
+                `;
+            }
+        },
+        loss_type: {
+            title: "افزودن نوع افت جدید",
+            nameLabel: "عنوان نوع افت <span class='text-danger'>*</span>",
+            placeholder: "مثال: رطوبت، خاک و خاشاک، شکستگی...",
+            renderFields: function() {
+                return `
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-secondary">درصد افت پیش‌فرض (%)</label>
+                            <input type="number" step="0.01" min="0" max="100" class="form-control" name="default_percent" id="qa_loss_pct" value="0.00">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-secondary">کد افت (اختیاری)</label>
+                            <input type="text" class="form-control" name="code" id="qa_loss_code" placeholder="کد افت">
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    };
+
+    function initQuickAdd() {
+        const modalEl = document.getElementById("quickAddModal");
+        if (!modalEl) return;
+
+        const modal = new bootstrap.Modal(modalEl);
+        const form = document.getElementById("quickAddForm");
+        const titleEl = document.getElementById("quickAddTitle");
+        const nameLabelEl = document.getElementById("quickAddNameLabel");
+        const nameInput = document.getElementById("quickAddName");
+        const dynamicFields = document.getElementById("quickAddDynamicFields");
+        const entityInput = document.getElementById("quickAddEntity");
+        const targetIdInput = document.getElementById("quickAddTargetId");
+        const feedbackEl = document.getElementById("quickAddFeedback");
+        const submitBtn = document.getElementById("quickAddSubmitBtn");
+        const submitText = document.getElementById("quickAddSubmitText");
+
+        // Attach click listener to all quick-add buttons
+        document.querySelectorAll(".btn-quick-add").forEach(function(btn) {
+            btn.addEventListener("click", function(e) {
+                e.preventDefault();
+                const entity = this.dataset.entity;
+                const targetId = this.dataset.target;
+                const config = entityConfigs[entity] || {
+                    title: "افزودن آیتم جدید",
+                    nameLabel: "عنوان / نام <span class='text-danger'>*</span>",
+                    placeholder: "عنوان را وارد کنید...",
+                    renderFields: () => ""
+                };
+
+                entityInput.value = entity;
+                targetIdInput.value = targetId;
+                titleEl.textContent = config.title;
+                nameLabelEl.innerHTML = config.nameLabel;
+                nameInput.placeholder = config.placeholder || "عنوان را وارد کنید...";
+                nameInput.value = "";
+                feedbackEl.classList.add("d-none");
+                feedbackEl.textContent = "";
+
+                dynamicFields.innerHTML = config.renderFields();
+                modal.show();
+            });
+        });
+
+        modalEl.addEventListener("shown.bs.modal", function() {
+            if (nameInput) nameInput.focus();
+        });
+
+        form.addEventListener("submit", function(e) {
+            e.preventDefault();
+            const entity = entityInput.value;
+            const targetId = targetIdInput.value;
+            const targetSelect = document.getElementById(targetId);
+
+            if (!nameInput.value.trim()) {
+                feedbackEl.className = "alert alert-danger py-2 px-3 mb-3 small fw-bold";
+                feedbackEl.textContent = "لطفاً عنوان یا نام را وارد کنید.";
+                feedbackEl.classList.remove("d-none");
+                nameInput.focus();
+                return;
+            }
+
+            // Disable submit button & show loading state
+            submitBtn.disabled = true;
+            submitText.textContent = "در حال ثبت...";
+
+            const csrfToken = document.querySelector("[name=csrfmiddlewaretoken]") ? document.querySelector("[name=csrfmiddlewaretoken]").value : "";
+            const formData = new FormData(form);
+
+            fetch(`/masterdata/api/quick-add/${entity}/`, {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": csrfToken,
+                    "X-Requested-With": "XMLHttpRequest"
+                },
+                body: formData
+            })
+            .then(function(res) {
+                return res.json().then(function(data) {
+                    return { ok: res.ok, status: res.status, data: data };
+                });
+            })
+            .then(function(result) {
+                submitBtn.disabled = false;
+                submitText.textContent = "ثبت و انتخاب";
+
+                const data = result.data;
+                if (!result.ok || data.status === "error") {
+                    feedbackEl.className = "alert alert-danger py-2 px-3 mb-3 small fw-bold";
+                    feedbackEl.textContent = data.message || "خطا در ثبت اطلاعات. لطفاً مجدداً بررسی فرمایید.";
+                    feedbackEl.classList.remove("d-none");
+                    return;
+                }
+
+                // If target select exists on page, select or add the option
+                if (targetSelect) {
+                    let option = targetSelect.querySelector(`option[value="${data.id}"]`);
+                    if (!option) {
+                        option = document.createElement("option");
+                        option.value = data.id;
+                        option.textContent = data.text || data.name;
+                        targetSelect.appendChild(option);
+                    }
+                    targetSelect.value = data.id;
+                    targetSelect.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+
+                // Close modal
+                modal.hide();
+
+                // Notification Toast
+                if (typeof window.showToast === "function") {
+                    if (data.status === "duplicate") {
+                        window.showToast(data.message, "warning");
+                    } else {
+                        window.showToast(data.message, "success");
+                    }
+                }
+            })
+            .catch(function(err) {
+                submitBtn.disabled = false;
+                submitText.textContent = "ثبت و انتخاب";
+                feedbackEl.className = "alert alert-danger py-2 px-3 mb-3 small fw-bold";
+                feedbackEl.textContent = "خطای غیرمنتظره در ارتباط با سرور: " + (err.message || err);
+                feedbackEl.classList.remove("d-none");
+            });
+        });
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initQuickAdd);
+    } else {
+        initQuickAdd();
+    }
+})();
+</script>

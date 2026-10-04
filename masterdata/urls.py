@@ -59,6 +59,7 @@ urlpatterns = [
     path("loss-types/<int:pk>/toggle/", views.loss_type_toggle, name="loss_type_toggle"),
 
     # Quick Add AJAX
+    path("api/quick-add/<str:entity>/", views.api_quick_add, name="api_quick_add"),
     path("api/quick-add/party/", views.api_quick_add_party, name="api_quick_add_party"),
     path("api/quick-add/driver/", views.api_quick_add_driver, name="api_quick_add_driver"),
     path("api/quick-add/vehicle/", views.api_quick_add_vehicle, name="api_quick_add_vehicle"),

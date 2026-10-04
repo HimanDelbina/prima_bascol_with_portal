@@ -5,9 +5,11 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.db.models import Q
+from decimal import Decimal
 from masterdata.models import (
     Product, Party, Driver, VehicleType, Vehicle, 
-    Location, UnloadLocation, OperationType, LossType
+    Location, UnloadLocation, OperationType, LossType,
+    PartyType, LocationType, OperationDirection
 )
 from masterdata.forms import (
     ProductForm, PartyForm, DriverForm, VehicleTypeForm, VehicleForm,
@@ -452,52 +454,395 @@ def loss_type_toggle(request, pk):
 
 
 # ----------------- AJAX Quick Add Endpoints for Ticket Form -----------------
-@login_required
-def api_quick_add_party(request):
-    if request.method == "POST":
-        name = request.POST.get("name", "").strip()
-        party_type = request.POST.get("party_type", "customer")
-        phone = request.POST.get("phone", "").strip()
-        if name:
-            party = Party.objects.create(name=name, party_type=party_type, phone=phone)
-            return JsonResponse({"status": "success", "id": party.id, "name": str(party)})
-    return JsonResponse({"status": "error", "message": "نام طرف حساب الزامی است."}, status=400)
+def normalize_search_text(val):
+    if not val:
+        return ""
+    val = str(val).strip().replace("ي", "ی").replace("ك", "ک")
+    return " ".join(val.split())
 
 @login_required
-def api_quick_add_driver(request):
-    if request.method == "POST":
-        full_name = request.POST.get("full_name", "").strip()
-        mobile = request.POST.get("mobile", "").strip()
-        national_code = request.POST.get("national_code", "").strip()
-        if full_name:
-            driver = Driver.objects.create(full_name=full_name, mobile=mobile, national_code=national_code)
-            return JsonResponse({"status": "success", "id": driver.id, "name": str(driver), "mobile": mobile})
-    return JsonResponse({"status": "error", "message": "نام راننده الزامی است."}, status=400)
+@role_required("super_admin", "system_admin", "weighbridge_manager", "weighbridge_operator")
+def api_quick_add(request, entity=None):
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "متد غیرمجاز است."}, status=405)
 
-@login_required
-def api_quick_add_vehicle(request):
-    if request.method == "POST":
-        p1 = request.POST.get("plate_part1", "").strip()
-        pL = request.POST.get("plate_letter", "").strip()
-        p2 = request.POST.get("plate_part2", "").strip()
-        pIran = request.POST.get("plate_iran", "").strip()
-        vtype_id = request.POST.get("vehicle_type")
-        
-        display = f"{p1} {pL} {p2} - ایران {pIran}" if (p1 and pL and p2 and pIran) else request.POST.get("plate_display", "").strip()
-        if display:
+    if not entity:
+        entity = request.POST.get("entity", "").strip()
+
+    name = request.POST.get("name", "").strip()
+    norm_name = normalize_search_text(name)
+
+    if not name:
+        return JsonResponse({"status": "error", "message": "وارد کردن عنوان یا نام الزامی است."}, status=400)
+
+    try:
+        if entity == "party":
+            party_type = request.POST.get("party_type", PartyType.CUSTOMER)
+            phone = request.POST.get("phone", "").strip()
+            code = request.POST.get("code", "").strip()
+            
+            existing = None
+            if code:
+                existing = Party.objects.filter(code__iexact=code).first()
+            if not existing:
+                for p in Party.objects.all():
+                    if normalize_search_text(p.name) == norm_name:
+                        existing = p
+                        break
+
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    existing.save()
+                return JsonResponse({
+                    "status": "duplicate",
+                    "id": existing.id,
+                    "text": str(existing),
+                    "name": existing.name,
+                    "message": f"طرف حساب با نام «{existing.name}» از قبل در سیستم وجود دارد و همان مورد انتخاب گردید."
+                })
+
+            party = Party.objects.create(
+                name=name,
+                party_type=party_type,
+                phone=phone,
+                code=code or None,
+                is_active=True
+            )
+            log_audit(AuditAction.CREATE, "Party", party.id, f"طرف حساب {party.name}", reason="افزودن سریع طرف حساب در فرم قبض")
+            return JsonResponse({
+                "status": "created",
+                "id": party.id,
+                "text": str(party),
+                "name": party.name,
+                "message": f"طرف حساب «{party.name}» با موفقیت ثبت و انتخاب شد."
+            })
+
+        elif entity == "product":
+            code = request.POST.get("code", "").strip()
+            default_loss = request.POST.get("default_loss_percent") or "0.00"
+            tolerance = request.POST.get("standard_tolerance_kg") or "50.00"
+
+            existing = None
+            if code:
+                existing = Product.objects.filter(code__iexact=code).first()
+            if not existing:
+                for pr in Product.objects.all():
+                    if normalize_search_text(pr.name) == norm_name:
+                        existing = pr
+                        break
+
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    existing.save()
+                return JsonResponse({
+                    "status": "duplicate",
+                    "id": existing.id,
+                    "text": str(existing),
+                    "name": existing.name,
+                    "message": f"محصول با نام «{existing.name}» از قبل در سیستم وجود دارد و همان مورد انتخاب گردید."
+                })
+
+            try:
+                loss_dec = Decimal(str(default_loss))
+            except Exception:
+                loss_dec = Decimal("0.00")
+            try:
+                tol_dec = Decimal(str(tolerance))
+            except Exception:
+                tol_dec = Decimal("50.00")
+
+            product = Product.objects.create(
+                name=name,
+                code=code or None,
+                default_loss_percent=loss_dec,
+                standard_tolerance_kg=tol_dec,
+                is_active=True
+            )
+            log_audit(AuditAction.CREATE, "Product", product.id, f"محصول {product.name}", reason="افزودن سریع محصول در فرم قبض")
+            return JsonResponse({
+                "status": "created",
+                "id": product.id,
+                "text": str(product),
+                "name": product.name,
+                "message": f"محصول «{product.name}» با موفقیت افزوده و انتخاب شد."
+            })
+
+        elif entity == "operation_type":
+            direction = request.POST.get("direction", OperationDirection.INBOUND)
+            code = request.POST.get("code", "").strip()
+
+            existing = None
+            if code:
+                existing = OperationType.objects.filter(code__iexact=code).first()
+            if not existing:
+                for op in OperationType.objects.all():
+                    if normalize_search_text(op.name) == norm_name:
+                        existing = op
+                        break
+
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    existing.save()
+                return JsonResponse({
+                    "status": "duplicate",
+                    "id": existing.id,
+                    "text": str(existing),
+                    "name": existing.name,
+                    "message": f"نوع عملیات «{existing.name}» از قبل در سیستم وجود دارد و همان مورد انتخاب گردید."
+                })
+
+            op = OperationType.objects.create(name=name, direction=direction, code=code or None, is_active=True)
+            log_audit(AuditAction.CREATE, "OperationType", op.id, f"نوع عملیات {op.name}", reason="افزودن سریع نوع عملیات در فرم قبض")
+            return JsonResponse({
+                "status": "created",
+                "id": op.id,
+                "text": str(op),
+                "name": op.name,
+                "message": f"نوع عملیات «{op.name}» با موفقیت افزوده و انتخاب شد."
+            })
+
+        elif entity == "vehicle_type":
+            tare = request.POST.get("standard_tare_weight") or "0.00"
+            code = request.POST.get("code", "").strip()
+
+            existing = None
+            if code:
+                existing = VehicleType.objects.filter(code__iexact=code).first()
+            if not existing:
+                for vt in VehicleType.objects.all():
+                    if normalize_search_text(vt.name) == norm_name:
+                        existing = vt
+                        break
+
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    existing.save()
+                return JsonResponse({
+                    "status": "duplicate",
+                    "id": existing.id,
+                    "text": str(existing),
+                    "name": existing.name,
+                    "message": f"نوع خودرو «{existing.name}» از قبل در سیستم وجود دارد و همان مورد انتخاب گردید."
+                })
+
+            try:
+                tare_dec = Decimal(str(tare))
+            except Exception:
+                tare_dec = Decimal("0.00")
+
+            vt = VehicleType.objects.create(name=name, standard_tare_weight=tare_dec, code=code or None, is_active=True)
+            log_audit(AuditAction.CREATE, "VehicleType", vt.id, f"نوع خودرو {vt.name}", reason="افزودن سریع نوع خودرو در فرم قبض")
+            return JsonResponse({
+                "status": "created",
+                "id": vt.id,
+                "text": str(vt),
+                "name": vt.name,
+                "message": f"نوع خودرو «{vt.name}» با موفقیت افزوده و انتخاب شد."
+            })
+
+        elif entity in ("origin", "destination", "location"):
+            desc = request.POST.get("description", "").strip()
+            existing = None
+            for loc in Location.objects.all():
+                if normalize_search_text(loc.name) == norm_name:
+                    existing = loc
+                    break
+
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                if entity == "origin" and existing.location_type == LocationType.DESTINATION:
+                    existing.location_type = LocationType.BOTH
+                elif entity == "destination" and existing.location_type == LocationType.ORIGIN:
+                    existing.location_type = LocationType.BOTH
+                existing.save()
+                return JsonResponse({
+                    "status": "duplicate",
+                    "id": existing.id,
+                    "text": str(existing),
+                    "name": existing.name,
+                    "message": f"محل «{existing.name}» از قبل در سیستم وجود دارد و همان مورد انتخاب گردید."
+                })
+
+            loc = Location.objects.create(name=name, location_type=LocationType.BOTH, description=desc, is_active=True)
+            log_audit(AuditAction.CREATE, "Location", loc.id, f"محل {loc.name}", reason="افزودن سریع مبدأ/مقصد در فرم قبض")
+            return JsonResponse({
+                "status": "created",
+                "id": loc.id,
+                "text": str(loc),
+                "name": loc.name,
+                "message": f"محل «{loc.name}» با موفقیت افزوده و انتخاب شد."
+            })
+
+        elif entity == "unload_location":
+            code = request.POST.get("code", "").strip()
+            desc = request.POST.get("description", "").strip()
+
+            existing = None
+            if code:
+                existing = UnloadLocation.objects.filter(code__iexact=code).first()
+            if not existing:
+                for ul in UnloadLocation.objects.all():
+                    if normalize_search_text(ul.name) == norm_name:
+                        existing = ul
+                        break
+
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    existing.save()
+                return JsonResponse({
+                    "status": "duplicate",
+                    "id": existing.id,
+                    "text": str(existing),
+                    "name": existing.name,
+                    "message": f"جایگاه «{existing.name}» از قبل در سیستم وجود دارد و همان مورد انتخاب گردید."
+                })
+
+            ul = UnloadLocation.objects.create(name=name, code=code or None, description=desc, is_active=True)
+            log_audit(AuditAction.CREATE, "UnloadLocation", ul.id, f"جایگاه تخلیه {ul.name}", reason="افزودن سریع جایگاه تخلیه در فرم قبض")
+            return JsonResponse({
+                "status": "created",
+                "id": ul.id,
+                "text": str(ul),
+                "name": ul.name,
+                "message": f"جایگاه «{ul.name}» با موفقیت افزوده و انتخاب شد."
+            })
+
+        elif entity == "loss_type":
+            code = request.POST.get("code", "").strip()
+            default_pct = request.POST.get("default_percent") or "0.00"
+            desc = request.POST.get("description", "").strip()
+
+            existing = None
+            if code:
+                existing = LossType.objects.filter(code__iexact=code).first()
+            if not existing:
+                for lt in LossType.objects.all():
+                    if normalize_search_text(lt.name) == norm_name:
+                        existing = lt
+                        break
+
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    existing.save()
+                return JsonResponse({
+                    "status": "duplicate",
+                    "id": existing.id,
+                    "text": str(existing),
+                    "name": existing.name,
+                    "message": f"نوع افت «{existing.name}» از قبل در سیستم وجود دارد و همان مورد انتخاب گردید."
+                })
+
+            try:
+                pct_dec = Decimal(str(default_pct))
+            except Exception:
+                pct_dec = Decimal("0.00")
+
+            lt = LossType.objects.create(name=name, code=code or None, default_percent=pct_dec, description=desc, is_active=True)
+            log_audit(AuditAction.CREATE, "LossType", lt.id, f"نوع افت {lt.name}", reason="افزودن سریع نوع افت در فرم قبض")
+            return JsonResponse({
+                "status": "created",
+                "id": lt.id,
+                "text": str(lt),
+                "name": lt.name,
+                "message": f"نوع افت «{lt.name}» با موفقیت افزوده و انتخاب شد."
+            })
+
+        elif entity == "driver":
+            mobile = request.POST.get("mobile", "").strip()
+            nat_code = request.POST.get("national_code", "").strip()
+            existing = None
+            if nat_code:
+                existing = Driver.objects.filter(national_code=nat_code).first()
+            if not existing and mobile:
+                existing = Driver.objects.filter(mobile=mobile).first()
+            if not existing:
+                for d in Driver.objects.all():
+                    if normalize_search_text(d.full_name) == norm_name:
+                        existing = d
+                        break
+
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    existing.save()
+                return JsonResponse({
+                    "status": "duplicate",
+                    "id": existing.id,
+                    "text": str(existing),
+                    "name": existing.full_name,
+                    "mobile": existing.mobile,
+                    "message": f"راننده «{existing.full_name}» از قبل در سیستم وجود دارد و همان مورد انتخاب گردید."
+                })
+
+            driver = Driver.objects.create(full_name=name, mobile=mobile, national_code=nat_code, is_active=True)
+            log_audit(AuditAction.CREATE, "Driver", driver.id, f"راننده {driver.full_name}", reason="افزودن سریع راننده در فرم قبض")
+            return JsonResponse({
+                "status": "created",
+                "id": driver.id,
+                "text": str(driver),
+                "name": driver.full_name,
+                "mobile": driver.mobile,
+                "message": f"راننده «{driver.full_name}» با موفقیت افزوده و انتخاب شد."
+            })
+
+        elif entity == "vehicle":
+            p1 = request.POST.get("plate_part1", "").strip()
+            pL = request.POST.get("plate_letter", "").strip()
+            p2 = request.POST.get("plate_part2", "").strip()
+            pIran = request.POST.get("plate_iran", "").strip()
+            vtype_id = request.POST.get("vehicle_type")
+            display = f"{p1} {pL} {p2} - ایران {pIran}" if (p1 and pL and p2 and pIran) else request.POST.get("plate_display", "").strip() or name
+
+            existing = Vehicle.objects.filter(plate_display=display).first()
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    existing.save()
+                return JsonResponse({
+                    "status": "duplicate",
+                    "id": existing.id,
+                    "text": str(existing),
+                    "plate_display": existing.plate_display,
+                    "message": f"خودرو با پلاک «{existing.plate_display}» از قبل در سیستم وجود دارد و همان مورد انتخاب گردید."
+                })
+
             vehicle = Vehicle.objects.create(
                 plate_part1=p1, plate_letter=pL, plate_part2=p2, plate_iran=pIran,
-                plate_display=display, vehicle_type_id=vtype_id if vtype_id else None
+                plate_display=display, vehicle_type_id=vtype_id if vtype_id else None,
+                is_active=True
             )
-            return JsonResponse({"status": "success", "id": vehicle.id, "plate_display": vehicle.plate_display})
-    return JsonResponse({"status": "error", "message": "اطلاعات پلاک خودرو ناقص است."}, status=400)
+            log_audit(AuditAction.CREATE, "Vehicle", vehicle.id, f"خودرو {vehicle.plate_display}", reason="افزودن سریع خودرو در فرم قبض")
+            return JsonResponse({
+                "status": "created",
+                "id": vehicle.id,
+                "text": str(vehicle),
+                "plate_display": vehicle.plate_display,
+                "message": f"خودرو «{vehicle.plate_display}» با موفقیت افزوده و انتخاب شد."
+            })
 
-@login_required
+        else:
+            return JsonResponse({"status": "error", "message": f"موجودیت «{entity}» معتبر نمی‌باشد."}, status=400)
+
+    except Exception as exc:
+        return JsonResponse({"status": "error", "message": f"خطا در ثبت اطلاعات: {str(exc)}"}, status=500)
+
+# Legacy aliases
+def api_quick_add_party(request):
+    return api_quick_add(request, entity="party")
+
+def api_quick_add_driver(request):
+    return api_quick_add(request, entity="driver")
+
+def api_quick_add_vehicle(request):
+    return api_quick_add(request, entity="vehicle")
+
 def api_quick_add_product(request):
-    if request.method == "POST":
-        name = request.POST.get("name", "").strip()
-        code = request.POST.get("code", "").strip()
-        if name:
-            prod = Product.objects.create(name=name, code=code)
-            return JsonResponse({"status": "success", "id": prod.id, "name": str(prod)})
-    return JsonResponse({"status": "error", "message": "نام محصول الزامی است."}, status=400)
+    return api_quick_add(request, entity="product")
+

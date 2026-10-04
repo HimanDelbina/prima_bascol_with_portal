@@ -403,6 +403,23 @@ body {
   margin-top: 0.2rem;
 }
 
+/* Quick Add Button Styling in Input Groups */
+.btn-quick-add {
+  padding: 0.25rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+  color: #0f4c81;
+  transition: all 0.2s ease;
+}
+.btn-quick-add:hover {
+  background-color: #0f4c81;
+  border-color: #0f4c81;
+  color: #ffffff;
+}
+
 /* Print CSS */
 @media print {
   body {

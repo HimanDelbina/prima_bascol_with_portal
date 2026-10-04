@@ -50,17 +50,32 @@
                     <div class="row g-3">
                         <div class="col-md-6 col-xl">
                             <label class="form-label fw-bold small text-secondary">نوع عملیات <span class="text-danger">*</span></label>
-                            {{ form.operation_type }}
+                            <div class="input-group">
+                                {{ form.operation_type }}
+                                <button type="button" class="btn btn-outline-primary btn-quick-add" data-entity="operation_type" data-target="id_operation_type" title="افزودن نوع عملیات جدید">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
                             {% if form.operation_type.errors %}<div class="text-danger small">{{ form.operation_type.errors }}</div>{% endif %}
                         </div>
                         <div class="col-md-6 col-xl">
                             <label class="form-label fw-bold small text-secondary">طرف حساب <span class="text-danger">*</span></label>
-                            {{ form.party }}
+                            <div class="input-group">
+                                {{ form.party }}
+                                <button type="button" class="btn btn-outline-primary btn-quick-add" data-entity="party" data-target="id_party" title="افزودن طرف حساب جدید">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
                             {% if form.party.errors %}<div class="text-danger small">{{ form.party.errors }}</div>{% endif %}
                         </div>
                         <div class="col-md-6 col-xl">
                             <label class="form-label fw-bold small text-secondary">نام محصول (کالا) <span class="text-danger">*</span></label>
-                            {{ form.product }}
+                            <div class="input-group">
+                                {{ form.product }}
+                                <button type="button" class="btn btn-outline-primary btn-quick-add" data-entity="product" data-target="id_product" title="افزودن محصول جدید">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
                             {% if form.product.errors %}<div class="text-danger small">{{ form.product.errors }}</div>{% endif %}
                         </div>
                         <div class="col-md-6 col-xl">
@@ -102,7 +117,12 @@
                         </div>
                         <div class="col-12 col-sm-6 col-md-4 col-lg col-xl">
                             <label class="form-label fw-bold small text-secondary">نوع خودرو</label>
-                            {{ form.vehicle_type }}
+                            <div class="input-group">
+                                {{ form.vehicle_type }}
+                                <button type="button" class="btn btn-outline-primary btn-quick-add" data-entity="vehicle_type" data-target="id_vehicle_type" title="افزودن نوع خودرو جدید">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
                             {% if form.vehicle_type.errors %}<div class="text-danger small mt-1">{{ form.vehicle_type.errors }}</div>{% endif %}
                         </div>
                         <div class="col-12 col-sm-6 col-md-4 col-lg col-xl">
@@ -129,15 +149,30 @@
                     <div class="row g-3">
                         <div class="col-md-3">
                             <label class="form-label fw-bold small text-secondary">مبدأ بار</label>
-                            {{ form.origin }}
+                            <div class="input-group">
+                                {{ form.origin }}
+                                <button type="button" class="btn btn-outline-primary btn-quick-add" data-entity="origin" data-target="id_origin" title="افزودن مبدأ جدید">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label fw-bold small text-secondary">مقصد بار</label>
-                            {{ form.destination }}
+                            <div class="input-group">
+                                {{ form.destination }}
+                                <button type="button" class="btn btn-outline-primary btn-quick-add" data-entity="destination" data-target="id_destination" title="افزودن مقصد جدید">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-bold small text-secondary">جایگاه تخلیه / بارگیری</label>
-                            {{ form.unload_location }}
+                            <div class="input-group">
+                                {{ form.unload_location }}
+                                <button type="button" class="btn btn-outline-primary btn-quick-add" data-entity="unload_location" data-target="id_unload_location" title="افزودن جایگاه تخلیه جدید">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold small text-secondary">تعداد بار / سرویس</label>
@@ -243,7 +278,12 @@
                             <div class="row g-2 mb-2">
                                 <div class="col-6">
                                     <label class="form-label fw-bold small text-secondary">نوع افت</label>
-                                    {{ form.loss_type }}
+                                    <div class="input-group">
+                                        {{ form.loss_type }}
+                                        <button type="button" class="btn btn-outline-primary btn-quick-add" data-entity="loss_type" data-target="id_loss_type" title="افزودن نوع افت جدید">
+                                            <i class="bi bi-plus-lg"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="col-6">
                                     <label class="form-label fw-bold small text-secondary">درصد افت (%)</label>
@@ -371,6 +411,8 @@
         </div>
     </div>
 </form>
+
+{% include 'components/quick_add_modal.html' %}
 {% endblock %}
 
 {% block extra_js %}
