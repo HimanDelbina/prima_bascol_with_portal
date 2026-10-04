@@ -1,4 +1,5 @@
 from django import forms
+from django.db import models
 from decimal import Decimal
 from datetime import datetime
 from weighbridge.models import WeighTicket, TicketStatus, WeightMode
@@ -306,9 +307,93 @@ class TicketEditManagerForm(forms.ModelForm):
             "second_weight": forms.NumberInput(attrs={"class": "form-control", "step": "any"}),
             "sent_weight": forms.NumberInput(attrs={"class": "form-control", "step": "any"}),
             "loss_type": forms.Select(attrs={"class": "form-select"}),
-            "loss_percent": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
-            "loss_weight": forms.NumberInput(attrs={"class": "form-control", "step": "any"}),
-            "is_loss_overridden": forms.CheckboxInput(attrs={"class": "form-check-input"}),
-            "loss_override_reason": forms.TextInput(attrs={"class": "form-control"}),
+            "loss_percent": forms.NumberInput(attrs={"class": "form-control", "id": "id_loss_percent", "step": "0.01", "placeholder": "۰"}),
+            "loss_weight": forms.NumberInput(attrs={"class": "form-control", "id": "id_loss_weight", "step": "any", "placeholder": "۰"}),
+            "is_loss_overridden": forms.CheckboxInput(attrs={"class": "form-check-input", "id": "id_is_loss_overridden"}),
+            "loss_override_reason": forms.TextInput(attrs={"class": "form-control", "id": "id_loss_override_reason"}),
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for f, model_cls in [
+            ("product", Product), ("party", Party), ("driver", Driver),
+            ("vehicle", Vehicle), ("operation_type", OperationType),
+            ("loss_type", LossType), ("origin", Location),
+            ("destination", Location), ("unload_location", UnloadLocation)
+        ]:
+            if f in self.fields:
+                curr_val = getattr(self.instance, f + "_id", None) if self.instance and self.instance.pk else None
+                if curr_val:
+                    self.fields[f].queryset = model_cls.objects.filter(models.Q(is_active=True) | models.Q(pk=curr_val))
+                else:
+                    self.fields[f].queryset = model_cls.objects.filter(is_active=True)
+
+        optional_fields = [
+            "second_weight", "sent_weight", "loss_type", "loss_percent", 
+            "loss_weight", "is_loss_overridden", "loss_override_reason", 
+            "notes", "driver_name_custom", "driver_mobile_custom", 
+            "waybill_number", "freight_amount", "origin", "destination", 
+            "unload_location", "vehicle", "vehicle_type", "driver", "load_count"
+        ]
+        for field_name in optional_fields:
+            if field_name in self.fields:
+                self.fields[field_name].required = False
+
+        if self.instance and self.instance.pk:
+            if self.instance.loss_weight == 0:
+                self.initial["loss_weight"] = ""
+            if self.instance.loss_percent == 0:
+                self.initial["loss_percent"] = ""
+            if self.instance.sent_weight == 0:
+                self.initial["sent_weight"] = ""
+            if not self.instance.load_count:
+                self.initial["load_count"] = 1
+
+    def clean(self):
+        cleaned_data = super().clean()
+        for field in ("sent_weight", "loss_percent", "loss_weight"):
+            if cleaned_data.get(field) is None and field not in self.errors:
+                cleaned_data[field] = Decimal("0")
+
+        if cleaned_data.get("load_count") is None or cleaned_data.get("load_count") == "":
+            cleaned_data["load_count"] = (self.instance.load_count if self.instance and self.instance.pk else 1) or 1
+
+        w1 = cleaned_data.get("first_weight")
+        if w1 is None or w1 <= 0:
+            self.add_error("first_weight", "وزن اول باید مقداری بزرگتر از صفر باشد.")
+
+        w2 = cleaned_data.get("second_weight")
+        if w2 is not None and w2 <= 0:
+            self.add_error("second_weight", "وزن دوم باید بزرگتر از صفر باشد یا خالی بماند.")
+
+        if (cleaned_data.get("sent_weight") or 0) < 0:
+            self.add_error("sent_weight", "وزن ارسالی نمی‌تواند منفی باشد.")
+
+        loss_weight = cleaned_data.get("loss_weight") or Decimal("0")
+        if loss_weight < 0:
+            self.add_error("loss_weight", "وزن افت نمی‌تواند منفی باشد.")
+
+        loss_pct = cleaned_data.get("loss_percent") or Decimal("0")
+        if loss_pct < 0 or loss_pct > 100:
+            self.add_error("loss_percent", "درصد افت باید عددی بین ۰ تا ۱۰۰ باشد.")
+
+        plate = cleaned_data.get("license_plate_display", "").strip()
+        if not plate:
+            self.add_error("license_plate_display", "شماره پلاک خودرو الزامی است.")
+        else:
+            from weighbridge.models import BlockedPlate
+            from weighbridge.plate_policy import normalize_plate
+            norm = normalize_plate(plate)
+            blocked = BlockedPlate.objects.filter(normalized_plate=norm, is_active=True).first()
+            if blocked:
+                self.add_error("license_plate_display", f"⛔ این خودرو در لیست سیاه پلاک‌های مسدود قرار دارد و امکان بارگیری ندارد! علت مسدودی: {blocked.reason}")
+
+        # If loss_weight is manually entered and > 0, ensure is_loss_overridden is set
+        if loss_weight > 0 and not cleaned_data.get("is_loss_overridden"):
+            cleaned_data["is_loss_overridden"] = True
+            if not cleaned_data.get("loss_override_reason"):
+                cleaned_data["loss_override_reason"] = cleaned_data.get("manager_reason", "")
+
+        return cleaned_data
+

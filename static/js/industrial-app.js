@@ -692,6 +692,12 @@
     const lossPctInput = document.getElementById("id_loss_percent");
     const lossWeightInput = document.getElementById("id_loss_weight");
     const isLossOverridden = document.getElementById("id_is_loss_overridden");
+    const isEditPage = !!document.getElementById("ticket-edit-form") || !!document.querySelector(".ticket-edit-form");
+
+    if (isEditPage && lossWeightInput) {
+      lossWeightInput.readOnly = false;
+      lossWeightInput.removeAttribute("readonly");
+    }
 
     // Output Metric Elements
     const grossDisplay = document.getElementById("calc-gross-val");
@@ -727,7 +733,7 @@
       });
     }
 
-    function calculateAll() {
+    function calculateAll(sourceEl) {
       const w1 = parseNum(w1Input ? w1Input.value : 0);
       const hasW2 = w2Input && w2Input.value.trim() !== "";
       const w2 = hasW2 ? parseNum(w2Input.value) : null;
@@ -749,13 +755,23 @@
       }
 
       let lossKg = 0;
-      if (isLossOverridden && isLossOverridden.checked && lossWeightInput && lossWeightInput.value) {
+      const isOverridden = isLossOverridden && isLossOverridden.checked;
+      const isTypingLossWeight = (document.activeElement === lossWeightInput) || (sourceEl === lossWeightInput);
+
+      if (isTypingLossWeight) {
+        lossKg = parseNum(lossWeightInput ? lossWeightInput.value : 0);
+      } else if (isOverridden && lossWeightInput && lossWeightInput.value.trim() !== "") {
         lossKg = parseNum(lossWeightInput.value);
+      } else if (lossWeightInput && lossWeightInput.value.trim() !== "" && parseNum(lossWeightInput.value) > 0 && lossPct === 0) {
+        lossKg = parseNum(lossWeightInput.value);
+        if (isLossOverridden && !isLossOverridden.checked) {
+          isLossOverridden.checked = true;
+        }
       } else {
         if (net > 0 && lossPct > 0) {
           lossKg = (net * lossPct) / 100;
         }
-        if (lossWeightInput && (!isLossOverridden || !isLossOverridden.checked)) {
+        if (lossWeightInput && !isOverridden && !isTypingLossWeight) {
           lossWeightInput.value = lossKg > 0 ? Math.round(lossKg * 100) / 100 : "";
         }
       }
@@ -811,20 +827,37 @@
       if (stickyFinal) stickyFinal.textContent = formatKg(final);
     }
 
-    [w1Input, w2Input, sentInput, lossPctInput, lossWeightInput].forEach((el) => {
+    if (lossWeightInput) {
+      lossWeightInput.addEventListener("input", function () {
+        const val = parseNum(this.value);
+        if (this.value.trim() !== "" && val > 0) {
+          if (isLossOverridden && !isLossOverridden.checked) {
+            isLossOverridden.checked = true;
+          }
+        }
+        calculateAll(this);
+      });
+      lossWeightInput.addEventListener("change", function () {
+        calculateAll(this);
+      });
+    }
+
+    [w1Input, w2Input, sentInput, lossPctInput].forEach((el) => {
       if (el) {
-        el.addEventListener("input", calculateAll);
-        el.addEventListener("change", calculateAll);
+        el.addEventListener("input", () => calculateAll(el));
+        el.addEventListener("change", () => calculateAll(el));
       }
     });
 
     if (isLossOverridden) {
       isLossOverridden.addEventListener("change", function () {
         if (lossWeightInput) {
-          lossWeightInput.readOnly = !this.checked;
+          if (!isEditPage) {
+            lossWeightInput.readOnly = !this.checked;
+          }
           if (this.checked) lossWeightInput.focus();
         }
-        calculateAll();
+        calculateAll(this);
       });
     }
 

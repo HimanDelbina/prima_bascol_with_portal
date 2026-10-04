@@ -130,13 +130,23 @@ function initLiveCalculations() {
     }
 
     let lossKg = 0;
-    if (isLossOverridden && isLossOverridden.checked && lossWeightInput && lossWeightInput.value) {
+    const isOverridden = isLossOverridden && isLossOverridden.checked;
+    const isTypingLossWeight = (document.activeElement === lossWeightInput);
+
+    if (isTypingLossWeight) {
       lossKg = cleanNum(lossWeightInput.value);
+    } else if (isOverridden && lossWeightInput && lossWeightInput.value.trim() !== "") {
+      lossKg = cleanNum(lossWeightInput.value);
+    } else if (lossWeightInput && lossWeightInput.value.trim() !== "" && cleanNum(lossWeightInput.value) > 0 && lossPct === 0) {
+      lossKg = cleanNum(lossWeightInput.value);
+      if (isLossOverridden && !isLossOverridden.checked) {
+        isLossOverridden.checked = true;
+      }
     } else {
       if (net > 0 && lossPct > 0) {
         lossKg = (net * lossPct) / 100;
       }
-      if (lossWeightInput && (!isLossOverridden || !isLossOverridden.checked)) {
+      if (lossWeightInput && !isOverridden && !isTypingLossWeight) {
         lossWeightInput.value = lossKg > 0 ? (Math.round(lossKg * 100) / 100) : "";
       }
     }
@@ -168,7 +178,20 @@ function initLiveCalculations() {
   }
 
   // Bind event listeners
-  [w1Input, w2Input, sentInput, lossPctInput, lossWeightInput].forEach((el) => {
+  if (lossWeightInput) {
+    lossWeightInput.addEventListener("input", function () {
+      const val = cleanNum(this.value);
+      if (this.value.trim() !== "" && val > 0) {
+        if (isLossOverridden && !isLossOverridden.checked) {
+          isLossOverridden.checked = true;
+        }
+      }
+      calculate();
+    });
+    lossWeightInput.addEventListener("change", calculate);
+  }
+
+  [w1Input, w2Input, sentInput, lossPctInput].forEach((el) => {
     if (el) {
       el.addEventListener("input", calculate);
       el.addEventListener("change", calculate);

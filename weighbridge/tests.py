@@ -76,6 +76,36 @@ class FreightAmountTests(TestCase):
         self.assertEqual(ticket.status, TicketStatus.COMPLETED)
         self.assertEqual(ticket.freight_amount, Decimal("1250000"))
 
+    def test_manager_edit_loss_weight_optional_and_allows_blank(self):
+        ticket = self.create_ticket("1000")
+        payload = {**self.payload, "first_weight": "25000", "second_weight": "10000", "manager_reason": "تست افت اختیاری"}
+        payload["loss_weight"] = ""
+        payload["loss_percent"] = ""
+        response = self.client.post(reverse("weighbridge:ticket_edit", args=[ticket.pk]), payload)
+        self.assertEqual(response.status_code, 302)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.loss_weight, Decimal("0.00"))
+        self.assertEqual(ticket.net_weight, Decimal("15000.00"))
+        self.assertEqual(ticket.final_weight, Decimal("15000.00"))
+
+    def test_manager_edit_loss_weight_manual_value_saved_and_overridden(self):
+        ticket = self.create_ticket("1000")
+        payload = {
+            **self.payload,
+            "first_weight": "25000",
+            "second_weight": "10000",
+            "loss_weight": "120.50",
+            "loss_percent": "0",
+            "manager_reason": "تنظیم دستی افت توسط مدیر",
+        }
+        response = self.client.post(reverse("weighbridge:ticket_edit", args=[ticket.pk]), payload)
+        self.assertEqual(response.status_code, 302)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.loss_weight, Decimal("120.50"))
+        self.assertTrue(ticket.is_loss_overridden)
+        self.assertEqual(ticket.net_weight, Decimal("15000.00"))
+        self.assertEqual(ticket.final_weight, Decimal("14879.50"))
+
 class WeighbridgeCalculationTests(TestCase):
     def setUp(self):
         self.settings = SystemSetting.objects.create(

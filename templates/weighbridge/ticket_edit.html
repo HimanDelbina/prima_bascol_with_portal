@@ -20,7 +20,7 @@
                     </div>
                 </div>
 
-                <form method="post">
+                <form method="post" id="ticket-edit-form" class="ticket-edit-form">
                     {% csrf_token %}
                     {% if form.errors %}<div class="alert alert-danger">{{ form.errors }}</div>{% endif %}
                     
@@ -61,6 +61,23 @@
                             {{ form.freight_amount }}
                             {% if form.freight_amount.errors %}<div class="text-danger small">{{ form.freight_amount.errors }}</div>{% endif %}
                         </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">تعداد بار / سرویس</label>
+                            {{ form.load_count }}
+                            {% if form.load_count.errors %}<div class="text-danger small">{{ form.load_count.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">مبدأ بار</label>
+                            {{ form.origin }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">مقصد بار</label>
+                            {{ form.destination }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">جایگاه تخلیه / بارگیری</label>
+                            {{ form.unload_location }}
+                        </div>
 
                         <div class="col-md-4">
                             <label class="form-label fw-bold text-primary">وزن اول (Kg)</label>
@@ -82,10 +99,12 @@
                         <div class="col-md-4">
                             <label class="form-label fw-bold">درصد افت (%)</label>
                             {{ form.loss_percent }}
+                            {% if form.loss_percent.errors %}<div class="text-danger small">{{ form.loss_percent.errors }}</div>{% endif %}
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-bold">وزن افت (Kg)</label>
+                            <label class="form-label fw-bold">وزن افت (Kg) <span class="text-muted fw-normal small">(اختیاری)</span></label>
                             {{ form.loss_weight }}
+                            {% if form.loss_weight.errors %}<div class="text-danger small">{{ form.loss_weight.errors }}</div>{% endif %}
                         </div>
 
                         <div class="col-12">
@@ -116,4 +135,32 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const lossWeightInput = document.getElementById("id_loss_weight");
+    const isLossOverridden = document.getElementById("id_is_loss_overridden");
+    const reasonInput = document.getElementById("id_loss_override_reason");
+    const managerReason = document.getElementById("id_manager_reason");
+
+    if (lossWeightInput) {
+        lossWeightInput.readOnly = false;
+        lossWeightInput.removeAttribute("readonly");
+
+        lossWeightInput.addEventListener("input", function() {
+            const val = parseFloat((this.value || "").replace(/,/g, "").trim());
+            if (!isNaN(val) && val > 0) {
+                if (isLossOverridden && !isLossOverridden.checked) {
+                    isLossOverridden.checked = true;
+                }
+                if (reasonInput && !reasonInput.value && managerReason) {
+                    reasonInput.value = managerReason.value || "اصلاح و ویرایش مدیریتی";
+                }
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

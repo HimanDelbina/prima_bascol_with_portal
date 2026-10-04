@@ -443,6 +443,11 @@ def ticket_edit(request, pk):
             ticket.last_edited_by = request.user
             ticket.last_edit_reason = reason
 
+            if ticket.loss_weight and ticket.loss_weight > 0:
+                ticket.is_loss_overridden = True
+                if not ticket.loss_override_reason:
+                    ticket.loss_override_reason = reason
+
             # Recalculate weights
             calc_results = TicketCalculationService.calculate_ticket(
                 first_weight=ticket.first_weight,
