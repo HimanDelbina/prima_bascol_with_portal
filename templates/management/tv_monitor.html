@@ -84,7 +84,7 @@
                             {% for t in recent_activity %}
                             <tr>
                                 <td class="fw-bold text-info">{{ t.serial_number }}</td>
-                                <td style="direction: ltr;" class="font-monospace small">{{ t.license_plate_display }}</td>
+                                <td style="direction: rtl; unicode-bidi: isolate;" class="font-monospace small">{{ t.license_plate_display }}</td>
                                 <td>{{ t.product.name|default:"-" }}</td>
                                 <td class="text-end font-monospace text-success fw-bold">{{ t.net_weight|weight_ton }}</td>
                             </tr>

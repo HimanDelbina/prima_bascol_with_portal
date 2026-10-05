@@ -218,7 +218,8 @@ body {
 /* Badge License Plate (Display Only) */
 .plate-badge {
   display: inline-flex;
-  direction: ltr;
+  direction: rtl;
+  unicode-bidi: isolate;
   align-items: center;
   background-color: #f8fafc;
   border: 2px solid #334155;

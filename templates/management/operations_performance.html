@@ -67,7 +67,7 @@
                 {% for s in data.slow_operations %}
                 <tr>
                     <td class="fw-bold text-primary">{{ s.ticket.serial_number }}</td>
-                    <td style="direction: ltr;">{{ s.ticket.license_plate_display }}</td>
+                    <td style="direction: rtl; unicode-bidi: isolate;">{{ s.ticket.license_plate_display }}</td>
                     <td>{{ s.ticket.driver_display }}</td>
                     <td>{{ s.ticket.product.name|default:"-" }}</td>
                     <td>{{ s.ticket.party.name|default:"-" }}</td>

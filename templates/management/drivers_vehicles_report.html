@@ -81,7 +81,7 @@
                     <tbody>
                         {% for v in vehicles_rows %}
                         <tr>
-                            <td><span class="badge bg-white text-dark border font-monospace" style="direction: ltr;">{{ v.plate }}</span></td>
+                            <td><span class="badge bg-white text-dark border font-monospace" style="direction: rtl; unicode-bidi: isolate;">{{ v.plate }}</span></td>
                             <td>{{ v.trips }} بار</td>
                             <td class="text-end font-monospace fw-bold text-dark">{{ v.net_ton|floatformat:2 }}</td>
                             <td class="text-end font-monospace">{{ v.avg_load_ton|floatformat:2 }} Ton</td>

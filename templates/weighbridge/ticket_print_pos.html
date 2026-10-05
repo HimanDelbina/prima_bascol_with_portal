@@ -59,12 +59,20 @@
         <span class="fw-bold">{{ ticket.product.name|default:"-" }}</span>
     </div>
     <div class="row-item">
+        <span>کد محصول:</span>
+        <span class="fw-bold font-monospace">{{ ticket.product.code|default:"-" }}</span>
+    </div>
+    <div class="row-item">
         <span>پلاک خودرو:</span>
-        <span class="fw-bold" style="direction: ltr;">{{ ticket.license_plate_display }}</span>
+        <span class="fw-bold" style="direction: rtl; unicode-bidi: isolate;">{{ ticket.license_plate_display }}</span>
     </div>
     <div class="row-item">
         <span>راننده:</span>
         <span>{{ ticket.driver_display }}</span>
+    </div>
+    <div class="row-item">
+        <span>شماره موبایل:</span>
+        <span class="font-monospace fw-bold" style="direction: ltr;">{{ ticket.driver_mobile_display|default:"-" }}</span>
     </div>
     <div class="row-item">
         <span>شماره بارنامه:</span>
@@ -72,11 +80,15 @@
     </div>
     <div class="row-item">
         <span>تاریخ و ساعت پر:</span>
-        <span>{{ ticket.jalali_gross_date }} {{ ticket.gross_time }}</span>
+        <span>{{ ticket.jalali_gross_date|default:"-" }} {{ ticket.gross_time|default:"-" }}</span>
     </div>
     <div class="row-item">
         <span>تاریخ و ساعت خالی:</span>
-        <span>{{ ticket.jalali_tare_date }} {{ ticket.tare_time }}</span>
+        <span>{{ ticket.jalali_tare_date|default:"-" }} {{ ticket.tare_time|default:"-" }}</span>
+    </div>
+    <div class="row-item">
+        <span>توضیحات:</span>
+        <span>{{ ticket.notes|default:"-" }}</span>
     </div>
 
     <hr style="border: 1px dashed #000;">

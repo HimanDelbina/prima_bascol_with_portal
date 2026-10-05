@@ -111,7 +111,7 @@
             <td>{{ t.operation_type.name|default:"-" }}</td>
             <td>{{ t.party.name|default:"-" }}</td>
             <td>{{ t.product.name|default:"-" }}</td>
-            <td style="direction: ltr; text-align: center;">{{ t.license_plate_display }}</td>
+            <td style="direction: rtl; unicode-bidi: isolate; text-align: center;">{{ t.license_plate_display }}</td>
             <td>{{ t.driver_display }}</td>
             <td class="text-end">{{ t.gross_weight|weight_fmt }}</td>
             <td class="text-end">{{ t.tare_weight|weight_fmt }}</td>

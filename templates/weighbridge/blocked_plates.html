@@ -134,7 +134,7 @@
                 <tr class="{% if item.is_active %}table-danger-subtle{% endif %}">
                     <td>{{ forloop.counter }}</td>
                     <td>
-                        <span class="badge bg-white text-dark border {% if item.is_active %}border-danger text-danger{% else %}border-secondary{% endif %} font-monospace fs-6 px-2 py-1 shadow-sm" style="direction: ltr;">
+                        <span class="badge bg-white text-dark border {% if item.is_active %}border-danger text-danger{% else %}border-secondary{% endif %} font-monospace fs-6 px-2 py-1 shadow-sm" style="direction: rtl; unicode-bidi: isolate;">
                             {{ item.license_plate_display }}
                         </span>
                     </td>

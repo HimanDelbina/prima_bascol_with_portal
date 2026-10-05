@@ -124,7 +124,7 @@
                     <td>{{ t.first_weight_date_jalali }}</td>
                     <td>{{ t.party.name|default:"-" }}</td>
                     <td>{{ t.product.name|default:"-" }}</td>
-                    <td style="direction: ltr;">{{ t.license_plate_display }}</td>
+                    <td style="direction: rtl; unicode-bidi: isolate;">{{ t.license_plate_display }}</td>
                     <td>{{ t.driver_display }}</td>
                     <td class="text-end font-monospace">{{ t.sent_weight|floatformat:0 }}</td>
                     <td class="text-end font-monospace">{{ t.net_weight|floatformat:0 }}</td>

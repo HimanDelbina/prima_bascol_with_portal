@@ -422,7 +422,7 @@
                             {% for v in top10.top_vehicles %}
                             <tr>
                                 <td class="fw-bold">{{ forloop.counter }}</td>
-                                <td><span class="badge bg-white text-dark border font-monospace" style="direction: ltr;">{{ v.plate }}</span></td>
+                                <td><span class="badge bg-white text-dark border font-monospace" style="direction: rtl; unicode-bidi: isolate;">{{ v.plate }}</span></td>
                                 <td class="fw-bold">{{ v.trips }} بار</td>
                                 <td class="text-end font-monospace">{{ v.net_ton|floatformat:2 }}</td>
                             </tr>
@@ -458,7 +458,7 @@
                                 <td>{{ t.first_weight_date_jalali }}</td>
                                 <td>{{ t.party.name|default:"-" }}</td>
                                 <td>{{ t.product.name|default:"-" }}</td>
-                                <td style="direction: ltr;">{{ t.license_plate_display }}</td>
+                                <td style="direction: rtl; unicode-bidi: isolate;">{{ t.license_plate_display }}</td>
                                 <td class="text-end font-monospace">{{ t.sent_weight|floatformat:0 }}</td>
                                 <td class="text-end font-monospace">{{ t.net_weight|floatformat:0 }}</td>
                                 <td class="text-end font-monospace text-danger fw-bold">{{ t.weight_difference|floatformat:0 }}</td>

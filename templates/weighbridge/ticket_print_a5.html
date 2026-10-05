@@ -79,14 +79,26 @@
         <tr>
             <th class="bg-light">طرف حساب:</th>
             <td class="fw-bold">{{ ticket.party.name|default:"-" }}</td>
-            <th class="bg-light">محصول:</th>
+            <th class="bg-light">نوع عملیات:</th>
+            <td>{{ ticket.operation_type.name|default:"-" }}</td>
+        </tr>
+        <tr>
+            <th class="bg-light">نام محصول:</th>
             <td class="fw-bold">{{ ticket.product.name|default:"-" }}</td>
+            <th class="bg-light">کد محصول:</th>
+            <td class="fw-bold font-monospace">{{ ticket.product.code|default:"-" }}</td>
         </tr>
         <tr>
             <th class="bg-light">پلاک خودرو:</th>
-            <td class="fw-bold" style="direction: ltr;">{{ ticket.license_plate_display }}</td>
+            <td class="fw-bold" style="direction: rtl; unicode-bidi: isolate;">{{ ticket.license_plate_display }}</td>
+            <th class="bg-light">نوع خودرو:</th>
+            <td>{{ ticket.vehicle_type_display }}</td>
+        </tr>
+        <tr>
             <th class="bg-light">نام راننده:</th>
             <td>{{ ticket.driver_display }}</td>
+            <th class="bg-light">شماره موبایل:</th>
+            <td class="font-monospace fw-bold" style="direction: ltr; text-align: right;">{{ ticket.driver_mobile_display|default:"-" }}</td>
         </tr>
         <tr>
             <th class="bg-light">بارنامه:</th>
@@ -96,9 +108,13 @@
         </tr>
         <tr>
             <th class="bg-light">تاریخ پر:</th>
-            <td>{{ ticket.jalali_gross_date }} {{ ticket.gross_time }}</td>
+            <td>{{ ticket.jalali_gross_date|default:"-" }} {{ ticket.gross_time|default:"-" }}</td>
             <th class="bg-light">تاریخ خالی:</th>
-            <td>{{ ticket.jalali_tare_date }} {{ ticket.tare_time }}</td>
+            <td>{{ ticket.jalali_tare_date|default:"-" }} {{ ticket.tare_time|default:"-" }}</td>
+        </tr>
+        <tr>
+            <th class="bg-light">توضیحات:</th>
+            <td colspan="3">{{ ticket.notes|default:"-" }}</td>
         </tr>
     </table>
 
