@@ -22,17 +22,25 @@
 <!-- Refine Date Range & Export Box -->
 <div class="card shadow-sm border-0 mb-4">
     <div class="card-body p-3">
-        <form method="get" class="row g-2 align-items-center">
-            <div class="col-md-3">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-2">
                 <label class="form-label fw-bold small text-muted">از تاریخ (شمسی):</label>
                 <input type="text" name="start_date" class="form-control pdate-picker" value="{{ params.start_date }}" placeholder="1405/01/01">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label fw-bold small text-muted">تا تاریخ (شمسی):</label>
                 <input type="text" name="end_date" class="form-control pdate-picker" value="{{ params.end_date }}" placeholder="1405/12/29">
             </div>
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-muted">تجمیع بر اساس (Group By):</label>
+            <div class="col-md-2">
+                <label class="form-label fw-bold small text-muted">شماره قبض:</label>
+                <input type="text" name="ticket_number" class="form-control" value="{{ params.ticket_number|default:'' }}" placeholder="مثال: 1001">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold small text-muted">شماره بارنامه:</label>
+                <input type="text" name="waybill_number" class="form-control" value="{{ params.waybill_number|default:'' }}" placeholder="شماره بارنامه...">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold small text-muted">تجمیع بر اساس:</label>
                 <select name="group_by" class="form-select">
                     <option value="none" {% if group_by == 'none' %}selected{% endif %}>ریز قبوض (بدون گروه‌بندی)</option>
                     <option value="day" {% if group_by == 'day' %}selected{% endif %}>روز</option>
@@ -45,8 +53,8 @@
                     <option value="operation_type" {% if group_by == 'operation_type' %}selected{% endif %}>نوع عملیات</option>
                 </select>
             </div>
-            <div class="col-md-3 d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-primary fw-bold shadow-sm">
+            <div class="col-md-2 d-flex gap-1 justify-content-end">
+                <button type="submit" class="btn btn-primary fw-bold shadow-sm" title="بازخوانی">
                     <i class="bi bi-filter me-1"></i> بازخوانی
                 </button>
                 <button type="submit" name="export" value="excel" class="btn btn-success fw-bold shadow-sm" title="اکسل">
@@ -157,6 +165,7 @@
                 <thead>
                     <tr>
                         <th>شماره قبض</th>
+                        <th>شماره بارنامه</th>
                         <th>تاریخ</th>
                         <th>طرف حساب</th>
                         <th>محصول</th>
@@ -175,6 +184,7 @@
                     {% for ticket in page_obj %}
                     <tr>
                         <td class="fw-bold text-primary">{{ ticket.serial_number }}</td>
+                        <td class="font-monospace text-muted small">{{ ticket.waybill_number|default:"-" }}</td>
                         <td class="small">{{ ticket.jalali_first_date }}</td>
                         <td>{{ ticket.party.name|default:"-" }}</td>
                         <td><span class="fw-bold">{{ ticket.product.name|default:"-" }}</span></td>
@@ -199,7 +209,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="13" class="text-center py-5 text-muted">هیچ رکوردی یافت نشد.</td>
+                        <td colspan="14" class="text-center py-5 text-muted">هیچ رکوردی یافت نشد.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

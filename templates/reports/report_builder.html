@@ -48,6 +48,17 @@
                         <input type="time" name="end_time" class="form-control" value="{{ params.end_time }}">
                     </div>
 
+                    <!-- Ticket & Waybill Search -->
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small text-secondary">شماره قبض</label>
+                        <input type="text" name="ticket_number" class="form-control" placeholder="جستجوی شماره قبض..." value="{{ params.ticket_number|default:'' }}">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small text-secondary">شماره بارنامه</label>
+                        <input type="text" name="waybill_number" class="form-control" placeholder="جستجوی شماره بارنامه..." value="{{ params.waybill_number }}">
+                    </div>
+
                     <!-- Logistics & Cargo -->
                     <div class="col-md-3">
                         <label class="form-label fw-bold small text-secondary">محصول (کالا)</label>
@@ -261,6 +272,7 @@
                 <thead>
                     <tr>
                         <th>شماره قبض</th>
+                        <th>شماره بارنامه</th>
                         <th>تاریخ</th>
                         <th>نوع عملیات</th>
                         <th>طرف حساب</th>
@@ -284,6 +296,7 @@
                                 {{ ticket.serial_number }}
                             </a>
                         </td>
+                        <td class="font-monospace small text-muted">{{ ticket.waybill_number|default:"-" }}</td>
                         <td class="small">{{ ticket.jalali_first_date }}</td>
                         <td>{{ ticket.operation_type.name|default:"-" }}</td>
                         <td>{{ ticket.party.name|default:"-" }}</td>
@@ -308,7 +321,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="14" class="text-center py-5 text-muted">هیچ رکوردی منطبق با فیلترهای انتخابی یافت نشد.</td>
+                        <td colspan="15" class="text-center py-5 text-muted">هیچ رکوردی منطبق با فیلترهای انتخابی یافت نشد.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

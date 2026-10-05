@@ -107,12 +107,12 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
 
     # Header title
     settings_obj = SystemSetting.get_settings()
-    ws.merge_cells("A1:N1")
+    ws.merge_cells("A1:P1")
     ws["A1"] = f"{settings_obj.company_name} - {title}"
     ws["A1"].font = title_font
     ws["A1"].alignment = align_center
 
-    ws.merge_cells("A2:N2")
+    ws.merge_cells("A2:P2")
     ws["A2"] = f"تاریخ تهیه گزارش: {get_today_jalali()} | تعداد رکورد: {queryset.count()}"
     ws["A2"].font = subtitle_font
     ws["A2"].alignment = align_center
@@ -121,6 +121,7 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
     headers = [
         "ردیف",
         "شماره قبض",
+        "شماره بارنامه",
         "تاریخ",
         "نوع عملیات",
         "طرف حساب",
@@ -161,6 +162,7 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
         row_values = [
             idx,
             ticket.serial_number,
+            ticket.waybill_number or "-",
             date_str,
             op_name,
             party_name,
@@ -182,9 +184,9 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
             cell.border = thin_border
 
             # Alignments and number formats
-            if col_idx in [1, 2, 3, 7, 15]:
+            if col_idx in [1, 2, 3, 4, 8, 16]:
                 cell.alignment = align_center
-            elif col_idx in [9, 10, 11, 12, 13, 14]:
+            elif col_idx in [10, 11, 12, 13, 14, 15]:
                 cell.alignment = align_left
                 cell.number_format = num_fmt
             else:
@@ -197,6 +199,7 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
         summary_row_values = [
             "مجموع کل",
             f"{summaries['total_tickets']} قبض",
+            "-",
             "-",
             "-",
             "-",
@@ -216,7 +219,7 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
             cell.font = summary_font
             cell.fill = summary_fill
             cell.border = thin_border
-            if col_idx in [9, 10, 11, 12, 13, 14]:
+            if col_idx in [10, 11, 12, 13, 14, 15]:
                 cell.number_format = num_fmt
                 cell.alignment = align_left
             else:
@@ -254,7 +257,7 @@ def export_csv(queryset, title="گزارش باسکول"):
     
     writer = csv.writer(response)
     writer.writerow([
-        "ردیف", "شماره قبض", "تاریخ", "نوع عملیات", "طرف حساب", "محصول", 
+        "ردیف", "شماره قبض", "شماره بارنامه", "تاریخ", "نوع عملیات", "طرف حساب", "محصول", 
         "پلاک", "راننده", "وزن پر", "وزن خالی", "وزن خالص", "وزن ارسالی", 
         "افت", "وزن نهایی", "وضعیت"
     ])
@@ -264,6 +267,7 @@ def export_csv(queryset, title="گزارش باسکول"):
         writer.writerow([
             idx,
             ticket.serial_number,
+            ticket.waybill_number or "-",
             date_str,
             ticket.operation_type.name if ticket.operation_type else "-",
             ticket.party.name if ticket.party else "-",

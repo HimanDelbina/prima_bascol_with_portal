@@ -2,7 +2,7 @@ from decimal import Decimal
 from django.db.models import (
     Q, Sum, Avg, Count, Min, Max, F, ExpressionWrapper, DecimalField
 )
-from core.jalali import jalali_to_gregorian, gregorian_to_jalali, format_jalali_date
+from core.jalali import jalali_to_gregorian, gregorian_to_jalali, format_jalali_date, to_english_digits
 from weighbridge.models import WeighTicket, TicketStatus
 from django.db.models.functions import Coalesce, TruncDate
 
@@ -20,6 +20,37 @@ class FreightReportService:
         if params.get("driver_search"):
             qs = qs.filter(Q(driver__full_name__icontains=params["driver_search"]) |
                            Q(driver_name_custom__icontains=params["driver_search"]))
+
+        ticket_number = str(params.get("ticket_number") or params.get("serial_number") or "").strip()
+        if ticket_number:
+            ticket_number_en = to_english_digits(ticket_number)
+            qs = qs.filter(
+                Q(serial_number__icontains=ticket_number) |
+                Q(serial_number__icontains=ticket_number_en)
+            )
+
+        waybill = str(params.get("waybill_number") or params.get("waybill") or "").strip()
+        if waybill:
+            waybill_en = to_english_digits(waybill)
+            qs = qs.filter(
+                Q(waybill_number__icontains=waybill) |
+                Q(waybill_number__icontains=waybill_en)
+            )
+
+        q = str(params.get("q") or "").strip()
+        if q:
+            q_en = to_english_digits(q)
+            qs = qs.filter(
+                Q(serial_number__icontains=q) |
+                Q(serial_number__icontains=q_en) |
+                Q(waybill_number__icontains=q) |
+                Q(waybill_number__icontains=q_en) |
+                Q(license_plate_display__icontains=q) |
+                Q(party__name__icontains=q) |
+                Q(driver__full_name__icontains=q) |
+                Q(driver_name_custom__icontains=q) |
+                Q(product__name__icontains=q)
+            )
         status = params.get("status")
         if not status:
             qs = qs.exclude(status=TicketStatus.CANCELLED)
@@ -74,13 +105,21 @@ class ReportService:
         if end_time:
             qs = qs.filter(first_weight_time__lte=end_time)
 
-        # Serial numbers
-        serial_from = params.get("serial_from")
-        serial_to = params.get("serial_to")
+        # Ticket / Serial numbers
+        ticket_number = str(params.get("ticket_number") or params.get("serial_number") or "").strip()
+        if ticket_number:
+            ticket_number_en = to_english_digits(ticket_number)
+            qs = qs.filter(
+                Q(serial_number__icontains=ticket_number) |
+                Q(serial_number__icontains=ticket_number_en)
+            )
+
+        serial_from = str(params.get("serial_from") or "").strip()
+        serial_to = str(params.get("serial_to") or "").strip()
         if serial_from:
-            qs = qs.filter(serial_number__gte=serial_from)
+            qs = qs.filter(serial_number__gte=to_english_digits(serial_from))
         if serial_to:
-            qs = qs.filter(serial_number__lte=serial_to)
+            qs = qs.filter(serial_number__lte=to_english_digits(serial_to))
 
         # Status
         status = params.get("status")
@@ -151,9 +190,29 @@ class ReportService:
             qs = qs.filter(license_plate_display__icontains=plate)
 
         # Waybill
-        waybill = params.get("waybill_number")
+        waybill = str(params.get("waybill_number") or params.get("waybill") or "").strip()
         if waybill:
-            qs = qs.filter(waybill_number__icontains=waybill)
+            waybill_en = to_english_digits(waybill)
+            qs = qs.filter(
+                Q(waybill_number__icontains=waybill) |
+                Q(waybill_number__icontains=waybill_en)
+            )
+
+        # General search term (q)
+        q = str(params.get("q") or "").strip()
+        if q:
+            q_en = to_english_digits(q)
+            qs = qs.filter(
+                Q(serial_number__icontains=q) |
+                Q(serial_number__icontains=q_en) |
+                Q(waybill_number__icontains=q) |
+                Q(waybill_number__icontains=q_en) |
+                Q(license_plate_display__icontains=q) |
+                Q(party__name__icontains=q) |
+                Q(driver__full_name__icontains=q) |
+                Q(driver_name_custom__icontains=q) |
+                Q(product__name__icontains=q)
+            )
 
         # Locations
         origin_id = params.get("origin")

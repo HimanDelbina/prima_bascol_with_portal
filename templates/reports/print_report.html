@@ -86,6 +86,7 @@
         <tr>
             <th>ردیف</th>
             <th>شماره قبض</th>
+            <th>شماره بارنامه</th>
             <th>تاریخ</th>
             <th>نوع عملیات</th>
             <th>طرف حساب</th>
@@ -105,6 +106,7 @@
         <tr>
             <td class="text-center">{{ forloop.counter }}</td>
             <td class="fw-bold text-center">{{ t.serial_number }}</td>
+            <td class="text-center">{{ t.waybill_number|default:"-" }}</td>
             <td class="text-center">{{ t.jalali_first_date }}</td>
             <td>{{ t.operation_type.name|default:"-" }}</td>
             <td>{{ t.party.name|default:"-" }}</td>
@@ -122,7 +124,7 @@
         {% if summaries %}
         <tr class="summary-row">
             <td colspan="2" class="text-center">مجموع کل ({{ summaries.total_tickets }} قبض)</td>
-            <td colspan="6" class="text-center">{{ summaries.total_loads }} سرویس</td>
+            <td colspan="7" class="text-center">{{ summaries.total_loads }} سرویس</td>
             <td class="text-end">{{ summaries.sum_gross|weight_fmt }}</td>
             <td class="text-end">{{ summaries.sum_tare|weight_fmt }}</td>
             <td class="text-end">{{ summaries.sum_net|weight_fmt }}</td>

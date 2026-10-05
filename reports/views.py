@@ -49,6 +49,8 @@ def report_builder(request):
     Executes multi-criteria queries, summary metrics, and optional group-by.
     """
     params = request.GET.copy()
+    if "serial_number" in params and "ticket_number" not in params:
+        params["ticket_number"] = params["serial_number"]
     
     # Check if export requested
     export_format = request.GET.get("export")
@@ -159,6 +161,8 @@ def preset_report_view(request, code):
 
     # Combine preset defaults with request GET params
     combined_params = request.GET.copy()
+    if "serial_number" in combined_params and "ticket_number" not in combined_params:
+        combined_params["ticket_number"] = combined_params["serial_number"]
     for k, v in report_meta.get("default_params", {}).items():
         if k not in combined_params or not combined_params[k]:
             combined_params[k] = v

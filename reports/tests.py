@@ -226,3 +226,107 @@ class ReportServiceTests(TestCase):
         daily_rep = get_preset_report_by_code("daily")
         self.assertIsNotNone(daily_rep)
         self.assertEqual(daily_rep["title"], "گزارش روزانه باسکول")
+
+    def test_filter_by_ticket_number_and_digits(self):
+        WeighTicket.objects.filter(serial_number="T-1").update(waybill_number="WB-1001")
+        WeighTicket.objects.filter(serial_number="T-2").update(waybill_number="BL-2002")
+
+        # English digits ticket_number
+        qs1 = ReportService.filter_tickets({"ticket_number": "T-1"})
+        self.assertEqual(qs1.count(), 1)
+        self.assertEqual(qs1.first().serial_number, "T-1")
+
+        # Persian digits ticket_number
+        qs_fa = ReportService.filter_tickets({"ticket_number": "T-۱"})
+        self.assertEqual(qs_fa.count(), 1)
+        self.assertEqual(qs_fa.first().serial_number, "T-1")
+
+        # Alias serial_number
+        qs_alias = ReportService.filter_tickets({"serial_number": "T-2"})
+        self.assertEqual(qs_alias.count(), 1)
+        self.assertEqual(qs_alias.first().serial_number, "T-2")
+
+    def test_filter_by_waybill_number_and_digits(self):
+        WeighTicket.objects.filter(serial_number="T-1").update(waybill_number="WB-1001")
+        WeighTicket.objects.filter(serial_number="T-2").update(waybill_number="BL-2002")
+
+        # Search waybill
+        qs_wb = ReportService.filter_tickets({"waybill_number": "1001"})
+        self.assertEqual(qs_wb.count(), 1)
+        self.assertEqual(qs_wb.first().serial_number, "T-1")
+
+        # Search waybill with Persian digits
+        qs_wb_fa = ReportService.filter_tickets({"waybill_number": "۲۰۰۲"})
+        self.assertEqual(qs_wb_fa.count(), 1)
+        self.assertEqual(qs_wb_fa.first().serial_number, "T-2")
+
+    def test_filter_by_general_q_search(self):
+        WeighTicket.objects.filter(serial_number="T-1").update(waybill_number="WB-9900")
+        
+        # Search by ticket serial in q
+        qs_q_serial = ReportService.filter_tickets({"q": "T-1"})
+        self.assertEqual(qs_q_serial.count(), 1)
+
+        # Search by waybill in q
+        qs_q_waybill = ReportService.filter_tickets({"q": "۹۹۰۰"})
+        self.assertEqual(qs_q_waybill.count(), 1)
+        self.assertEqual(qs_q_waybill.first().serial_number, "T-1")
+
+
+class ReportBuilderViewFilterTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser("report_view_admin", password="test-password")
+        cls.t1 = WeighTicket.objects.create(
+            serial_number="REP-101",
+            waybill_number="BL-5555",
+            status=TicketStatus.COMPLETED,
+            gross_weight=Decimal("20000.00"),
+            tare_weight=Decimal("8000.00"),
+            net_weight=Decimal("12000.00"),
+            final_weight=Decimal("12000.00"),
+            license_plate_display="11 A 111",
+        )
+        cls.t2 = WeighTicket.objects.create(
+            serial_number="REP-202",
+            waybill_number="BL-8888",
+            status=TicketStatus.COMPLETED,
+            gross_weight=Decimal("25000.00"),
+            tare_weight=Decimal("10000.00"),
+            net_weight=Decimal("15000.00"),
+            final_weight=Decimal("15000.00"),
+            license_plate_display="22 B 222",
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+        self.url = reverse("reports:report_builder")
+
+    def test_filter_report_builder_by_ticket_number(self):
+        response = self.client.get(self.url, {"ticket_number": "101"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "REP-101")
+        self.assertNotContains(response, "REP-202")
+
+    def test_filter_report_builder_by_waybill_number(self):
+        response = self.client.get(self.url, {"waybill_number": "8888"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "REP-202")
+        self.assertNotContains(response, "REP-101")
+
+    def test_freight_report_ticket_and_waybill_filter(self):
+        self.t1.freight_amount = Decimal("500000")
+        self.t1.save()
+        self.t2.freight_amount = Decimal("700000")
+        self.t2.save()
+
+        freight_url = reverse("reports:freight_report")
+        response_ticket = self.client.get(freight_url, {"ticket_number": "101"})
+        self.assertEqual(response_ticket.status_code, 200)
+        self.assertContains(response_ticket, "REP-101")
+        self.assertNotContains(response_ticket, "REP-202")
+
+        response_waybill = self.client.get(freight_url, {"waybill_number": "8888"})
+        self.assertEqual(response_waybill.status_code, 200)
+        self.assertContains(response_waybill, "REP-202")
+        self.assertNotContains(response_waybill, "REP-101")

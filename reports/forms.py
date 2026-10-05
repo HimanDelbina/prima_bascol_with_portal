@@ -56,6 +56,8 @@ class FreightReportForm(forms.Form):
     end_date = JalaliReportDateField(label="تا تاریخ (شمسی)", required=False)
     party = forms.ModelChoiceField(label="طرف حساب", queryset=Party.objects.all(), required=False)
     product = forms.ModelChoiceField(label="محصول", queryset=Product.objects.all(), required=False)
+    ticket_number = forms.CharField(label="شماره قبض", max_length=50, required=False)
+    waybill_number = forms.CharField(label="شماره بارنامه", max_length=60, required=False)
     plate = forms.CharField(label="پلاک خودرو", max_length=60, required=False)
     driver_search = forms.CharField(label="نام راننده", max_length=150, required=False)
     status = forms.ChoiceField(label="وضعیت قبض", required=False, choices=[
@@ -72,6 +74,10 @@ class FreightReportForm(forms.Form):
             field.widget.attrs["class"] = "form-select" if isinstance(field.widget, forms.Select) else "form-control"
             if name in ("start_date", "end_date"):
                 field.widget.attrs.update({"class": "form-control pdate-picker", "placeholder": "۱۴۰۵/۰۶/۲۴"})
+            elif name == "ticket_number":
+                field.widget.attrs.update({"placeholder": "مثال: 1001"})
+            elif name == "waybill_number":
+                field.widget.attrs.update({"placeholder": "شماره بارنامه..."})
 
     def clean(self):
         data = super().clean()
