@@ -42,16 +42,18 @@ class IsExecutiveManager(BasePermission):
 
 
 class CanManageTicket(BasePermission):
-    """Allows creating/viewing for operators, but sensitive edits/cancels only for managers."""
+    """Allows creating/viewing for weighbridge authorized roles, sensitive edits/cancels only for managers."""
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated and request.user.is_active):
             return False
-        profile = getattr(request.user, "profile", None)
-        if profile and not profile.is_active:
-            return False
-        if request.method in SAFE_METHODS or request.user.is_superuser:
+        if request.user.is_superuser:
             return True
-        return bool(profile and profile.role in (
+        profile = getattr(request.user, "profile", None)
+        if not (profile and profile.is_active and profile.can_access_weighbridge):
+            return False
+        if request.method in SAFE_METHODS:
+            return True
+        return bool(profile.role in (
             RoleChoices.SUPER_ADMIN, RoleChoices.SYSTEM_ADMIN,
             RoleChoices.WEIGHBRIDGE_MANAGER, RoleChoices.WEIGHBRIDGE_OPERATOR,
         ))
@@ -97,16 +99,18 @@ class CanAccessAudit(BasePermission):
 
 
 class IsMasterDataAdminOrReadOnly(BasePermission):
-    """Authenticated users can read master data; only managers/admins can modify."""
+    """Users with masterdata access can read; only managers/admins can modify."""
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated):
             return False
-        if request.method in SAFE_METHODS:
-            return True
         if request.user.is_superuser:
             return True
         profile = getattr(request.user, "profile", None)
-        return bool(profile and profile.is_admin_or_manager)
+        if not (profile and profile.is_active and profile.can_access_masterdata):
+            return False
+        if request.method in SAFE_METHODS:
+            return True
+        return bool(profile.is_admin_or_manager)
 
 
 class CanManageMonitoring(BasePermission):

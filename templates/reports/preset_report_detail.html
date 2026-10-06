@@ -202,9 +202,13 @@
                         <td class="text-end fw-bold text-primary">{{ ticket.final_weight|weight_fmt }}</td>
                         <td>{{ ticket.status|status_badge }}</td>
                         <td class="text-center">
+                            {% if user.is_superuser or user.profile.can_access_weighbridge %}
                             <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-sm btn-outline-primary" title="مشاهده">
                                 <i class="bi bi-eye"></i>
                             </a>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}

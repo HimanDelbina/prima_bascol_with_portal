@@ -15,7 +15,7 @@ from masterdata.forms import (
     ProductForm, PartyForm, DriverForm, VehicleTypeForm, VehicleForm,
     LocationForm, UnloadLocationForm, OperationTypeForm, LossTypeForm
 )
-from accounts.decorators import role_required
+from accounts.decorators import role_required, masterdata_role_required
 from audit.services import log_audit
 from audit.models import AuditAction
 
@@ -35,6 +35,7 @@ def paginate_and_search(request, queryset, search_fields):
 
 # ----------------- Products -----------------
 @login_required
+@masterdata_role_required
 def product_list(request):
     products = Product.objects.all().order_by("-id")
     page_obj, q = paginate_and_search(request, products, ["name", "code", "description"])
@@ -88,6 +89,7 @@ def product_toggle(request, pk):
 
 # ----------------- Parties (طرف‌های حساب) -----------------
 @login_required
+@masterdata_role_required
 def party_list(request):
     parties = Party.objects.all().order_by("-id")
     page_obj, q = paginate_and_search(request, parties, ["name", "code", "phone", "national_id"])
@@ -136,12 +138,14 @@ def party_toggle(request, pk):
 
 # ----------------- Drivers (رانندگان) -----------------
 @login_required
+@masterdata_role_required
 def driver_list(request):
     drivers = Driver.objects.all().order_by("-id")
     page_obj, q = paginate_and_search(request, drivers, ["full_name", "mobile", "national_code", "license_number"])
     return render(request, "masterdata/driver_list.html", {"page_obj": page_obj, "q": q})
 
 @login_required
+@role_required("super_admin", "system_admin", "weighbridge_manager", "weighbridge_operator")
 def driver_create(request):
     if request.method == "POST":
         form = DriverForm(request.POST)
@@ -183,6 +187,7 @@ def driver_toggle(request, pk):
 
 # ----------------- Vehicles (خودروها) -----------------
 @login_required
+@masterdata_role_required
 def vehicle_list(request):
     vehicles = Vehicle.objects.select_related("vehicle_type", "default_driver").all().order_by("-id")
     page_obj, q = paginate_and_search(request, vehicles, ["plate_display", "plate_part1", "plate_part2", "description"])
@@ -194,6 +199,7 @@ def vehicle_list(request):
     })
 
 @login_required
+@role_required("super_admin", "system_admin", "weighbridge_manager", "weighbridge_operator")
 def vehicle_create(request):
     if request.method == "POST":
         form = VehicleForm(request.POST)
@@ -235,6 +241,7 @@ def vehicle_toggle(request, pk):
 
 # ----------------- Vehicle Types (انواع خودرو) -----------------
 @login_required
+@masterdata_role_required
 def vehicle_type_list(request):
     vtypes = VehicleType.objects.all().order_by("-id")
     page_obj, q = paginate_and_search(request, vtypes, ["name", "code"])
@@ -279,6 +286,7 @@ def vehicle_type_toggle(request, pk):
 
 # ----------------- Locations (مبادی و مقاصد) -----------------
 @login_required
+@masterdata_role_required
 def location_list(request):
     locs = Location.objects.all().order_by("-id")
     page_obj, q = paginate_and_search(request, locs, ["name", "description"])
@@ -323,6 +331,7 @@ def location_toggle(request, pk):
 
 # ----------------- Unload Locations (جایگاه‌های تخلیه) -----------------
 @login_required
+@masterdata_role_required
 def unload_location_list(request):
     ulocs = UnloadLocation.objects.all().order_by("-id")
     page_obj, q = paginate_and_search(request, ulocs, ["name", "code", "description"])
@@ -367,6 +376,7 @@ def unload_location_toggle(request, pk):
 
 # ----------------- Operation Types -----------------
 @login_required
+@masterdata_role_required
 def operation_type_list(request):
     optypes = OperationType.objects.all().order_by("-id")
     page_obj, q = paginate_and_search(request, optypes, ["name", "code"])
@@ -411,6 +421,7 @@ def operation_type_toggle(request, pk):
 
 # ----------------- Loss Types -----------------
 @login_required
+@masterdata_role_required
 def loss_type_list(request):
     losses = LossType.objects.all().order_by("-id")
     page_obj, q = paginate_and_search(request, losses, ["name", "code", "description"])

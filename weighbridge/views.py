@@ -15,7 +15,7 @@ from core.weight_provider import get_active_weight_provider
 from core.jalali import jalali_to_gregorian, get_today_jalali, format_jalali_date, get_today_gregorian
 from core.models import SystemSetting
 from masterdata.models import Product, Party, Driver, Vehicle, OperationType
-from accounts.decorators import role_required, manager_or_admin_required
+from accounts.decorators import role_required, manager_or_admin_required, weighbridge_role_required
 from audit.services import log_audit
 from audit.models import AuditAction, AuditLog
 from monitoring.services.anomaly_engine import AnomalyDetectionEngine
@@ -282,6 +282,7 @@ def ticket_second_weight(request, pk):
 
 
 @login_required
+@weighbridge_role_required
 def trucks_in_yard(request):
     """
     Dedicated view for vehicles currently inside the company waiting for 2nd weight.
@@ -311,6 +312,7 @@ def trucks_in_yard(request):
 
 
 @login_required
+@weighbridge_role_required
 def ticket_list(request):
     """
     Comprehensive ticket list view with advanced multi-field filtering and pagination.
@@ -387,6 +389,7 @@ def ticket_list(request):
 
 
 @login_required
+@weighbridge_role_required
 def ticket_detail(request, pk):
     ticket = get_object_or_404(
         WeighTicket.objects.select_related(
@@ -556,6 +559,7 @@ def ticket_cancel(request, pk):
 
 
 @login_required
+@weighbridge_role_required
 def ticket_print(request, pk):
     """
     High quality print preview supporting A4, A5, and POS thermal receipts.
@@ -592,6 +596,7 @@ def ticket_print(request, pk):
 
 
 @login_required
+@weighbridge_role_required
 def global_search(request):
     """
     Global search bar in navbar.
@@ -620,6 +625,7 @@ def global_search(request):
 from django.http import JsonResponse
 
 @login_required
+@weighbridge_role_required
 def ajax_plate_lookup(request):
     """
     Lookup vehicle history and check for active open tickets by license plate.
@@ -926,6 +932,7 @@ def emergency_ticket_second_weight(request, pk):
 
 
 @login_required
+@weighbridge_role_required
 def emergency_ticket_list(request):
     """
     لیست جامع قبوض توزین متفرقه / آزاد (مستقل از قبوض کارخانه).
@@ -989,6 +996,7 @@ def emergency_ticket_list(request):
 
 
 @login_required
+@weighbridge_role_required
 def emergency_ticket_detail(request, pk):
     """
     مشاهده جزئیات قبض متفرقه.
@@ -1001,6 +1009,7 @@ def emergency_ticket_detail(request, pk):
 
 
 @login_required
+@weighbridge_role_required
 def emergency_ticket_print(request, pk):
     """
     چاپ قبض توزین متفرقه ویژه شرکت‌های متقاضی (A5 / A4 / POS).

@@ -292,9 +292,13 @@
                     {% for ticket in page_obj %}
                     <tr>
                         <td class="fw-bold font-monospace text-primary">
+                            {% if user.is_superuser or user.profile.can_access_weighbridge %}
                             <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="text-decoration-none">
                                 {{ ticket.serial_number }}
                             </a>
+                            {% else %}
+                            <span>{{ ticket.serial_number }}</span>
+                            {% endif %}
                         </td>
                         <td class="font-monospace small text-muted">{{ ticket.waybill_number|default:"-" }}</td>
                         <td class="small">{{ ticket.jalali_first_date }}</td>
@@ -314,9 +318,13 @@
                         <td class="text-end font-monospace fw-bold text-primary">{{ ticket.final_weight|weight_fmt }}</td>
                         <td>{{ ticket.status|status_badge }}</td>
                         <td class="text-center">
+                            {% if user.is_superuser or user.profile.can_access_weighbridge %}
                             <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-sm btn-outline-secondary" title="مشاهده">
                                 <i class="bi bi-eye"></i>
                             </a>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}

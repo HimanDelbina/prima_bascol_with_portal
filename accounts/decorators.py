@@ -62,3 +62,39 @@ def audit_role_required(view_func):
     Excludes weighbridge_manager, weighbridge_operator, viewer.
     """
     return role_required("super_admin", "system_admin", "ceo")(view_func)
+
+def weighbridge_role_required(view_func):
+    """
+    Decorator requiring weighbridge operations access.
+    Excludes CEO, Viewer, Financial Manager, Warehouse, Report Manager.
+    """
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        if not request.user.is_authenticated or not request.user.is_active:
+            return redirect("accounts:login")
+        if request.user.is_superuser:
+            return view_func(request, *args, **kwargs)
+        profile = getattr(request.user, "profile", None)
+        if profile and profile.is_active and profile.can_access_weighbridge:
+            return view_func(request, *args, **kwargs)
+        messages.error(request, "شما دسترسی لازم برای عملیات باسکول را ندارید.")
+        return redirect("dashboard:index")
+    return _wrapped_view
+
+def masterdata_role_required(view_func):
+    """
+    Decorator requiring master data access.
+    Excludes CEO, Viewer, Financial Manager, Warehouse, Report Manager.
+    """
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        if not request.user.is_authenticated or not request.user.is_active:
+            return redirect("accounts:login")
+        if request.user.is_superuser:
+            return view_func(request, *args, **kwargs)
+        profile = getattr(request.user, "profile", None)
+        if profile and profile.is_active and profile.can_access_masterdata:
+            return view_func(request, *args, **kwargs)
+        messages.error(request, "شما دسترسی لازم برای اطلاعات پایه را ندارید.")
+        return redirect("dashboard:index")
+    return _wrapped_view

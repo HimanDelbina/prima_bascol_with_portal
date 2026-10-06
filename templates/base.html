@@ -161,6 +161,7 @@
             {% endif %}
 
             <!-- Weighbridge Submenu -->
+            {% if user.is_superuser or user.profile.can_access_weighbridge %}
             <a class="nav-link {% if request.resolver_match.app_name == 'weighbridge' %}active{% endif %}" data-bs-toggle="collapse" href="#menuWeighbridge" role="button" aria-expanded="{% if request.resolver_match.app_name == 'weighbridge' %}true{% else %}false{% endif %}">
                 <i class="bi bi-truck-front-fill"></i>
                 <span class="flex-grow-1">عملیات باسکول</span>
@@ -206,6 +207,7 @@
                     <span>لیست قبوض متفرقه (آزاد)</span>
                 </a>
             </div>
+            {% endif %}
 
             <!-- Reports Submenu -->
             <div class="nav-section-title">گزارشات و بیلان</div>
@@ -254,6 +256,7 @@
             </div>
 
             <!-- Master Data Submenu -->
+            {% if user.is_superuser or user.profile.can_access_masterdata %}
             <div class="nav-section-title">اطلاعات پایه</div>
             <a class="nav-link {% if request.resolver_match.app_name == 'masterdata' %}active{% endif %}" data-bs-toggle="collapse" href="#menuMasterdata" role="button" aria-expanded="{% if request.resolver_match.app_name == 'masterdata' %}true{% else %}false{% endif %}">
                 <i class="bi bi-database-fill-gear"></i>
@@ -271,6 +274,7 @@
                 <a href="{% url 'masterdata:operation_type_list' %}" class="nav-link {% if request.resolver_match.app_name == 'masterdata' and 'operation_type' in request.resolver_match.url_name %}active{% endif %}"><i class="bi bi-arrow-left-right"></i>انواع عملیات</a>
                 <a href="{% url 'masterdata:loss_type_list' %}" class="nav-link {% if request.resolver_match.app_name == 'masterdata' and 'loss_type' in request.resolver_match.url_name %}active{% endif %}"><i class="bi bi-percent"></i>انواع افت کالا</a>
             </div>
+            {% endif %}
 
             <!-- Administration & Settings -->
             {% if user.is_superuser or user.profile.can_manage_settings or user.profile.can_access_audit %}

@@ -55,7 +55,7 @@
             <tbody>
             {% for ticket in page_obj %}
                 <tr>
-                    <td><a class="fw-bold" href="{% url 'weighbridge:ticket_detail' ticket.id %}">{{ ticket.serial_number }}</a></td>
+                    <td>{% if user.is_superuser or user.profile.can_access_weighbridge %}<a class="fw-bold" href="{% url 'weighbridge:ticket_detail' ticket.id %}">{{ ticket.serial_number }}</a>{% else %}<span class="fw-bold font-monospace">{{ ticket.serial_number }}</span>{% endif %}</td>
                     <td class="text-nowrap">{{ ticket.report_date|jdate }}</td>
                     <td>{{ ticket.party.name|default:"-" }}</td><td>{{ ticket.product.name|default:"-" }}</td>
                     <td class="text-nowrap">{{ ticket.license_plate_display }}</td><td>{{ ticket.driver_display }}</td>

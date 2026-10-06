@@ -21,6 +21,7 @@
             </a>
         </li>
 
+        {% if user.is_superuser or user.profile.can_access_weighbridge %}
         <div class="sidebar-heading">عملیات توزین</div>
 
         <!-- New Ticket -->
@@ -63,6 +64,7 @@
                 <span>لیست قبوض متفرقه (آزاد)</span>
             </a>
         </li>
+        {% endif %}
 
         <div class="sidebar-heading">گزارشات و آمار</div>
 
@@ -83,6 +85,7 @@
             </a>
         </li>
 
+        {% if user.is_superuser or user.profile.can_access_masterdata %}
         <div class="sidebar-heading">اطلاعات پایه (Master Data)</div>
 
         <li>
@@ -147,6 +150,7 @@
                 <span>انواع افت بار</span>
             </a>
         </li>
+        {% endif %}
 
         {% if user.is_superuser or user.profile.can_access_audit or user.profile.can_manage_settings %}
         <div class="sidebar-heading">مدیریت و نظارت</div>

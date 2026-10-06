@@ -156,3 +156,94 @@ class RevokedPermissionsPolicyTests(TestCase):
         # Superadmin should have access
         self.client.login(username=self.superadmin.username, password="password123")
         self.assertEqual(self.client.get(reverse("management:dashboard")).status_code, 200)
+
+
+class RevokeMasterdataAndWeighbridgeAccessTests(TestCase):
+    """
+    Validates that:
+    1. CEO (مدیر عامل)
+    2. Viewer (مشاهده‌گر)
+    3. Financial Manager (مدیر مالی)
+    4. Warehouse (انبار)
+    have no access to Master Data (اطلاعات پایه) and Weighbridge Operations (عملیات باسکول).
+    """
+
+    def setUp(self):
+        self.client = Client()
+
+        self.ceo = User.objects.create_user(username="test_ceo", password="password123")
+        self.ceo.profile.role = "ceo"
+        self.ceo.profile.save()
+
+        self.viewer = User.objects.create_user(username="test_viewer", password="password123")
+        self.viewer.profile.role = "viewer"
+        self.viewer.profile.save()
+
+        self.financial_manager = User.objects.create_user(username="test_fin_mgr", password="password123")
+        self.financial_manager.profile.role = "financial_manager"
+        self.financial_manager.profile.save()
+
+        self.warehouse = User.objects.create_user(username="test_warehouse", password="password123")
+        self.warehouse.profile.role = "warehouse"
+        self.warehouse.profile.save()
+
+        self.restricted_users = [self.ceo, self.viewer, self.financial_manager, self.warehouse]
+
+        self.wb_manager = User.objects.create_user(username="test_wb_mgr", password="password123")
+        self.wb_manager.profile.role = "weighbridge_manager"
+        self.wb_manager.profile.save()
+
+        self.superadmin = User.objects.create_superuser(username="test_superadmin", password="password123")
+
+    def test_profile_properties(self):
+        """can_access_masterdata and can_access_weighbridge must be False for CEO, Viewer, Financial Manager, Warehouse."""
+        for user in self.restricted_users:
+            self.assertFalse(user.profile.can_access_masterdata, f"{user.username} should not have can_access_masterdata")
+            self.assertFalse(user.profile.can_access_weighbridge, f"{user.username} should not have can_access_weighbridge")
+
+        self.assertTrue(self.wb_manager.profile.can_access_masterdata)
+        self.assertTrue(self.wb_manager.profile.can_access_weighbridge)
+
+    def test_masterdata_views_redirect_restricted_roles(self):
+        """Restricted roles must be redirected to dashboard when accessing master data."""
+        for user in self.restricted_users:
+            self.client.login(username=user.username, password="password123")
+
+            res_products = self.client.get(reverse("masterdata:product_list"))
+            self.assertEqual(res_products.status_code, 302, f"{user.username} should be redirected from product_list")
+            self.assertRedirects(res_products, reverse("dashboard:index"))
+
+            res_parties = self.client.get(reverse("masterdata:party_list"))
+            self.assertEqual(res_parties.status_code, 302, f"{user.username} should be redirected from party_list")
+            self.assertRedirects(res_parties, reverse("dashboard:index"))
+
+            res_vehicles = self.client.get(reverse("masterdata:vehicle_list"))
+            self.assertEqual(res_vehicles.status_code, 302, f"{user.username} should be redirected from vehicle_list")
+            self.assertRedirects(res_vehicles, reverse("dashboard:index"))
+
+        # wb_manager should access fine
+        self.client.login(username=self.wb_manager.username, password="password123")
+        self.assertEqual(self.client.get(reverse("masterdata:product_list")).status_code, 200)
+
+    def test_weighbridge_views_redirect_restricted_roles(self):
+        """Restricted roles must be redirected to dashboard when accessing weighbridge operations."""
+        for user in self.restricted_users:
+            self.client.login(username=user.username, password="password123")
+
+            res_tickets = self.client.get(reverse("weighbridge:ticket_list"))
+            self.assertEqual(res_tickets.status_code, 302, f"{user.username} should be redirected from ticket_list")
+            self.assertRedirects(res_tickets, reverse("dashboard:index"))
+
+            res_yard = self.client.get(reverse("weighbridge:trucks_in_yard"))
+            self.assertEqual(res_yard.status_code, 302, f"{user.username} should be redirected from trucks_in_yard")
+            self.assertRedirects(res_yard, reverse("dashboard:index"))
+
+            res_create = self.client.get(reverse("weighbridge:ticket_create"))
+            self.assertEqual(res_create.status_code, 302, f"{user.username} should be redirected from ticket_create")
+            self.assertRedirects(res_create, reverse("dashboard:index"))
+
+        # wb_manager should access fine
+        self.client.login(username=self.wb_manager.username, password="password123")
+        self.assertEqual(self.client.get(reverse("weighbridge:ticket_list")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("weighbridge:trucks_in_yard")).status_code, 200)
+

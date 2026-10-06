@@ -13,6 +13,7 @@ class RoleChoices(models.TextChoices):
     WEIGHBRIDGE_MANAGER = "weighbridge_manager", "مدیر باسکول (Weighbridge Manager)"
     WEIGHBRIDGE_OPERATOR = "weighbridge_operator", "اپراتور باسکول (Operator)"
     REPORT_MANAGER = "report_manager", "مدیر گزارشات (Report Manager)"
+    WAREHOUSE = "warehouse", "مسئول انبار (Warehouse)"
     VIEWER = "viewer", "مشاهده‌گر (Viewer)"
 
 class UserProfile(models.Model):
@@ -101,6 +102,7 @@ class UserProfile(models.Model):
             RoleChoices.REPORT_MANAGER,
             RoleChoices.VIEWER,
             RoleChoices.WEIGHBRIDGE_OPERATOR,
+            RoleChoices.WAREHOUSE,
         ]
 
     @property
@@ -110,6 +112,40 @@ class UserProfile(models.Model):
             RoleChoices.SYSTEM_ADMIN,
             RoleChoices.CEO,
         ]
+
+    @property
+    def can_access_masterdata(self):
+        """
+        Permission to access masterdata app.
+        Revoked for CEO, Viewer, Financial Manager, Warehouse, and Report Manager.
+        """
+        if self.user.is_superuser:
+            return True
+        revoked = [
+            RoleChoices.CEO,
+            RoleChoices.VIEWER,
+            RoleChoices.FINANCIAL_MANAGER,
+            RoleChoices.WAREHOUSE,
+            RoleChoices.REPORT_MANAGER,
+        ]
+        return self.role not in revoked
+
+    @property
+    def can_access_weighbridge(self):
+        """
+        Permission to access weighbridge operations (weighbridge app).
+        Revoked for CEO, Viewer, Financial Manager, Warehouse, and Report Manager.
+        """
+        if self.user.is_superuser:
+            return True
+        revoked = [
+            RoleChoices.CEO,
+            RoleChoices.VIEWER,
+            RoleChoices.FINANCIAL_MANAGER,
+            RoleChoices.WAREHOUSE,
+            RoleChoices.REPORT_MANAGER,
+        ]
+        return self.role not in revoked
 
 @receiver(post_save, sender=User)
 def create_or_update_user_profile(sender, instance, created, **kwargs):
