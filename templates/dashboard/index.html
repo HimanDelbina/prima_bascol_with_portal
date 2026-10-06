@@ -71,8 +71,9 @@
         </div>
     </div>
 
-    <!-- Monitoring Alerts Today -->
+    <!-- Monitoring Alerts or Completed Tickets Today -->
     <div class="col-6 col-md-4 col-xl-2">
+        {% if user.is_superuser or user.profile.can_view_monitoring %}
         <a href="{% url 'monitoring:alert_list' %}" class="text-decoration-none">
             <div class="industrial-card p-3 h-100 border-start border-danger border-4 card-hover">
                 <div class="text-muted small fw-bold mb-1">هشدارهای پایش هوشمند</div>
@@ -80,6 +81,13 @@
                 <div class="small text-danger mt-1"><i class="bi bi-shield-exclamation text-danger me-1"></i>{{ today_critical_alerts }} مورد با اهمیت بالا</div>
             </div>
         </a>
+        {% else %}
+        <div class="industrial-card p-3 h-100 border-start border-success border-4">
+            <div class="text-muted small fw-bold mb-1">قبوض تکمیل‌شده امروز</div>
+            <div class="fs-3 fw-bold text-success">{{ today_completed_count }} <span class="fs-6 fw-normal text-muted">قبض</span></div>
+            <div class="small text-muted mt-1"><i class="bi bi-check2-circle text-success me-1"></i>از مجموع {{ today_count }} نوبت</div>
+        </div>
+        {% endif %}
     </div>
 </div>
 

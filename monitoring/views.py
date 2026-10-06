@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 
-from accounts.decorators import role_required, manager_or_admin_required
+from accounts.decorators import role_required, manager_or_admin_required, admin_only_required, monitoring_role_required
 from core.jalali import (
     get_today_gregorian, get_today_jalali, format_jalali_date, jalali_to_gregorian
 )
@@ -33,6 +33,7 @@ from monitoring.services.anomaly_engine import AnomalyDetectionEngine
 
 
 @login_required
+@monitoring_role_required
 def monitoring_dashboard(request):
     """
     Main Monitoring & Anomaly Detection Center Dashboard.
@@ -106,6 +107,7 @@ def monitoring_dashboard(request):
 
 
 @login_required
+@monitoring_role_required
 def alert_list(request):
     """
     Comprehensive Alert Center table view with multi-field filtering and pagination.
@@ -215,6 +217,7 @@ def alert_list(request):
 
 
 @login_required
+@monitoring_role_required
 def alert_detail(request, pk):
     """
     Detailed explainable view for a single alert, including baseline statistics,
@@ -261,6 +264,7 @@ def alert_detail(request, pk):
 
 
 @login_required
+@monitoring_role_required
 @require_POST
 def resolve_alert(request, pk):
     """
@@ -302,7 +306,7 @@ def resolve_alert(request, pk):
 
 
 @login_required
-@manager_or_admin_required
+@admin_only_required
 def monitoring_settings(request):
     """
     Configuration view for monitoring rules and thresholds.
@@ -348,6 +352,7 @@ def monitoring_settings(request):
 
 
 @login_required
+@monitoring_role_required
 def monitoring_reports(request):
     """
     Analytical monitoring report including Summary by Type/Severity/Party/Product

@@ -3,11 +3,11 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
 from audit.models import AuditLog, AuditAction
-from accounts.decorators import manager_or_admin_required
+from accounts.decorators import audit_role_required
 from core.jalali import jalali_to_gregorian
 
 @login_required
-@manager_or_admin_required
+@audit_role_required
 def audit_list(request):
     """
     Searchable and filterable view of all system audit logs.
@@ -58,7 +58,7 @@ def audit_list(request):
     })
 
 @login_required
-@manager_or_admin_required
+@audit_role_required
 def audit_detail(request, pk):
     log_entry = get_object_or_404(AuditLog.objects.select_related("user"), pk=pk)
     

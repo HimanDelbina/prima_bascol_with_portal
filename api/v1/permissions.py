@@ -110,16 +110,14 @@ class IsMasterDataAdminOrReadOnly(BasePermission):
 
 
 class CanManageMonitoring(BasePermission):
-    """Permission for taking action on monitoring alerts and changing rule thresholds."""
+    """Permission for viewing and managing monitoring alerts and thresholds."""
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated):
             return False
-        if request.method in SAFE_METHODS:
-            return True
         if request.user.is_superuser:
             return True
         profile = getattr(request.user, "profile", None)
-        return bool(profile and profile.is_admin_or_manager)
+        return bool(profile and profile.can_view_monitoring)
 
 
 class CanViewPartyAnalytics(BasePermission):
@@ -130,7 +128,7 @@ class CanViewPartyAnalytics(BasePermission):
         if request.user.is_superuser:
             return True
         profile = getattr(request.user, "profile", None)
-        return bool(profile and (profile.is_executive_manager or profile.is_admin_or_manager))
+        return bool(profile and profile.is_executive_manager)
 
 
 class CanViewPartyScore(BasePermission):
@@ -141,7 +139,7 @@ class CanViewPartyScore(BasePermission):
         if request.user.is_superuser:
             return True
         profile = getattr(request.user, "profile", None)
-        return bool(profile and (profile.is_executive_manager or profile.is_admin_or_manager))
+        return bool(profile and profile.is_executive_manager)
 
 
 class CanViewPartyRanking(BasePermission):
@@ -152,7 +150,7 @@ class CanViewPartyRanking(BasePermission):
         if request.user.is_superuser:
             return True
         profile = getattr(request.user, "profile", None)
-        return bool(profile and (profile.is_executive_manager or profile.is_admin_or_manager))
+        return bool(profile and profile.is_executive_manager)
 
 
 class CanExportPartyAnalytics(BasePermission):
@@ -163,7 +161,7 @@ class CanExportPartyAnalytics(BasePermission):
         if request.user.is_superuser:
             return True
         profile = getattr(request.user, "profile", None)
-        return bool(profile and (profile.is_executive_manager or profile.is_admin_or_manager))
+        return bool(profile and profile.is_executive_manager)
 
 
 class CanManagePartyScoringConfig(BasePermission):
@@ -173,8 +171,8 @@ class CanManagePartyScoringConfig(BasePermission):
             return False
         if request.method in SAFE_METHODS:
             profile = getattr(request.user, "profile", None)
-            return bool(request.user.is_superuser or (profile and (profile.is_executive_manager or profile.is_admin_or_manager)))
+            return bool(request.user.is_superuser or (profile and profile.is_executive_manager))
         if request.user.is_superuser:
             return True
         profile = getattr(request.user, "profile", None)
-        return bool(profile and (profile.is_admin_or_manager or profile.can_manage_settings))
+        return bool(profile and profile.can_manage_settings)

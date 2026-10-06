@@ -123,6 +123,7 @@
     </div>
 </div>
 
+{% if user.is_superuser or user.profile.can_view_monitoring %}
 <!-- Smart Monitoring & Anomaly Analysis Section -->
 <div class="industrial-card mb-4 border-top {% if monitoring_summary.open_alerts_count > 0 %}border-danger{% else %}border-success{% endif %} border-4">
     <div class="industrial-card-header d-flex justify-content-between align-items-center bg-light">
@@ -170,6 +171,7 @@
         {% endif %}
     </div>
 </div>
+{% endif %}
 
 <!-- Details & Timeline Grid -->
 <div class="row g-3 mb-4">

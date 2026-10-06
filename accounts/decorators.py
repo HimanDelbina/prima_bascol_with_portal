@@ -37,9 +37,28 @@ def management_role_required(view_func):
     """
     Decorator requiring executive management roles:
     Super Admin, System Admin, CEO, Factory Manager, Commercial Manager,
-    Financial Manager, Weighbridge Manager, or Report Manager.
+    Financial Manager, or Report Manager.
+    Excludes weighbridge_manager, weighbridge_operator, viewer.
     """
     return role_required(
         "super_admin", "system_admin", "ceo", "factory_manager",
-        "commercial_manager", "financial_manager", "weighbridge_manager", "report_manager"
+        "commercial_manager", "financial_manager", "report_manager"
     )(view_func)
+
+def monitoring_role_required(view_func):
+    """
+    Decorator requiring executive management or admin roles for smart monitoring.
+    Excludes weighbridge_manager, weighbridge_operator, viewer.
+    """
+    return role_required(
+        "super_admin", "system_admin", "ceo", "factory_manager",
+        "commercial_manager", "financial_manager", "report_manager"
+    )(view_func)
+
+def audit_role_required(view_func):
+    """
+    Decorator requiring audit access:
+    Super Admin, System Admin, CEO.
+    Excludes weighbridge_manager, weighbridge_operator, viewer.
+    """
+    return role_required("super_admin", "system_admin", "ceo")(view_func)

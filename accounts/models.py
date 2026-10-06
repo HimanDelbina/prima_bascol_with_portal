@@ -57,12 +57,15 @@ class UserProfile(models.Model):
             RoleChoices.FACTORY_MANAGER,
             RoleChoices.COMMERCIAL_MANAGER,
             RoleChoices.FINANCIAL_MANAGER,
-            RoleChoices.WEIGHBRIDGE_MANAGER,
             RoleChoices.REPORT_MANAGER,
         ]
 
     @property
     def can_view_management_dashboard(self):
+        return self.is_executive_manager
+
+    @property
+    def can_view_monitoring(self):
         return self.is_executive_manager
 
     @property
@@ -106,7 +109,6 @@ class UserProfile(models.Model):
             RoleChoices.SUPER_ADMIN,
             RoleChoices.SYSTEM_ADMIN,
             RoleChoices.CEO,
-            RoleChoices.WEIGHBRIDGE_MANAGER,
         ]
 
 @receiver(post_save, sender=User)

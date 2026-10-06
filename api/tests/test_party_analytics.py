@@ -23,8 +23,12 @@ class PartyAnalyticsAndScoringTests(TestCase):
         # Users
         self.admin = User.objects.create_superuser(username="admin_scoring", password="password123")
         self.manager = User.objects.create_user(username="manager_scoring", password="password123")
-        self.manager.profile.role = RoleChoices.WEIGHBRIDGE_MANAGER
+        self.manager.profile.role = RoleChoices.COMMERCIAL_MANAGER
         self.manager.profile.save()
+
+        self.wb_manager = User.objects.create_user(username="wb_manager_scoring", password="password123")
+        self.wb_manager.profile.role = RoleChoices.WEIGHBRIDGE_MANAGER
+        self.wb_manager.profile.save()
 
         self.operator = User.objects.create_user(username="op_scoring", password="password123")
         self.operator.profile.role = RoleChoices.WEIGHBRIDGE_OPERATOR
@@ -229,7 +233,12 @@ class PartyAnalyticsAndScoringTests(TestCase):
         res_op = self.client.get(url)
         self.assertEqual(res_op.status_code, status.HTTP_403_FORBIDDEN)
 
-        # 3. Manager
+        # 3. Weighbridge Manager (forbidden)
+        self.client.force_authenticate(user=self.wb_manager)
+        res_wb = self.client.get(url)
+        self.assertEqual(res_wb.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 4. Executive Manager (authorized)
         self.client.force_authenticate(user=self.manager)
         res_mgr = self.client.get(url)
         self.assertEqual(res_mgr.status_code, status.HTTP_200_OK)
@@ -259,7 +268,7 @@ class PartyAnalyticsAndScoringTests(TestCase):
 
     def test_scoring_config_update_and_audit(self):
         """Updating scoring config via API must record an entry in AuditLog (source='API')."""
-        self.client.force_authenticate(user=self.manager)
+        self.client.force_authenticate(user=self.admin)
         url_config = reverse('api_v1:management_parties_config')
 
         res_get = self.client.get(url_config)
@@ -288,7 +297,7 @@ class PartyAnalyticsAndScoringTests(TestCase):
             source="API"
         ).first()
         self.assertIsNotNone(audit_entry)
-        self.assertEqual(audit_entry.user, self.manager)
+        self.assertEqual(audit_entry.user, self.admin)
 
     def test_exports_endpoints(self):
         """Check Excel, CSV, and PDF export endpoints."""

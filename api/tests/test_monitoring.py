@@ -13,8 +13,12 @@ class MonitoringAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.manager = User.objects.create_user(username="manager_mon", password="password")
-        self.manager.profile.role = RoleChoices.WEIGHBRIDGE_MANAGER
+        self.manager.profile.role = RoleChoices.FACTORY_MANAGER
         self.manager.profile.save()
+
+        self.wb_manager = User.objects.create_user(username="wb_manager_mon", password="password")
+        self.wb_manager.profile.role = RoleChoices.WEIGHBRIDGE_MANAGER
+        self.wb_manager.profile.save()
 
         self.operator = User.objects.create_user(username="operator_mon", password="password")
         self.operator.profile.role = RoleChoices.WEIGHBRIDGE_OPERATOR
@@ -37,11 +41,20 @@ class MonitoringAPITests(TestCase):
         )
 
     def test_list_alerts(self):
-        self.client.force_authenticate(user=self.operator)
+        self.client.force_authenticate(user=self.manager)
         res = self.client.get("/api/v1/monitoring/alerts/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["count"], 1)
         self.assertEqual(res.data["results"][0]["severity"]["code"], AlertSeverity.HIGH)
+
+        # Operator and Weighbridge Manager are forbidden
+        self.client.force_authenticate(user=self.operator)
+        res_op = self.client.get("/api/v1/monitoring/alerts/")
+        self.assertEqual(res_op.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.wb_manager)
+        res_wb = self.client.get("/api/v1/monitoring/alerts/")
+        self.assertEqual(res_wb.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_resolve_alert_by_manager(self):
         self.client.force_authenticate(user=self.manager)
@@ -53,17 +66,32 @@ class MonitoringAPITests(TestCase):
         self.assertEqual(self.alert.status, AlertStatus.RESOLVED)
         self.assertEqual(self.alert.resolved_by, self.manager)
 
-    def test_operator_cannot_resolve_alert(self):
+    def test_operator_and_wb_manager_cannot_resolve_alert(self):
         self.client.force_authenticate(user=self.operator)
         res = self.client.post(f"/api/v1/monitoring/alerts/{self.alert.id}/resolve/", {
             "resolution_note": "اقدام غیرمجاز"
         })
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
+        self.client.force_authenticate(user=self.wb_manager)
+        res_wb = self.client.post(f"/api/v1/monitoring/alerts/{self.alert.id}/resolve/", {
+            "resolution_note": "اقدام غیرمجاز مدیر باسکول"
+        })
+        self.assertEqual(res_wb.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_monitoring_summary(self):
-        self.client.force_authenticate(user=self.operator)
+        self.client.force_authenticate(user=self.manager)
         res = self.client.get("/api/v1/monitoring/summary/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn("open", res.data)
         self.assertIn("high", res.data)
         self.assertIn("critical", res.data)
+
+        # Operator and Weighbridge Manager are forbidden
+        self.client.force_authenticate(user=self.operator)
+        res_op = self.client.get("/api/v1/monitoring/summary/")
+        self.assertEqual(res_op.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.wb_manager)
+        res_wb = self.client.get("/api/v1/monitoring/summary/")
+        self.assertEqual(res_wb.status_code, status.HTTP_403_FORBIDDEN)

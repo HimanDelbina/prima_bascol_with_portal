@@ -148,15 +148,17 @@
             </a>
         </li>
 
-        {% if user.is_superuser or user.profile.is_admin_or_manager %}
+        {% if user.is_superuser or user.profile.can_access_audit or user.profile.can_manage_settings %}
         <div class="sidebar-heading">مدیریت و نظارت</div>
 
+        {% if user.is_superuser or user.profile.can_access_audit %}
         <li>
             <a href="{% url 'audit:audit_list' %}" class="sidebar-link {% if request.resolver_match.app_name == 'audit' %}active{% endif %}">
                 <i class="bi bi-shield-check text-warning"></i>
                 <span>گزارش تغییرات (Audit Log)</span>
             </a>
         </li>
+        {% endif %}
 
         {% if user.is_superuser or user.profile.can_manage_settings %}
         <li>

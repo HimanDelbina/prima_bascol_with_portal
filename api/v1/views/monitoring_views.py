@@ -37,7 +37,7 @@ class MonitoringAlertViewSet(viewsets.ReadOnlyModelViewSet):
     ).all().order_by('-id')
 
     serializer_class = MonitoringAlertSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanManageMonitoring]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = MonitoringAlertFilter
     search_fields = [

@@ -43,6 +43,7 @@
             </a>
 
             <!-- Smart Monitoring & Anomaly Detection Submenu -->
+            {% if user.is_superuser or user.profile.can_view_monitoring %}
             <div class="nav-section-title text-danger">پایش هوشمند و کشف مغایرت</div>
             <a class="nav-link {% if request.resolver_match.app_name == 'monitoring' %}active{% endif %}" data-bs-toggle="collapse" href="#menuMonitoring" role="button" aria-expanded="{% if request.resolver_match.app_name == 'monitoring' %}true{% else %}false{% endif %}">
                 <i class="bi bi-shield-exclamation text-danger"></i>
@@ -82,13 +83,14 @@
                     <i class="bi bi-file-earmark-bar-graph"></i>
                     <span>گزارشات تحلیلی</span>
                 </a>
-                {% if user.profile.is_admin_or_manager or user.is_superuser %}
+                {% if user.profile.can_manage_settings or user.is_superuser %}
                 <a href="{% url 'monitoring:settings' %}" class="nav-link {% if request.resolver_match.app_name == 'monitoring' and request.resolver_match.url_name == 'settings' %}active{% endif %}">
                     <i class="bi bi-sliders"></i>
                     <span>تنظیمات پایش</span>
                 </a>
                 {% endif %}
             </div>
+            {% endif %}
 
             <!-- Executive Management Suite Submenu -->
             {% if user.profile.is_executive_manager or user.is_superuser %}
@@ -271,16 +273,21 @@
             </div>
 
             <!-- Administration & Settings -->
-            {% if user.profile.is_admin_or_manager or user.is_superuser %}
+            {% if user.is_superuser or user.profile.can_manage_settings or user.profile.can_access_audit %}
             <div class="nav-section-title">مدیریت و امنیت</div>
+            {% if user.is_superuser or user.profile.can_manage_settings %}
             <a href="{% url 'accounts:user_list' %}" class="nav-link {% if request.resolver_match.app_name == 'accounts' and 'user' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="bi bi-people-fill"></i>
                 <span>کاربران و دسترسی‌ها</span>
             </a>
+            {% endif %}
+            {% if user.is_superuser or user.profile.can_access_audit %}
             <a href="{% url 'audit:audit_list' %}" class="nav-link {% if request.resolver_match.app_name == 'audit' %}active{% endif %}">
                 <i class="bi bi-shield-lock-fill"></i>
                 <span>گزارش تغییرات (Audit)</span>
             </a>
+            {% endif %}
+            {% if user.is_superuser or user.profile.can_manage_settings %}
             <a href="{% url 'core:settings' %}" class="nav-link {% if request.resolver_match.app_name == 'core' and request.resolver_match.url_name == 'settings' %}active{% endif %}">
                 <i class="bi bi-sliders2"></i>
                 <span>تنظیمات سیستم</span>
@@ -289,6 +296,7 @@
                 <i class="bi bi-database-down"></i>
                 <span>پشتیبان‌گیری و بازیابی</span>
             </a>
+            {% endif %}
             {% endif %}
         </div>
 

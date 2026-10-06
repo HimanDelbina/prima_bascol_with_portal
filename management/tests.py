@@ -105,10 +105,10 @@ class ManagementSuiteTests(TestCase):
         response = self.client.get(reverse("management:dashboard"))
         self.assertEqual(response.status_code, 200)
 
-        # Weighbridge Manager (authorized)
+        # Weighbridge Manager (unauthorized per latest policy)
         self.client.login(username="mgr_user", password="password123")
         response = self.client.get(reverse("management:dashboard"))
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
 
     def test_dashboard_metrics_and_context(self):
         self.client.login(username="ceo_user", password="password123")
@@ -129,7 +129,13 @@ class ManagementSuiteTests(TestCase):
         self.assertEqual(kpis["discrepancies_count"], 1)
 
     def test_excel_and_csv_export(self):
+        # Weighbridge Manager cannot export management reports
         self.client.login(username="mgr_user", password="password123")
+        res_mgr = self.client.get(reverse("management:dashboard") + "?export=excel")
+        self.assertEqual(res_mgr.status_code, 302)
+
+        # CEO can export management reports
+        self.client.login(username="ceo_user", password="password123")
         
         # Excel
         res_excel = self.client.get(reverse("management:dashboard") + "?export=excel")
@@ -168,7 +174,13 @@ class ManagementSuiteTests(TestCase):
             self.assertEqual(res.status_code, 200, f"View {v} failed with status {res.status_code}")
 
     def test_charts_and_filters_api(self):
+        # Weighbridge Manager cannot access charts API
         self.client.login(username="mgr_user", password="password123")
+        res_mgr = self.client.get(reverse("management:api_charts"))
+        self.assertEqual(res_mgr.status_code, 302)
+
+        # CEO can access charts API
+        self.client.login(username="ceo_user", password="password123")
         
         # Charts API
         res_charts = self.client.get(reverse("management:api_charts"))
