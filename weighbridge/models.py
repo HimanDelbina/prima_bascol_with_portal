@@ -386,3 +386,151 @@ class PlateDayLock(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["plate", "date"], name="unique_plate_day_lock")]
 
+
+class EmergencyTicketStatus(models.TextChoices):
+    WAITING_SECOND = "waiting_second", "در انتظار وزن دوم"
+    COMPLETED = "completed", "تکمیل شده"
+    CANCELLED = "cancelled", "ابطال شده"
+
+
+class EmergencyWeighTicket(BaseModel):
+    """
+    قبض توزین اضطراری / متفرقه برای شرکت‌های خارج از مجموعه.
+    این رکوردها کاملاً ایزوله بوده و در آمارها و داده‌های انبار، کالا و طرف‌حساب‌های کارخانه تأثیری ندارند.
+    """
+    serial_number = models.CharField(max_length=50, unique=True, db_index=True, verbose_name="شماره قبض")
+    status = models.CharField(
+        max_length=30,
+        choices=EmergencyTicketStatus.choices,
+        default=EmergencyTicketStatus.COMPLETED,
+        db_index=True,
+        verbose_name="وضعیت سند"
+    )
+
+    # اطلاعات متقاضی و خودرو
+    company_name = models.CharField(max_length=150, blank=True, verbose_name="نام شرکت / متقاضی")
+    driver_name = models.CharField(max_length=150, verbose_name="نام راننده")
+    driver_mobile = models.CharField(max_length=30, blank=True, verbose_name="شماره موبایل")
+    license_plate = models.CharField(max_length=60, blank=True, verbose_name="شماره پلاک")
+
+    # اوزان (کیلوگرم)
+    gross_weight = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"), verbose_name="وزن پر (Kg)")
+    tare_weight = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"), verbose_name="وزن خالی (Kg)")
+    net_weight = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"), verbose_name="وزن خالص (Kg)")
+
+    # تاریخ و زمان
+    weight_date = models.DateField(db_index=True, verbose_name="تاریخ توزین")
+    weight_time = models.TimeField(null=True, blank=True, verbose_name="ساعت توزین")
+
+    gross_date = models.DateField(null=True, blank=True, verbose_name="تاریخ وزن پر")
+    gross_time = models.TimeField(null=True, blank=True, verbose_name="ساعت وزن پر")
+    tare_date = models.DateField(null=True, blank=True, verbose_name="تاریخ وزن خالی")
+    tare_time = models.TimeField(null=True, blank=True, verbose_name="ساعت وزن خالی")
+
+    operator = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="emergency_tickets",
+        verbose_name="اپراتور ثبت‌کننده"
+    )
+    notes = models.TextField(blank=True, verbose_name="توضیحات")
+
+    # ابطال
+    cancellation_reason = models.TextField(blank=True, verbose_name="دلیل ابطال")
+    cancelled_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cancelled_emergency_tickets",
+        verbose_name="کاربر ابطال‌کننده"
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True, verbose_name="زمان ابطال")
+
+    class Meta:
+        verbose_name = "قبض توزین متفرقه / آزاد"
+        verbose_name_plural = "قبوض توزین متفرقه و آزاد"
+        ordering = ["-id"]
+        indexes = [
+            models.Index(fields=["serial_number"]),
+            models.Index(fields=["weight_date"]),
+            models.Index(fields=["driver_name"]),
+            models.Index(fields=["driver_mobile"]),
+            models.Index(fields=["license_plate"]),
+            models.Index(fields=["company_name"]),
+        ]
+
+    def __str__(self):
+        return f"قبض متفرقه {self.serial_number} - {self.driver_name} ({self.license_plate})"
+
+    def save(self, *args, **kwargs):
+        if not self.serial_number:
+            self.serial_number = self.generate_serial()
+        # محاسبه وزن خالص
+        if self.gross_weight and self.tare_weight:
+            if self.gross_weight >= self.tare_weight:
+                self.net_weight = self.gross_weight - self.tare_weight
+            else:
+                self.net_weight = self.tare_weight - self.gross_weight
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def generate_serial(cls) -> str:
+        last = cls.objects.order_by("-id").first()
+        if not last:
+            return "EXT-1001"
+        try:
+            num_part = "".join(filter(str.isdigit, last.serial_number))
+            if num_part:
+                next_num = int(num_part) + 1
+                return f"EXT-{next_num}"
+        except Exception:
+            pass
+        return f"EXT-{last.id + 1001}"
+
+    @property
+    def jalali_weight_date(self):
+        return format_jalali_date(self.weight_date)
+
+    @property
+    def jalali_gross_date(self):
+        return format_jalali_date(self.gross_date or self.weight_date)
+
+    @property
+    def jalali_tare_date(self):
+        return format_jalali_date(self.tare_date or self.weight_date)
+
+    @property
+    def time_str(self):
+        return format_time_hhmm(self.weight_time)
+
+    @property
+    def gross_time_str(self):
+        return format_time_hhmm(self.gross_time or self.weight_time)
+
+    @property
+    def tare_time_str(self):
+        return format_time_hhmm(self.tare_time or self.weight_time)
+
+    @property
+    def net_tonnage(self):
+        return round((self.net_weight or Decimal("0")) / Decimal("1000"), 3)
+
+    @property
+    def gross_tonnage(self):
+        return round((self.gross_weight or Decimal("0")) / Decimal("1000"), 3)
+
+    @property
+    def tare_tonnage(self):
+        return round((self.tare_weight or Decimal("0")) / Decimal("1000"), 3)
+
+    @property
+    def operator_name(self):
+        if self.operator:
+            return self.operator.get_full_name() or self.operator.username
+        return "سیستم باسکول"
+
+
+

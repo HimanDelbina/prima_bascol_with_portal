@@ -31,7 +31,13 @@
         }
         .fw-bold { font-weight: bold; }
         .big-val { font-size: 15px; font-weight: 900; }
+        @page {
+            size: 80mm auto;
+            margin: 2mm;
+        }
         @media print {
+            body { width: 80mm; margin: 0; padding: 2mm; }
+            .pos-container { width: 76mm; }
             .no-print { display: none !important; }
         }
     </style>

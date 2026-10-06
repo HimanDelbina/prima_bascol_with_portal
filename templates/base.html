@@ -179,6 +179,10 @@
                     <i class="bi bi-plus-circle-fill text-warning"></i>
                     <span>ثبت باسکول جدید</span>
                 </a>
+                <a href="{% url 'weighbridge:emergency_ticket_create' %}" class="nav-link text-warning {% if request.resolver_match.url_name == 'emergency_ticket_create' %}active{% endif %}">
+                    <i class="bi bi-building-add text-warning"></i>
+                    <span>توزین متفرقه (شرکت‌های دیگر)</span>
+                </a>
                 <a href="{% url 'weighbridge:trucks_in_yard' %}" class="nav-link {% if request.resolver_match.app_name == 'weighbridge' and request.resolver_match.url_name == 'trucks_in_yard' %}active{% endif %}">
                     <i class="bi bi-hourglass-split"></i>
                     <span>خودروهای داخل مجموعه</span>
@@ -194,6 +198,10 @@
                 <a href="{% url 'weighbridge:ticket_list' %}" class="nav-link {% if request.resolver_match.app_name == 'weighbridge' and request.resolver_match.url_name == 'ticket_list' and not request.GET.status %}active{% endif %}">
                     <i class="bi bi-card-checklist"></i>
                     <span>همه قبوض</span>
+                </a>
+                <a href="{% url 'weighbridge:emergency_ticket_list' %}" class="nav-link {% if 'emergency' in request.resolver_match.url_name and request.resolver_match.url_name != 'emergency_ticket_create' %}active{% endif %}">
+                    <i class="bi bi-journal-text text-warning"></i>
+                    <span>لیست قبوض متفرقه (آزاد)</span>
                 </a>
             </div>
 

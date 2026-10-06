@@ -1,0 +1,223 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+
+    <!-- Header & Action Buttons -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 pb-2 border-bottom gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <h4 class="fw-bold mb-0 text-slate-900">
+                <i class="bi bi-file-earmark-text text-primary me-2"></i>قبض متفرقه شماره {{ ticket.serial_number }}
+            </h4>
+            {% if ticket.status == 'completed' %}
+                <span class="badge bg-success-subtle text-success border border-success px-3 py-1 fs-6">تکمیل شده</span>
+            {% elif ticket.status == 'waiting_second' %}
+                <span class="badge bg-warning text-dark px-3 py-1 fs-6">در انتظار وزن دوم</span>
+            {% elif ticket.status == 'cancelled' %}
+                <span class="badge bg-danger text-white px-3 py-1 fs-6">باطل شده</span>
+            {% endif %}
+            <span class="badge bg-warning-subtle text-warning border border-warning">توزین آزاد / خارج از سازمان</span>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <div class="dropdown">
+                <button class="btn btn-primary dropdown-toggle shadow-sm" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-printer-fill me-1"></i> چاپ قبض رسمی
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow">
+                    <li>
+                        <a class="dropdown-item py-2" href="{% url 'weighbridge:emergency_ticket_print' ticket.pk %}?template=a5" target="_blank">
+                            <i class="bi bi-file-earmark me-2 text-primary"></i>چاپ برگه A5 (استاندارد قبض)
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item py-2" href="{% url 'weighbridge:emergency_ticket_print' ticket.pk %}?template=a4" target="_blank">
+                            <i class="bi bi-file-earmark-text me-2 text-info"></i>چاپ برگه A4 کامل
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item py-2" href="{% url 'weighbridge:emergency_ticket_print' ticket.pk %}?template=pos" target="_blank">
+                            <i class="bi bi-receipt me-2 text-warning"></i>فیش حرارتی پرینتر کوچک (POS)
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            {% if ticket.status == 'waiting_second' %}
+            <a href="{% url 'weighbridge:emergency_ticket_second_weight' ticket.pk %}" class="btn btn-warning text-dark fw-bold">
+                <i class="bi bi-plus-circle-fill me-1"></i> ثبت وزن دوم
+            </a>
+            {% endif %}
+
+            {% if ticket.status != 'cancelled' and user.profile.is_admin_or_manager or user.is_superuser %}
+            <a href="{% url 'weighbridge:emergency_ticket_cancel' ticket.pk %}" class="btn btn-outline-danger">
+                <i class="bi bi-slash-circle me-1"></i> ابطال قبض
+            </a>
+            {% endif %}
+
+            <a href="{% url 'weighbridge:emergency_ticket_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-right-circle me-1"></i> بازگشت به لیست
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content Cards -->
+    <div class="row g-3">
+        <!-- Left: Weights and Details -->
+        <div class="col-lg-8">
+            
+            <!-- Big Weight Display Cards -->
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-speedometer2 text-primary me-2"></i>مشخصات و اوزان ثبت‌شده
+                    </h6>
+                    <span class="text-muted small">واحد اندازه‌گیری: کیلوگرم (Kg)</span>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-3 text-center">
+                        <!-- Gross -->
+                        <div class="col-md-4">
+                            <div class="p-3 bg-light rounded-3 border border-danger border-2 h-100">
+                                <span class="badge bg-danger text-white mb-2">وزن پر (Gross)</span>
+                                <div class="display-6 fw-bold text-danger">{{ ticket.gross_weight|floatformat:0 }}</div>
+                                <div class="text-muted small mt-1">کیلوگرم ({{ ticket.gross_tonnage }} تن)</div>
+                                {% if ticket.gross_date %}
+                                <div class="text-muted small border-top pt-2 mt-2" style="font-size: 0.75rem;">
+                                    {{ ticket.jalali_gross_date }} - {{ ticket.gross_time_str }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Tare -->
+                        <div class="col-md-4">
+                            <div class="p-3 bg-light rounded-3 border border-info border-2 h-100">
+                                <span class="badge bg-info text-dark mb-2">وزن خالی (Tare)</span>
+                                <div class="display-6 fw-bold text-info">{{ ticket.tare_weight|floatformat:0 }}</div>
+                                <div class="text-muted small mt-1">کیلوگرم ({{ ticket.tare_tonnage }} تن)</div>
+                                {% if ticket.tare_date %}
+                                <div class="text-muted small border-top pt-2 mt-2" style="font-size: 0.75rem;">
+                                    {{ ticket.jalali_tare_date }} - {{ ticket.tare_time_str }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Net -->
+                        <div class="col-md-4">
+                            <div class="p-3 bg-light rounded-3 border border-success border-2 h-100">
+                                <span class="badge bg-success text-white mb-2">وزن خالص (Net)</span>
+                                {% if ticket.status == 'completed' %}
+                                    <div class="display-6 fw-bold text-success">{{ ticket.net_weight|floatformat:0 }}</div>
+                                    <div class="text-success fw-bold small mt-1">کیلوگرم ({{ ticket.net_tonnage }} تن)</div>
+                                {% else %}
+                                    <div class="display-6 fw-bold text-muted">-</div>
+                                    <div class="text-muted small mt-1">در انتظار وزن دوم</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cargo & Notes Details -->
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h6 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-chat-left-text text-primary me-2"></i>توضیحات و یادداشت‌های قبض
+                    </h6>
+                </div>
+                <div class="card-body p-3">
+                    {% if ticket.notes %}
+                        <p class="mb-0 text-dark" style="white-space: pre-line;">{{ ticket.notes }}</p>
+                    {% else %}
+                        <p class="text-muted mb-0 small">توضیحاتی برای این قبض ثبت نشده است.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if ticket.status == 'cancelled' %}
+            <div class="alert alert-danger shadow-sm border-0">
+                <h6 class="alert-heading fw-bold"><i class="bi bi-slash-circle-fill me-1"></i>اطلاعات ابطال قبض:</h6>
+                <div><strong>علت ابطال:</strong> {{ ticket.cancellation_reason }}</div>
+                <div class="small mt-1 text-muted">ابطال شده توسط {{ ticket.cancelled_by.get_full_name|default:ticket.cancelled_by.username }} در تاریخ {{ ticket.cancelled_at }}</div>
+            </div>
+            {% endif %}
+
+        </div>
+
+        <!-- Right: Meta Information -->
+        <div class="col-lg-4">
+            
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h6 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-info-circle-fill text-primary me-2"></i>اطلاعات کلی قبض
+                    </h6>
+                </div>
+                <div class="card-body p-3">
+                    <table class="table table-sm table-borderless mb-0">
+                        <tbody>
+                            <tr>
+                                <td class="text-muted small">شماره سریال:</td>
+                                <td class="fw-bold text-end font-monospace">{{ ticket.serial_number }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted small">نام شرکت / متقاضی:</td>
+                                <td class="fw-bold text-end text-dark">{{ ticket.company_name|default:'سایر شرکت‌ها (آزاد)' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted small">نام راننده:</td>
+                                <td class="fw-bold text-end text-dark">{{ ticket.driver_name }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted small">شماره موبایل:</td>
+                                <td class="text-end font-monospace" dir="ltr">{{ ticket.driver_mobile|default:'-' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted small">شماره پلاک:</td>
+                                <td class="text-end">
+                                    {% if ticket.license_plate %}
+                                        <span class="badge bg-dark font-monospace px-2 py-1">{{ ticket.license_plate }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr class="border-top">
+                                <td class="text-muted small pt-2">تاریخ ثبت:</td>
+                                <td class="text-end fw-bold pt-2">{{ ticket.jalali_weight_date }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted small">ساعت ثبت:</td>
+                                <td class="text-end fw-bold">{{ ticket.time_str }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted small">کاربر اپراتور:</td>
+                                <td class="text-end">{{ ticket.operator_name }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Print Actions Quick Box -->
+            <div class="card shadow-sm border-0 mb-3 bg-light">
+                <div class="card-body p-3 text-center">
+                    <h6 class="fw-bold text-dark mb-2">دریافت و تحویل رسید به راننده</h6>
+                    <p class="text-muted small mb-3">چاپ مستقیم برگه با سربرگ رسمی و مهر باسکول</p>
+                    <a href="{% url 'weighbridge:emergency_ticket_print' ticket.pk %}?template=a5" class="btn btn-success fw-bold w-100 mb-2" target="_blank">
+                        <i class="bi bi-printer me-1"></i> چاپ قبض (A5 استاندارد)
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

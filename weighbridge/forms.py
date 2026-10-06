@@ -397,3 +397,114 @@ class TicketEditManagerForm(forms.ModelForm):
 
         return cleaned_data
 
+
+from weighbridge.models import EmergencyWeighTicket, EmergencyTicketStatus
+from weighbridge.plate_policy import normalize_plate
+import re
+
+class EmergencyTicketForm(forms.ModelForm):
+    plate_part1 = forms.CharField(max_length=5, required=False)
+    plate_letter = forms.ChoiceField(choices=IRAN_PLATE_LETTERS, required=False)
+    plate_part2 = forms.CharField(max_length=5, required=False)
+    plate_iran = forms.CharField(max_length=5, required=False)
+    license_plate_display = forms.CharField(max_length=60, required=False)
+
+    weight_date_jalali = forms.CharField(
+        label="تاریخ توزین (شمسی)",
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control pdate-picker text-center", "id": "id_weight_date_jalali"})
+    )
+    weight_time_str = forms.CharField(
+        label="ساعت توزین",
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control auto-current-time text-center", "placeholder": "HH:MM", "id": "id_weight_time_str"})
+    )
+
+    class Meta:
+        model = EmergencyWeighTicket
+        fields = [
+            "company_name",
+            "driver_name",
+            "driver_mobile",
+            "license_plate",
+            "gross_weight",
+            "tare_weight",
+            "notes",
+        ]
+        widgets = {
+            "company_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "اختیاری - نام شرکت یا سازمان متقاضی"}),
+            "driver_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "نام و نام‌خانوادگی راننده", "id": "id_driver_name"}),
+            "driver_mobile": forms.TextInput(attrs={"class": "form-control text-start", "placeholder": "۰۹۱۲۳۴۵۶۷۸۹", "dir": "ltr", "id": "id_driver_mobile"}),
+            "license_plate": forms.HiddenInput(attrs={"id": "id_license_plate"}),
+            "gross_weight": forms.NumberInput(attrs={"class": "form-control text-center fw-bold fs-3", "step": "any", "placeholder": "0", "id": "id_gross_weight"}),
+            "tare_weight": forms.NumberInput(attrs={"class": "form-control text-center fw-bold fs-3", "step": "any", "placeholder": "0", "id": "id_tare_weight"}),
+            "notes": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "توضیحات اختیاری درباره درخواست شرکت متقاضی..."}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and self.instance.license_plate:
+            norm = normalize_plate(self.instance.license_plate)
+            parts = re.fullmatch(r"(\d{2})(.+?)(\d{3})(\d{2})", norm)
+            if parts:
+                self.initial["plate_part1"] = parts.group(1)
+                self.initial["plate_letter"] = parts.group(2)
+                self.initial["plate_part2"] = parts.group(3)
+                self.initial["plate_iran"] = parts.group(4)
+                self.initial["license_plate_display"] = self.instance.license_plate
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        plate_p1 = (self.data.get("plate_part1") or cleaned_data.get("plate_part1") or "").strip()
+        plate_letter = (self.data.get("plate_letter") or cleaned_data.get("plate_letter") or "").strip()
+        plate_p2 = (self.data.get("plate_part2") or cleaned_data.get("plate_part2") or "").strip()
+        plate_iran = (self.data.get("plate_iran") or cleaned_data.get("plate_iran") or "").strip()
+        disp = (self.data.get("license_plate_display") or cleaned_data.get("license_plate_display") or "").strip()
+        manual_plate = (cleaned_data.get("license_plate") or "").strip()
+
+        if plate_p1 and plate_letter and plate_p2 and plate_iran:
+            cleaned_data["license_plate"] = f"{plate_p1} {plate_letter} {plate_p2} - ایران {plate_iran}"
+        elif disp and "--" not in disp:
+            cleaned_data["license_plate"] = disp
+        elif manual_plate:
+            cleaned_data["license_plate"] = manual_plate
+        elif disp:
+            cleaned_data["license_plate"] = disp
+
+        gross = cleaned_data.get("gross_weight") or Decimal("0")
+        tare = cleaned_data.get("tare_weight") or Decimal("0")
+
+        if gross <= 0 and tare <= 0:
+            self.add_error("gross_weight", "حداقل یکی از اوزان (وزن پر یا وزن خالی) باید وارد شود.")
+
+        return cleaned_data
+
+
+class EmergencySecondWeightForm(forms.ModelForm):
+    second_weight = forms.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=True,
+        label="وزن دوم (Kg)",
+        widget=forms.NumberInput(attrs={"class": "form-control text-center fw-bold fs-3", "step": "any", "placeholder": "0", "id": "id_second_weight"})
+    )
+    second_weight_date_jalali = forms.CharField(
+        label="تاریخ وزن دوم (شمسی)",
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control pdate-picker text-center", "id": "id_second_weight_date_jalali"})
+    )
+    second_weight_time_str = forms.CharField(
+        label="ساعت وزن دوم",
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control auto-current-time text-center", "placeholder": "HH:MM", "id": "id_second_weight_time_str"})
+    )
+
+    class Meta:
+        model = EmergencyWeighTicket
+        fields = ["notes"]
+        widgets = {
+            "notes": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+        }
+
+

@@ -31,6 +31,15 @@
             </a>
         </li>
 
+        <!-- Emergency / Third-Party Weighing -->
+        <li>
+            <a href="{% url 'weighbridge:emergency_ticket_create' %}" class="sidebar-link {% if request.resolver_match.url_name == 'emergency_ticket_create' %}active{% endif %}">
+                <i class="bi bi-building-add text-warning"></i>
+                <span>توزین متفرقه (شرکت‌های دیگر)</span>
+                <span class="badge bg-warning-subtle text-dark ms-auto" style="font-size: 0.65rem;">آزاد</span>
+            </a>
+        </li>
+
         <!-- Waiting Trucks (In Yard) -->
         <li>
             <a href="{% url 'weighbridge:trucks_in_yard' %}" class="sidebar-link {% if request.resolver_match.url_name == 'trucks_in_yard' %}active{% endif %}">
@@ -44,6 +53,14 @@
             <a href="{% url 'weighbridge:ticket_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'ticket_list' %}active{% endif %}">
                 <i class="bi bi-card-checklist text-primary"></i>
                 <span>لیست قبوض باسکول</span>
+            </a>
+        </li>
+
+        <!-- Emergency Tickets List -->
+        <li>
+            <a href="{% url 'weighbridge:emergency_ticket_list' %}" class="sidebar-link {% if 'emergency' in request.resolver_match.url_name and request.resolver_match.url_name != 'emergency_ticket_create' %}active{% endif %}">
+                <i class="bi bi-journal-text text-warning"></i>
+                <span>لیست قبوض متفرقه (آزاد)</span>
             </a>
         </li>
 

@@ -6,9 +6,19 @@
 <form method="post" id="weighbridge-form">
     {% csrf_token %}
     {% if form.errors %}<div class="alert alert-danger">{{ form.non_field_errors }}{% for field in form %}{% if field.errors %}<div>{{ field.label }}: {{ field.errors }}</div>{% endif %}{% endfor %}</div>{% endif %}
-    <div class="alert alert-info small">
+    <div class="alert alert-info small mb-2">
         هر پلاک در تاریخ وزن اول فقط یک قبض فعال می‌تواند داشته باشد. برای پلاک‌های مجاز توسط سرپرست، ثبت چندباره امکان‌پذیر است.
         {% if can_manage_plate_exceptions %}<a href="{% url 'weighbridge:plate_exceptions' %}" class="fw-bold ms-2" target="_blank">مدیریت استثناهای پلاک</a>{% endif %}
+    </div>
+
+    <div class="alert alert-warning py-2 small d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 shadow-sm border border-warning">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-building-add text-warning-emphasis fs-5"></i>
+            <span><strong>نیاز به توزین آزاد برای سایر شرکت‌ها دارید؟</strong> این موارد مستقل بوده و در آمار و موجودی داخلی کارخانه ثبت نمی‌شوند.</span>
+        </div>
+        <a href="{% url 'weighbridge:emergency_ticket_create' %}" class="btn btn-sm btn-dark text-warning fw-bold">
+            <i class="bi bi-box-arrow-up-right me-1"></i> فرم توزین متفرقه (سایر شرکت‌ها)
+        </a>
     </div>
     
     <!-- Top Action & Ticket Info Header -->

@@ -773,3 +773,277 @@ def ajax_plate_lookup(request):
         }
 
     return JsonResponse(response_data)
+
+
+# ==============================================================================
+# بخش توزین متفرقه و آزاد (شرکت‌های دیگر / اضطراری)
+# کاملاً مجزا از داده‌ها و آمارهای کارخانه
+# ==============================================================================
+
+from django.db.models import Sum
+from weighbridge.models import EmergencyWeighTicket, EmergencyTicketStatus
+from weighbridge.forms import EmergencyTicketForm, EmergencySecondWeightForm
+
+@login_required
+@role_required("super_admin", "system_admin", "weighbridge_manager", "weighbridge_operator")
+def emergency_ticket_create(request):
+    """
+    ثبت سریع و مستقل توزین برای سایر شرکت‌ها (توزین متفرقه / آزاد / اضطراری).
+    داده‌های این بخش در آمارهای انبار و کالای کارخانه ثبت نمی‌شوند.
+    """
+    if request.method == "POST":
+        form = EmergencyTicketForm(request.POST)
+        if form.is_valid():
+            ticket = form.save(commit=False)
+
+            # ثبت تاریخ و ساعت
+            weight_date_j = form.cleaned_data.get("weight_date_jalali")
+            ticket.weight_date = jalali_to_gregorian(weight_date_j) if weight_date_j else get_today_gregorian()
+
+            time_str = form.cleaned_data.get("weight_time_str")
+            if time_str and ":" in time_str:
+                try:
+                    h, m = time_str.split(":")[:2]
+                    ticket.weight_time = time(int(h), int(m))
+                except Exception:
+                    ticket.weight_time = timezone.localtime().time()
+            else:
+                ticket.weight_time = timezone.localtime().time()
+
+            ticket.operator = request.user
+
+            gross = ticket.gross_weight or Decimal("0")
+            tare = ticket.tare_weight or Decimal("0")
+
+            if gross > 0 and tare > 0:
+                ticket.status = EmergencyTicketStatus.COMPLETED
+                ticket.gross_date = ticket.weight_date
+                ticket.gross_time = ticket.weight_time
+                ticket.tare_date = ticket.weight_date
+                ticket.tare_time = ticket.weight_time
+            else:
+                ticket.status = EmergencyTicketStatus.WAITING_SECOND
+                if gross > 0:
+                    ticket.gross_date = ticket.weight_date
+                    ticket.gross_time = ticket.weight_time
+                elif tare > 0:
+                    ticket.tare_date = ticket.weight_date
+                    ticket.tare_time = ticket.weight_time
+
+            ticket.save()
+
+            messages.success(
+                request,
+                f"قبض توزین متفرقه شماره {ticket.serial_number} با موفقیت ثبت گردید."
+            )
+
+            if "save_and_print" in request.POST:
+                return redirect("weighbridge:emergency_ticket_print", pk=ticket.pk)
+            return redirect("weighbridge:emergency_ticket_detail", pk=ticket.pk)
+    else:
+        initial_data = {
+            "weight_date_jalali": get_today_jalali(),
+            "weight_time_str": timezone.localtime().strftime("%H:%M"),
+        }
+        form = EmergencyTicketForm(initial=initial_data)
+
+    return render(request, "weighbridge/emergency_ticket_create.html", {
+        "form": form,
+        "title": "ثبت باسکول متفرقه / آزاد (شرکت‌های دیگر)",
+        "today_jalali": get_today_jalali(),
+        "current_time": timezone.localtime().strftime("%H:%M"),
+    })
+
+
+@login_required
+@role_required("super_admin", "system_admin", "weighbridge_manager", "weighbridge_operator")
+def emergency_ticket_second_weight(request, pk):
+    """
+    تکمیل وزن دوم برای قبض متفرقه که در انتظار وزن دوم بوده است.
+    """
+    ticket = get_object_or_404(EmergencyWeighTicket, pk=pk)
+
+    if ticket.status == EmergencyTicketStatus.COMPLETED:
+        messages.info(request, "این قبض قبلاً هر دو وزن را ثبت کرده و تکمیل شده است.")
+        return redirect("weighbridge:emergency_ticket_detail", pk=ticket.pk)
+
+    is_missing_tare = (ticket.gross_weight > 0 and (not ticket.tare_weight or ticket.tare_weight == 0))
+    missing_weight_name = "وزن خالی (تار)" if is_missing_tare else "وزن پر (ناخالص)"
+
+    if request.method == "POST":
+        form = EmergencySecondWeightForm(request.POST, instance=ticket)
+        if form.is_valid():
+            sec_weight = form.cleaned_data.get("second_weight")
+            date_j = form.cleaned_data.get("second_weight_date_jalali")
+            sec_date = jalali_to_gregorian(date_j) if date_j else get_today_gregorian()
+
+            time_str = form.cleaned_data.get("second_weight_time_str")
+            if time_str and ":" in time_str:
+                try:
+                    h, m = time_str.split(":")[:2]
+                    sec_time = time(int(h), int(m))
+                except Exception:
+                    sec_time = timezone.localtime().time()
+            else:
+                sec_time = timezone.localtime().time()
+
+            if is_missing_tare:
+                ticket.tare_weight = sec_weight
+                ticket.tare_date = sec_date
+                ticket.tare_time = sec_time
+            else:
+                ticket.gross_weight = sec_weight
+                ticket.gross_date = sec_date
+                ticket.gross_time = sec_time
+
+            ticket.status = EmergencyTicketStatus.COMPLETED
+            if form.cleaned_data.get("notes"):
+                extra_notes = form.cleaned_data.get("notes")
+                ticket.notes = (ticket.notes + "\n" + extra_notes).strip() if ticket.notes else extra_notes
+
+            ticket.save()
+
+            messages.success(request, f"وزن دوم برای قبض متفرقه {ticket.serial_number} با موفقیت ثبت و قبض تکمیل گردید.")
+            if "save_and_print" in request.POST:
+                return redirect("weighbridge:emergency_ticket_print", pk=ticket.pk)
+            return redirect("weighbridge:emergency_ticket_detail", pk=ticket.pk)
+    else:
+        form = EmergencySecondWeightForm(
+            instance=ticket,
+            initial={
+                "second_weight_date_jalali": get_today_jalali(),
+                "second_weight_time_str": timezone.localtime().strftime("%H:%M"),
+            }
+        )
+
+    return render(request, "weighbridge/emergency_ticket_second_weight.html", {
+        "form": form,
+        "ticket": ticket,
+        "is_missing_tare": is_missing_tare,
+        "missing_weight_name": missing_weight_name,
+        "title": f"ثبت وزن دوم قبض متفرقه {ticket.serial_number}",
+    })
+
+
+@login_required
+def emergency_ticket_list(request):
+    """
+    لیست جامع قبوض توزین متفرقه / آزاد (مستقل از قبوض کارخانه).
+    """
+    today_g = get_today_gregorian()
+    qs = EmergencyWeighTicket.objects.all().order_by("-id")
+
+    q = request.GET.get("q", "").strip()
+    if q:
+        qs = qs.filter(
+            Q(serial_number__icontains=q) |
+            Q(driver_name__icontains=q) |
+            Q(driver_mobile__icontains=q) |
+            Q(company_name__icontains=q) |
+            Q(license_plate__icontains=q)
+        )
+
+    status = request.GET.get("status", "").strip()
+    if status in EmergencyTicketStatus.values:
+        qs = qs.filter(status=status)
+
+    date_from_j = request.GET.get("date_from", "").strip()
+    date_to_j = request.GET.get("date_to", "").strip()
+    if date_from_j:
+        try:
+            g_from = jalali_to_gregorian(date_from_j)
+            qs = qs.filter(weight_date__gte=g_from)
+        except Exception:
+            pass
+    if date_to_j:
+        try:
+            g_to = jalali_to_gregorian(date_to_j)
+            qs = qs.filter(weight_date__lte=g_to)
+        except Exception:
+            pass
+
+    total_count = EmergencyWeighTicket.objects.count()
+    today_count = EmergencyWeighTicket.objects.filter(weight_date=today_g).count()
+    waiting_count = EmergencyWeighTicket.objects.filter(status=EmergencyTicketStatus.WAITING_SECOND).count()
+    total_net_kg = EmergencyWeighTicket.objects.filter(status=EmergencyTicketStatus.COMPLETED).aggregate(
+        s=Sum("net_weight")
+    )["s"] or Decimal("0")
+    total_net_ton = round(total_net_kg / Decimal("1000"), 2)
+
+    paginator = Paginator(qs, 20)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, "weighbridge/emergency_ticket_list.html", {
+        "page_obj": page_obj,
+        "total_count": total_count,
+        "today_count": today_count,
+        "waiting_count": waiting_count,
+        "total_net_ton": total_net_ton,
+        "query": q,
+        "selected_status": status,
+        "date_from": date_from_j,
+        "date_to": date_to_j,
+        "title": "لیست قبوض توزین متفرقه / آزاد (سایر شرکت‌ها)",
+    })
+
+
+@login_required
+def emergency_ticket_detail(request, pk):
+    """
+    مشاهده جزئیات قبض متفرقه.
+    """
+    ticket = get_object_or_404(EmergencyWeighTicket, pk=pk)
+    return render(request, "weighbridge/emergency_ticket_detail.html", {
+        "ticket": ticket,
+        "title": f"جزئیات قبض متفرقه {ticket.serial_number}",
+    })
+
+
+@login_required
+def emergency_ticket_print(request, pk):
+    """
+    چاپ قبض توزین متفرقه ویژه شرکت‌های متقاضی (A5 / A4 / POS).
+    """
+    ticket = get_object_or_404(EmergencyWeighTicket, pk=pk)
+    settings_obj = SystemSetting.get_settings()
+    template_type = request.GET.get("template", settings_obj.default_print_template or "a5")
+
+    return render(request, "weighbridge/emergency_ticket_print.html", {
+        "ticket": ticket,
+        "settings": settings_obj,
+        "template_type": template_type,
+        "print_date": get_today_jalali(),
+        "print_time": timezone.localtime().strftime("%H:%M"),
+        "title": f"چاپ قبض متفرقه {ticket.serial_number}",
+    })
+
+
+@login_required
+@manager_or_admin_required
+def emergency_ticket_cancel(request, pk):
+    """
+    ابطال قبض متفرقه با درج دلیل.
+    """
+    ticket = get_object_or_404(EmergencyWeighTicket, pk=pk)
+
+    if request.method == "POST":
+        reason = request.POST.get("cancellation_reason", "").strip()
+        if not reason:
+            messages.error(request, "وارد کردن دلیل ابطال سند الزامی است.")
+            return redirect("weighbridge:emergency_ticket_detail", pk=ticket.pk)
+
+        ticket.status = EmergencyTicketStatus.CANCELLED
+        ticket.cancellation_reason = reason
+        ticket.cancelled_by = request.user
+        ticket.cancelled_at = timezone.now()
+        ticket.save()
+
+        messages.warning(request, f"قبض متفرقه {ticket.serial_number} با موفقیت باطل گردید.")
+        return redirect("weighbridge:emergency_ticket_detail", pk=ticket.pk)
+
+    return render(request, "weighbridge/emergency_ticket_cancel_confirm.html", {
+        "ticket": ticket,
+        "title": f"ابطال قبض متفرقه {ticket.serial_number}",
+    })
+

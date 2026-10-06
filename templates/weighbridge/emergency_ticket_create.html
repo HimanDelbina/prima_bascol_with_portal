@@ -1,0 +1,344 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+
+    <!-- Header Banner -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 pb-2 border-bottom gap-2">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-warning text-dark px-2 py-1"><i class="bi bi-shield-exclamation me-1"></i>حالت اضطراری / آزاد</span>
+                <h4 class="fw-bold mb-0 text-slate-900">
+                    <i class="bi bi-building me-2 text-warning"></i>ثبت باسکول متفرقه (شرکت‌های دیگر)
+                </h4>
+            </div>
+            <p class="text-muted small mb-0 mt-1">
+                این بخش ویژه مواقع ضروری و توزین آزاد برای سایر شرکت‌هاست؛ داده‌های این بخش <strong>کاملاً مجزا</strong> بوده و در آمارهای کالا، انبار و مشتریان داخلی ثبت نمی‌شود.
+            </p>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'weighbridge:emergency_ticket_list' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-card-checklist me-1"></i> لیست قبوض متفرقه
+            </a>
+            <a href="{% url 'weighbridge:ticket_create' %}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-arrow-right-circle me-1"></i> بازگشت به باسکول کارخانه
+            </a>
+        </div>
+    </div>
+
+    {% if form.errors %}
+    <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+        <h6 class="alert-heading fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>خطا در ثبت اطلاعات:</h6>
+        {{ form.non_field_errors }}
+        {% for field in form %}
+            {% if field.errors %}
+                <div><strong>{{ field.label }}:</strong> {{ field.errors|striptags }}</div>
+            {% endif %}
+        {% endfor %}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <form method="post" id="emergency-form">
+        {% csrf_token %}
+
+        <div class="row g-3">
+            <!-- Left/Main Column: Driver & Weights Info -->
+            <div class="col-lg-8">
+                
+                <!-- Card 1: Customer & Driver Information (With Official Iran Plate Component) -->
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+                        <h6 class="fw-bold mb-0 text-dark">
+                            <i class="bi bi-truck-front-fill text-primary me-2"></i>مشخصات خودرو، راننده و شرکت متقاضی
+                        </h6>
+                        <span class="badge bg-light text-muted border small fw-normal d-none d-sm-inline" id="plate-autofill-indicator">
+                            <i class="bi bi-magic text-primary me-1"></i>تکمیل خودکار سوابق راننده با پلاک
+                        </span>
+                    </div>
+                    <div class="card-body p-3">
+                        <!-- Real-time Plate Feedback Banner (Duplication / Auto-fill status) -->
+                        <div id="plate-history-banner" class="mb-3 d-none"></div>
+
+                        <div class="row g-3 align-items-start">
+                            <!-- Iran License Plate Component -->
+                            <div class="col-12 col-xl-auto col-lg-auto">
+                                <label class="form-label fw-bold small text-secondary d-block">
+                                    پلاک ملی خودرو <span class="key-hint-badge">F2</span> <span class="text-danger">*</span>
+                                </label>
+                                <div class="d-inline-block">
+                                    {% include 'components/iran_plate_input.html' with initial_part1=form.plate_part1.value initial_letter=form.plate_letter.value initial_part2=form.plate_part2.value initial_iran=form.plate_iran.value initial_plate_display=form.license_plate_display.value %}
+                                </div>
+                                {% if form.license_plate.errors %}<div class="text-danger small mt-1">{{ form.license_plate.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="col-12 col-sm-6 col-md-4 col-lg col-xl">
+                                <label class="form-label fw-bold small text-secondary">
+                                    نام راننده <span class="text-danger">*</span>
+                                </label>
+                                {{ form.driver_name }}
+                                {% if form.driver_name.errors %}<div class="text-danger small mt-1">{{ form.driver_name.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="col-12 col-sm-6 col-md-4 col-lg col-xl">
+                                <label class="form-label fw-bold small text-secondary">
+                                    شماره موبایل راننده
+                                </label>
+                                {{ form.driver_mobile }}
+                                {% if form.driver_mobile.errors %}<div class="text-danger small mt-1">{{ form.driver_mobile.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="col-12 col-sm-12 col-md-4 col-lg col-xl">
+                                <label class="form-label fw-bold small text-secondary">
+                                    نام شرکت / متقاضی
+                                </label>
+                                {{ form.company_name }}
+                                {% if form.company_name.errors %}<div class="text-danger small mt-1">{{ form.company_name.errors }}</div>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Big Weight Input Boxes -->
+                <div class="card shadow-sm border-0 mb-3 border-top border-4 border-primary">
+                    <div class="card-header bg-slate-900 text-white py-3 d-flex align-items-center justify-content-between" style="background-color: #0f172a;">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-speedometer2 text-warning fs-5"></i>
+                            <h6 class="fw-bold mb-0 text-white">ثبت اوزان باسکول</h6>
+                        </div>
+                        <span class="badge bg-primary-subtle text-primary border border-primary">محاسبه آنی وزن خالص</span>
+                    </div>
+                    <div class="card-body p-4 bg-light">
+                        <div class="row g-4 align-items-stretch">
+                            
+                            <!-- Gross Weight Box -->
+                            <div class="col-md-6">
+                                <div class="p-3 bg-white rounded-3 shadow-sm border border-2 border-danger h-100 position-relative">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge bg-danger text-white fs-6 px-2 py-1">
+                                            <i class="bi bi-truck-front-fill me-1"></i>وزن پر (Gross)
+                                        </span>
+                                        <span class="text-muted small">کیلوگرم (Kg)</span>
+                                    </div>
+                                    <div class="input-group input-group-lg my-2">
+                                        {{ form.gross_weight }}
+                                        <span class="input-group-text bg-danger text-white fw-bold">Kg</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+                                        <span class="text-muted small">معادل تناژ:</span>
+                                        <span class="fw-bold text-danger fs-6" id="gross-ton-display">۰.۰۰۰ تن</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tare Weight Box -->
+                            <div class="col-md-6">
+                                <div class="p-3 bg-white rounded-3 shadow-sm border border-2 border-info h-100 position-relative">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge bg-info text-dark fs-6 px-2 py-1">
+                                            <i class="bi bi-truck me-1"></i>وزن خالی (Tare)
+                                        </span>
+                                        <span class="text-muted small">کیلوگرم (Kg)</span>
+                                    </div>
+                                    <div class="input-group input-group-lg my-2">
+                                        {{ form.tare_weight }}
+                                        <span class="input-group-text bg-info text-dark fw-bold">Kg</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+                                        <span class="text-muted small">معادل تناژ:</span>
+                                        <span class="fw-bold text-info fs-6" id="tare-ton-display">۰.۰۰۰ تن</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Live Calculated Net Weight Display Banner -->
+                        <div class="mt-4 p-3 bg-white rounded-3 shadow-sm border border-2 border-success d-flex flex-wrap justify-content-between align-items-center gap-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="rounded-circle bg-success text-white p-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                                    <i class="bi bi-check-lg fs-3"></i>
+                                </div>
+                                <div>
+                                    <div class="text-muted small fw-bold">وزن خالص محاسبه شده (Net Weight):</div>
+                                    <div class="fw-bolder text-success fs-3" id="live-net-weight">۰ کیلوگرم</div>
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <div class="text-muted small">تناژ خالص:</div>
+                                <div class="fw-bold text-dark fs-4" id="live-net-ton">۰.۰۰۰ تن</div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-secondary small mt-3 mb-0 py-2 d-flex align-items-center gap-2">
+                            <i class="bi bi-info-circle-fill text-primary fs-5"></i>
+                            <div>
+                                چنانچه راننده در حال حاضر فقط یک وزن را انجام می‌دهد (مثلاً ابتدا پر یا ابتدا خالی)، می‌توانید فقط همان وزن را ثبت کنید. قبض به صورت <strong>«در انتظار وزن دوم»</strong> ذخیره می‌شود و پس از بازگشت راننده، وزن دوم تکمیل خواهد شد.
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Card 3: Notes -->
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-header bg-white py-2">
+                        <label class="form-label fw-bold small text-secondary mb-0">
+                            <i class="bi bi-chat-left-text me-1"></i>{{ form.notes.label }}
+                        </label>
+                    </div>
+                    <div class="card-body p-3">
+                        {{ form.notes }}
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Date, Time & Action Buttons -->
+            <div class="col-lg-4">
+                
+                <!-- Date & Time Card -->
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-header bg-white py-3 border-bottom">
+                        <h6 class="fw-bold mb-0 text-dark">
+                            <i class="bi bi-calendar3 text-primary me-2"></i>زمان و تاریخ توزین
+                        </h6>
+                    </div>
+                    <div class="card-body p-3">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small text-secondary">
+                                {{ form.weight_date_jalali.label }}
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
+                                {{ form.weight_date_jalali }}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small text-secondary">
+                                {{ form.weight_time_str.label }}
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-clock"></i></span>
+                                {{ form.weight_time_str }}
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setCurrentTime()" title="بروزرسانی به ساعت کنونی">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="border-top pt-2">
+                            <div class="d-flex justify-content-between text-muted small py-1">
+                                <span>کاربر ثبت‌کننده:</span>
+                                <strong class="text-dark">{{ user.get_full_name|default:user.username }}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted small py-1">
+                                <span>نوع سند:</span>
+                                <span class="badge bg-warning-subtle text-warning">قبض متفرقه مستقل</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Action Buttons Card -->
+                <div class="card shadow-sm border-0 mb-3 border-2 border-success">
+                    <div class="card-header bg-success-subtle py-2">
+                        <h6 class="fw-bold mb-0 text-success">
+                            <i class="bi bi-check2-circle me-1"></i>تأیید و ذخیره‌سازی
+                        </h6>
+                    </div>
+                    <div class="card-body p-3">
+                        <div class="d-grid gap-2">
+                            <button type="submit" name="save_and_print" value="1" class="btn btn-success btn-lg fw-bold shadow-sm">
+                                <i class="bi bi-printer-fill me-1"></i> ثبت و چاپ قبض [F9]
+                            </button>
+
+                            <button type="submit" name="save_only" value="1" class="btn btn-primary fw-bold">
+                                <i class="bi bi-check-lg me-1"></i> فقط ثبت قبض [F8]
+                            </button>
+
+                            <a href="{% url 'weighbridge:emergency_ticket_list' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-circle me-1"></i> انصراف و بازگشت
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Help / Summary Info -->
+                <div class="card bg-info-subtle border-0 shadow-sm p-3">
+                    <h6 class="fw-bold text-info-emphasis mb-2"><i class="bi bi-lightbulb-fill me-1"></i>نکات مهم:</h6>
+                    <ul class="text-secondary small mb-0 ps-3">
+                        <li class="mb-1">این قبض شماره سریالی مجزا با پیشوند <strong>EXT-</strong> دریافت می‌کند.</li>
+                        <li class="mb-1">در لیست خودروهای محوطه یا گزارش‌های موجودی کالای کارخانه نمایش داده نمی‌شود.</li>
+                        <li>امکان چاپ برگه A5، A4 یا فیش حرارتی رسمی برای تحویل به راننده وجود دارد.</li>
+                    </ul>
+                </div>
+
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    function updateCalculatedWeights() {
+        const grossInput = document.getElementById('id_gross_weight');
+        const tareInput = document.getElementById('id_tare_weight');
+        
+        const gross = parseFloat(grossInput.value) || 0;
+        const tare = parseFloat(tareInput.value) || 0;
+        
+        // update tons display
+        document.getElementById('gross-ton-display').textContent = (gross / 1000).toFixed(3) + ' تن';
+        document.getElementById('tare-ton-display').textContent = (tare / 1000).toFixed(3) + ' تن';
+        
+        let net = 0;
+        if (gross > 0 && tare > 0) {
+            net = Math.abs(gross - tare);
+        } else if (gross > 0) {
+            net = gross;
+        } else if (tare > 0) {
+            net = tare;
+        }
+        
+        document.getElementById('live-net-weight').textContent = net.toLocaleString('fa-IR') + ' کیلوگرم (' + net + ' Kg)';
+        document.getElementById('live-net-ton').textContent = (net / 1000).toFixed(3) + ' تن';
+    }
+
+    function setCurrentTime() {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const timeInput = document.getElementById('id_weight_time_str');
+        if (timeInput) {
+            timeInput.value = hh + ':' + mm;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const grossInput = document.getElementById('id_gross_weight');
+        const tareInput = document.getElementById('id_tare_weight');
+        
+        if (grossInput) grossInput.addEventListener('input', updateCalculatedWeights);
+        if (tareInput) tareInput.addEventListener('input', updateCalculatedWeights);
+        
+        updateCalculatedWeights();
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'F9') {
+                e.preventDefault();
+                const btn = document.querySelector('button[name="save_and_print"]');
+                if (btn) btn.click();
+            } else if (e.key === 'F8') {
+                e.preventDefault();
+                const btn = document.querySelector('button[name="save_only"]');
+                if (btn) btn.click();
+            }
+        });
+    });
+</script>
+{% endblock %}

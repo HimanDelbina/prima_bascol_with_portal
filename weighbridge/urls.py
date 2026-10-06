@@ -19,4 +19,12 @@ urlpatterns = [
     path("tickets/<int:pk>/print/", views.ticket_print, name="ticket_print"),
     path("search/", views.global_search, name="global_search"),
     path("ajax/plate-lookup/", views.ajax_plate_lookup, name="ajax_plate_lookup"),
+
+    # توزین متفرقه و آزاد (شرکت‌های دیگر / اضطراری)
+    path("emergency/", views.emergency_ticket_list, name="emergency_ticket_list"),
+    path("emergency/create/", views.emergency_ticket_create, name="emergency_ticket_create"),
+    path("emergency/<int:pk>/", views.emergency_ticket_detail, name="emergency_ticket_detail"),
+    path("emergency/<int:pk>/second-weight/", views.emergency_ticket_second_weight, name="emergency_ticket_second_weight"),
+    path("emergency/<int:pk>/print/", views.emergency_ticket_print, name="emergency_ticket_print"),
+    path("emergency/<int:pk>/cancel/", views.emergency_ticket_cancel, name="emergency_ticket_cancel"),
 ]
