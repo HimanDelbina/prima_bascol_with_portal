@@ -54,3 +54,13 @@ class AuditLog(models.Model):
     @property
     def jalali_timestamp(self):
         return format_jalali_datetime(self.timestamp)
+
+    @property
+    def jalali_date(self):
+        from core.jalali import format_jalali_date
+        return format_jalali_date(self.timestamp)
+
+    @property
+    def time_str(self):
+        from core.jalali import format_time_hhmm
+        return format_time_hhmm(self.timestamp)

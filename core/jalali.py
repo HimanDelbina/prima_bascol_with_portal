@@ -22,11 +22,15 @@ def to_english_digits(val) -> str:
     return str(val).translate(ENGLISH_DIGITS)
 
 def gregorian_to_jalali(dt_or_date):
-    """Convert Gregorian datetime/date to jdatetime."""
+    """Convert Gregorian datetime/date to jdatetime, respecting active timezone for aware datetimes."""
     if not dt_or_date:
         return None
     if isinstance(dt_or_date, datetime):
+        if timezone.is_aware(dt_or_date):
+            dt_or_date = timezone.localtime(dt_or_date)
         return jdatetime.datetime.fromgregorian(datetime=dt_or_date)
+    elif isinstance(dt_or_date, (jdatetime.datetime, jdatetime.date)):
+        return dt_or_date
     elif isinstance(dt_or_date, date):
         return jdatetime.date.fromgregorian(date=dt_or_date)
     return None
@@ -59,7 +63,7 @@ def format_jalali_date(dt_or_date, fmt: str = "%Y/%m/%d") -> str:
     return ""
 
 def format_jalali_datetime(dt, fmt: str = "%Y/%m/%d %H:%M") -> str:
-    """Format Gregorian datetime to Jalali datetime string."""
+    """Format Gregorian datetime to Jalali datetime string in local timezone."""
     if not dt:
         return ""
     j_dt = gregorian_to_jalali(dt)
@@ -68,13 +72,20 @@ def format_jalali_datetime(dt, fmt: str = "%Y/%m/%d %H:%M") -> str:
     return ""
 
 def format_time_hhmm(t) -> str:
-    """Format time object as HH:MM."""
+    """Format time object or datetime as HH:MM in local timezone."""
     if not t:
         return ""
     if isinstance(t, datetime):
+        if timezone.is_aware(t):
+            t = timezone.localtime(t)
         return t.strftime("%H:%M")
     elif isinstance(t, time):
         return t.strftime("%H:%M")
+    elif isinstance(t, str):
+        parts = t.strip().split(":")
+        if len(parts) >= 2:
+            return f"{parts[0].zfill(2)}:{parts[1].zfill(2)}"
+        return t
     return str(t)
 
 def get_today_jalali() -> str:
