@@ -67,6 +67,12 @@ def create_db_backup(format_type='auto'):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     try:
+        # Ensure all migrations are applied so model tables exist before serialization
+        try:
+            call_command('migrate', interactive=False)
+        except Exception:
+            pass
+
         if db_info['is_postgres']:
             pg_dump_bin = find_postgres_binary('pg_dump')
 

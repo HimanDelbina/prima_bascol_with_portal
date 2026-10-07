@@ -40,5 +40,9 @@ EOF
 
 echo "PostgreSQL is ready."
 
+# Automatically apply database migrations on startup
+echo "Applying database migrations..."
+python manage.py migrate --noinput
+
 # Execute the given command
 exec "$@"
