@@ -82,8 +82,18 @@
     </div>
     <div class="row-item">
         <span>شماره بارنامه:</span>
-        <span>{{ ticket.waybill_number|default:"-" }}</span>
+        <span class="font-monospace fw-bold">{{ ticket.waybill_number|default:"-" }}</span>
     </div>
+    <div class="row-item">
+        <span>وزن ارسالی در بارنامه:</span>
+        <span class="fw-bold font-monospace">{{ ticket.sent_weight|weight_fmt }} Kg</span>
+    </div>
+    {% if ticket.sent_weight > 0 and ticket.weight_difference and ticket.status == 'completed' %}
+    <div class="row-item">
+        <span>اختلاف با بارنامه:</span>
+        <span class="font-monospace {% if ticket.is_tolerance_exceeded %}fw-bold text-danger{% endif %}">{{ ticket.weight_difference|weight_fmt }} Kg</span>
+    </div>
+    {% endif %}
     <div class="row-item">
         <span>تاریخ و ساعت پر:</span>
         <span>{{ ticket.jalali_gross_date|default:"-" }} {{ ticket.gross_time|default:"-" }}</span>

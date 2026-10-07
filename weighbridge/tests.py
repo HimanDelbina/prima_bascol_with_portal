@@ -426,3 +426,48 @@ class PlateLookupAutoFillTests(TestCase):
         self.assertEqual(lookup_data["vehicle_type_id"], self.v_type.id)
 
 
+class TicketPrintSentWeightTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(username="print_tester", password="test-password")
+        self.client.force_login(self.user)
+        SystemSetting.objects.create(company_name="شرکت پریما باسکول", receipt_header_title="قبض توزین رسمی")
+
+        self.ticket = WeighTicket.objects.create(
+            serial_number="T-99001",
+            license_plate_display="55 ب 678 - ایران 22",
+            waybill_number="WB-884422",
+            sent_weight=Decimal("18500.00"),
+            first_weight=Decimal("30500.00"),
+            second_weight=Decimal("12000.00"),
+            gross_weight=Decimal("30500.00"),
+            tare_weight=Decimal("12000.00"),
+            net_weight=Decimal("18500.00"),
+            final_weight=Decimal("18500.00"),
+            status=TicketStatus.COMPLETED,
+            weight_mode=WeightMode.EMPTY_FIRST,
+            load_count=1,
+        )
+
+    def test_print_a4_contains_sent_weight_in_waybill(self):
+        response = self.client.get(reverse("weighbridge:ticket_print", args=[self.ticket.pk]), {"template": "a4"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "وزن ارسالی در بارنامه:")
+        self.assertContains(response, "18,500")
+        self.assertContains(response, "WB-884422")
+
+    def test_print_a5_contains_sent_weight_in_waybill(self):
+        response = self.client.get(reverse("weighbridge:ticket_print", args=[self.ticket.pk]), {"template": "a5"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "وزن ارسالی در بارنامه:")
+        self.assertContains(response, "18,500")
+        self.assertContains(response, "WB-884422")
+
+    def test_print_pos_contains_sent_weight_in_waybill(self):
+        response = self.client.get(reverse("weighbridge:ticket_print", args=[self.ticket.pk]), {"template": "pos"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "وزن ارسالی در بارنامه:")
+        self.assertContains(response, "18,500")
+        self.assertContains(response, "WB-884422")
+
+
+

@@ -124,10 +124,23 @@
             <td class="font-monospace fw-bold" style="direction: ltr; text-align: right;">{{ ticket.driver_mobile_display|default:"-" }}</td>
         </tr>
         <tr>
-            <th class="bg-light">بارنامه:</th>
-            <td>{{ ticket.waybill_number|default:"-" }}</td>
+            <th class="bg-light">شماره بارنامه:</th>
+            <td class="fw-bold font-monospace">{{ ticket.waybill_number|default:"-" }}</td>
+            <th class="bg-light">وزن ارسالی در بارنامه:</th>
+            <td class="fw-bold font-monospace">
+                {{ ticket.sent_weight|weight_fmt }} کیلوگرم
+                {% if ticket.sent_weight > 0 and ticket.weight_difference and ticket.status == 'completed' %}
+                <span class="small font-monospace {% if ticket.is_tolerance_exceeded %}text-danger fw-bold{% else %}text-muted{% endif %} me-1">
+                    (اختلاف: {{ ticket.weight_difference|weight_fmt }})
+                </span>
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
             <th class="bg-light">مبدأ / مقصد:</th>
             <td>{{ ticket.origin.name|default:"-" }} به {{ ticket.destination.name|default:"-" }}</td>
+            <th class="bg-light">جایگاه تخلیه:</th>
+            <td>{{ ticket.unload_location.name|default:"-" }}</td>
         </tr>
         <tr>
             <th class="bg-light">تاریخ پر:</th>

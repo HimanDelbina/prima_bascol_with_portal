@@ -153,9 +153,16 @@
             </tr>
             <tr>
                 <th class="bg-light">شماره بارنامه:</th>
-                <td>{{ ticket.waybill_number|default:"-" }}</td>
-                <th class="bg-light">تعداد بار / سرویس:</th>
-                <td>{{ ticket.load_count }}</td>
+                <td class="fw-bold font-monospace">{{ ticket.waybill_number|default:"-" }}</td>
+                <th class="bg-light">وزن ارسالی در بارنامه:</th>
+                <td class="fw-bold font-monospace">
+                    {{ ticket.sent_weight|weight_fmt }} کیلوگرم
+                    {% if ticket.sent_weight > 0 and ticket.weight_difference and ticket.status == 'completed' %}
+                    <span class="small font-monospace {% if ticket.is_tolerance_exceeded %}text-danger fw-bold{% else %}text-muted{% endif %} me-2">
+                        (اختلاف: {{ ticket.weight_difference|weight_fmt }} کیلوگرم)
+                    </span>
+                    {% endif %}
+                </td>
             </tr>
             <tr>
                 <th class="bg-light">مبدأ بار:</th>
@@ -166,20 +173,20 @@
             <tr>
                 <th class="bg-light">جایگاه تخلیه:</th>
                 <td>{{ ticket.unload_location.name|default:"-" }}</td>
-                <th class="bg-light">وزن ارسالی مبدأ:</th>
-                <td>{{ ticket.sent_weight|weight_fmt }} کیلوگرم</td>
+                <th class="bg-light">تعداد بار / سرویس:</th>
+                <td>{{ ticket.load_count }}</td>
             </tr>
             <tr>
                 <th class="bg-light">تاریخ و ساعت پر:</th>
                 <td>{{ ticket.jalali_gross_date|default:"-" }} ساعت {{ ticket.gross_time|default:"-" }}</td>
                 <th class="bg-light">مسئول توزین پر:</th>
-                <td>{{ ticket.gross_weight_operator.get_full_name|default:ticket.gross_weight_operator.username|default:"-" }}</td>
+                <td>{% if ticket.gross_weight_operator %}{{ ticket.gross_weight_operator.get_full_name|default:ticket.gross_weight_operator.username }}{% else %}-{% endif %}</td>
             </tr>
             <tr>
                 <th class="bg-light">تاریخ و ساعت خالی:</th>
                 <td>{{ ticket.jalali_tare_date|default:"-" }} ساعت {{ ticket.tare_time|default:"-" }}</td>
                 <th class="bg-light">مسئول توزین خالی:</th>
-                <td>{{ ticket.tare_weight_operator.get_full_name|default:ticket.tare_weight_operator.username|default:"-" }}</td>
+                <td>{% if ticket.tare_weight_operator %}{{ ticket.tare_weight_operator.get_full_name|default:ticket.tare_weight_operator.username }}{% else %}-{% endif %}</td>
             </tr>
             {% if ticket.loss_weight > 0 or ticket.loss_percent > 0 %}
             <tr>
