@@ -11,18 +11,31 @@ from core.models import SystemSetting
 
 
 def export_freight_report(queryset, summaries, export_format):
-    headers = ["شماره قبض", "تاریخ", "طرف حساب", "محصول", "پلاک", "راننده",
-               "شماره بارنامه", "وضعیت", "مبلغ کرایه (تومان)"]
+    headers = ["شماره قبض", "تاریخ", "ساعت ورود", "ساعت خروج", "طرف حساب", "محصول", "پلاک", "راننده",
+               "شماره بارنامه", "وزن بارنامه (Kg)", "وضعیت", "مبلغ کرایه (تومان)"]
 
     def rows():
         for ticket in queryset.iterator():
-            yield [ticket.serial_number, format_jalali_date(ticket.report_date),
-                   ticket.party.name if ticket.party else "-",
-                   ticket.product.name if ticket.product else "-",
-                   ticket.license_plate_display, ticket.driver_display, ticket.waybill_number,
-                   ticket.get_status_display(),
-                   int(ticket.freight_amount) if ticket.freight_amount is not None else "ثبت نشده"]
-        yield ["مجموع کرایه", "", "", "", "", "", "", "", int(summaries["total_amount"])]
+            yield [
+                ticket.serial_number,
+                format_jalali_date(ticket.report_date),
+                ticket.first_time_str or "-",
+                ticket.second_time_str or "-",
+                ticket.party.name if ticket.party else "-",
+                ticket.product.name if ticket.product else "-",
+                ticket.license_plate_display,
+                ticket.driver_display,
+                ticket.waybill_number or "-",
+                float(ticket.sent_weight or 0),
+                ticket.get_status_display(),
+                int(ticket.freight_amount) if ticket.freight_amount is not None else "ثبت نشده"
+            ]
+        yield [
+            "مجموع کرایه", "", "", "", "", "", "", "", "",
+            float(summaries.get("sum_sent", 0) or 0),
+            "",
+            int(summaries["total_amount"])
+        ]
 
     if export_format == "csv":
         response = HttpResponse(content_type="text/csv; charset=utf-8")
@@ -41,11 +54,11 @@ def export_freight_report(queryset, summaries, export_format):
     ws = wb.active
     ws.title = "مبالغ کرایه"
     ws.sheet_view.rightToLeft = True
-    ws.merge_cells("A1:I1")
+    ws.merge_cells("A1:L1")
     ws["A1"] = "گزارش مبالغ کرایه (تومان)"
     ws["A1"].font = Font(name="Tahoma", size=15, bold=True)
     ws["A1"].alignment = Alignment(horizontal="center")
-    ws.merge_cells("A2:I2")
+    ws.merge_cells("A2:L2")
     ws["A2"] = (f"تعداد قبوض: {summaries['total_tickets']} | مبلغ ثبت‌شده: {summaries['recorded_count']}"
                 f" | بدون مبلغ: {summaries['missing_count']}")
     ws["A2"].alignment = Alignment(horizontal="center")
@@ -59,15 +72,20 @@ def export_freight_report(queryset, summaries, export_format):
             if isinstance(value, str):
                 cell.data_type = "s"
             cell.font = Font(name="Tahoma", size=10)
-            cell.alignment = Alignment(horizontal="right", vertical="center")
-            if col == 9:
-                cell.number_format = "#,##0"
+            if col in [1, 2, 3, 4, 7, 9, 11]:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            elif col in [10, 12]:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+                if isinstance(value, (int, float, Decimal)):
+                    cell.number_format = "#,##0"
+            else:
+                cell.alignment = Alignment(horizontal="right", vertical="center")
     for cell in ws[ws.max_row]:
         cell.font = Font(name="Tahoma", bold=True)
         cell.fill = PatternFill("solid", fgColor="E2E8F0")
     ws.freeze_panes = "A5"
-    ws.auto_filter.ref = f"A4:I{max(4, ws.max_row - 1)}"
-    for col, width in enumerate([20, 16, 32, 26, 28, 25, 24, 30, 24], 1):
+    ws.auto_filter.ref = f"A4:L{max(4, ws.max_row - 1)}"
+    for col, width in enumerate([18, 14, 12, 12, 26, 24, 22, 20, 18, 16, 16, 22], 1):
         ws.column_dimensions[get_column_letter(col)].width = width
     output = io.BytesIO()
     wb.save(output)
@@ -107,12 +125,12 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
 
     # Header title
     settings_obj = SystemSetting.get_settings()
-    ws.merge_cells("A1:P1")
+    ws.merge_cells("A1:R1")
     ws["A1"] = f"{settings_obj.company_name} - {title}"
     ws["A1"].font = title_font
     ws["A1"].alignment = align_center
 
-    ws.merge_cells("A2:P2")
+    ws.merge_cells("A2:R2")
     ws["A2"] = f"تاریخ تهیه گزارش: {get_today_jalali()} | تعداد رکورد: {queryset.count()}"
     ws["A2"].font = subtitle_font
     ws["A2"].alignment = align_center
@@ -123,15 +141,17 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
         "شماره قبض",
         "شماره بارنامه",
         "تاریخ",
+        "ساعت ورود",
+        "ساعت خروج",
         "نوع عملیات",
         "طرف حساب",
         "نام محصول",
         "شماره پلاک",
         "نام راننده",
+        "وزن بارنامه (Kg)",
         "وزن پر (Kg)",
         "وزن خالی (Kg)",
         "وزن خالص (Kg)",
-        "وزن ارسالی (Kg)",
         "افت (Kg)",
         "وزن نهایی (Kg)",
         "وضعیت",
@@ -164,15 +184,17 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
             ticket.serial_number,
             ticket.waybill_number or "-",
             date_str,
+            ticket.first_time_str or "-",
+            ticket.second_time_str or "-",
             op_name,
             party_name,
             prod_name,
             ticket.license_plate_display,
             driver_name,
+            float(ticket.sent_weight or 0),
             float(ticket.gross_weight or 0),
             float(ticket.tare_weight or 0),
             float(ticket.net_weight or 0),
-            float(ticket.sent_weight or 0),
             float(ticket.loss_weight or 0),
             float(ticket.final_weight or 0),
             status_name,
@@ -184,9 +206,9 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
             cell.border = thin_border
 
             # Alignments and number formats
-            if col_idx in [1, 2, 3, 4, 8, 16]:
+            if col_idx in [1, 2, 3, 4, 5, 6, 10, 18]:
                 cell.alignment = align_center
-            elif col_idx in [10, 11, 12, 13, 14, 15]:
+            elif col_idx in [12, 13, 14, 15, 16, 17]:
                 cell.alignment = align_left
                 cell.number_format = num_fmt
             else:
@@ -205,13 +227,15 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
             "-",
             "-",
             "-",
+            "-",
+            "-",
             f"{summaries['total_loads']} بار",
-            float(summaries["sum_gross"]),
-            float(summaries["sum_tare"]),
-            float(summaries["sum_net"]),
-            float(summaries["sum_sent"]),
-            float(summaries["sum_loss"]),
-            float(summaries["sum_final"]),
+            float(summaries["sum_sent"] or 0),
+            float(summaries["sum_gross"] or 0),
+            float(summaries["sum_tare"] or 0),
+            float(summaries["sum_net"] or 0),
+            float(summaries["sum_loss"] or 0),
+            float(summaries["sum_final"] or 0),
             "-",
         ]
         for col_idx, val in enumerate(summary_row_values, 1):
@@ -219,7 +243,7 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
             cell.font = summary_font
             cell.fill = summary_fill
             cell.border = thin_border
-            if col_idx in [10, 11, 12, 13, 14, 15]:
+            if col_idx in [12, 13, 14, 15, 16, 17]:
                 cell.number_format = num_fmt
                 cell.alignment = align_left
             else:
@@ -257,9 +281,10 @@ def export_csv(queryset, title="گزارش باسکول"):
     
     writer = csv.writer(response)
     writer.writerow([
-        "ردیف", "شماره قبض", "شماره بارنامه", "تاریخ", "نوع عملیات", "طرف حساب", "محصول", 
-        "پلاک", "راننده", "وزن پر", "وزن خالی", "وزن خالص", "وزن ارسالی", 
-        "افت", "وزن نهایی", "وضعیت"
+        "ردیف", "شماره قبض", "شماره بارنامه", "تاریخ", "ساعت ورود", "ساعت خروج",
+        "نوع عملیات", "طرف حساب", "محصول", "پلاک", "راننده",
+        "وزن بارنامه (Kg)", "وزن پر (Kg)", "وزن خالی (Kg)", "وزن خالص (Kg)",
+        "افت (Kg)", "وزن نهایی (Kg)", "وضعیت"
     ])
 
     for idx, ticket in enumerate(queryset, 1):
@@ -269,17 +294,19 @@ def export_csv(queryset, title="گزارش باسکول"):
             ticket.serial_number,
             ticket.waybill_number or "-",
             date_str,
+            ticket.first_time_str or "-",
+            ticket.second_time_str or "-",
             ticket.operation_type.name if ticket.operation_type else "-",
             ticket.party.name if ticket.party else "-",
             ticket.product.name if ticket.product else "-",
             ticket.license_plate_display,
             ticket.driver_display,
-            ticket.gross_weight,
-            ticket.tare_weight,
-            ticket.net_weight,
-            ticket.sent_weight,
-            ticket.loss_weight,
-            ticket.final_weight,
+            ticket.sent_weight or 0,
+            ticket.gross_weight or 0,
+            ticket.tare_weight or 0,
+            ticket.net_weight or 0,
+            ticket.loss_weight or 0,
+            ticket.final_weight or 0,
             ticket.get_status_display()
         ])
 
@@ -314,7 +341,7 @@ def export_pdf(queryset, summaries=None, title="گزارش باسکول"):
     elements.append(Spacer(1, 15))
 
     table_data = [
-        ["#", "Serial", "Date", "Operation", "Party", "Product", "Plate", "Gross", "Tare", "Net", "Final", "Status"]
+        ["#", "Serial", "Waybill", "Date", "In", "Out", "Operation", "Party", "Product", "Plate", "Waybill Wt", "Gross", "Tare", "Net", "Final", "Status"]
     ]
 
     for idx, t in enumerate(queryset[:500], 1):
@@ -322,11 +349,15 @@ def export_pdf(queryset, summaries=None, title="گزارش باسکول"):
         table_data.append([
             str(idx),
             str(t.serial_number),
+            str(t.waybill_number or "-"),
             str(d_str),
+            str(t.first_time_str or "-"),
+            str(t.second_time_str or "-"),
             str(t.operation_type.name if t.operation_type else "-"),
             str(t.party.name if t.party else "-"),
             str(t.product.name if t.product else "-"),
             str(t.license_plate_display),
+            f"{int(t.sent_weight or 0):,}",
             f"{int(t.gross_weight or 0):,}",
             f"{int(t.tare_weight or 0):,}",
             f"{int(t.net_weight or 0):,}",

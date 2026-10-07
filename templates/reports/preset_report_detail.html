@@ -167,15 +167,18 @@
                         <th>شماره قبض</th>
                         <th>شماره بارنامه</th>
                         <th>تاریخ</th>
+                        <th>ساعت ورود</th>
+                        <th>ساعت خروج</th>
                         <th>طرف حساب</th>
                         <th>محصول</th>
                         <th>پلاک</th>
                         <th>راننده</th>
-                        <th>وزن پر (Kg)</th>
-                        <th>وزن خالی (Kg)</th>
-                        <th>خالص (Kg)</th>
-                        <th>افت (Kg)</th>
-                        <th>نهایی (Kg)</th>
+                        <th class="text-end">وزن بارنامه (Kg)</th>
+                        <th class="text-end">وزن پر (Kg)</th>
+                        <th class="text-end">وزن خالی (Kg)</th>
+                        <th class="text-end">خالص (Kg)</th>
+                        <th class="text-end">افت (Kg)</th>
+                        <th class="text-end">نهایی (Kg)</th>
                         <th>وضعیت</th>
                         <th class="text-center">مشاهده</th>
                     </tr>
@@ -186,6 +189,8 @@
                         <td class="fw-bold text-primary">{{ ticket.serial_number }}</td>
                         <td class="font-monospace text-muted small">{{ ticket.waybill_number|default:"-" }}</td>
                         <td class="small">{{ ticket.jalali_first_date }}</td>
+                        <td class="font-monospace small">{{ ticket.first_time_str|default:"-" }}</td>
+                        <td class="font-monospace small">{{ ticket.second_time_str|default:"-" }}</td>
                         <td>{{ ticket.party.name|default:"-" }}</td>
                         <td><span class="fw-bold">{{ ticket.product.name|default:"-" }}</span></td>
                         <td>
@@ -195,6 +200,7 @@
                             </span>
                         </td>
                         <td>{{ ticket.driver_display }}</td>
+                        <td class="text-end font-monospace text-muted">{% if ticket.sent_weight and ticket.sent_weight > 0 %}{{ ticket.sent_weight|weight_fmt }}{% else %}-{% endif %}</td>
                         <td class="text-end fw-bold">{{ ticket.gross_weight|weight_fmt }}</td>
                         <td class="text-end fw-bold text-muted">{{ ticket.tare_weight|weight_fmt }}</td>
                         <td class="text-end fw-bold text-success">{{ ticket.net_weight|weight_fmt }}</td>
@@ -213,7 +219,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="14" class="text-center py-5 text-muted">هیچ رکوردی یافت نشد.</td>
+                        <td colspan="17" class="text-center py-5 text-muted">هیچ رکوردی یافت نشد.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

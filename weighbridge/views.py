@@ -109,9 +109,11 @@ def ticket_create(request):
                 DailyPlatePolicy.save(ticket, user=request.user, assign_serial=True)
             except ValidationError as exc:
                 form.add_error(None, exc)
+                sales_op_ids = list(OperationType.objects.filter(Q(direction='outbound') | Q(name__icontains='فروش')).values_list('id', flat=True))
                 return render(request, "weighbridge/ticket_create.html", {
                     "form": form, "title": "ثبت باسکول و توزین جدید", "settings": SystemSetting.get_settings(),
                     "can_manage_plate_exceptions": can_manage_plate_exceptions(request.user),
+                    "sales_op_ids": sales_op_ids,
                 })
 
             # Audit Log
@@ -173,11 +175,13 @@ def ticket_create(request):
         form = TicketCreateForm(initial=initial_data)
 
     settings_obj = SystemSetting.get_settings()
+    sales_op_ids = list(OperationType.objects.filter(Q(direction='outbound') | Q(name__icontains='فروش')).values_list('id', flat=True))
     return render(request, "weighbridge/ticket_create.html", {
         "form": form,
         "title": "ثبت باسکول و توزین جدید",
         "settings": settings_obj,
         "can_manage_plate_exceptions": can_manage_plate_exceptions(request.user),
+        "sales_op_ids": sales_op_ids,
     })
 
 
@@ -476,8 +480,10 @@ def ticket_edit(request, pk):
                 DailyPlatePolicy.save(ticket, user=request.user)
             except ValidationError as exc:
                 form.add_error(None, exc)
+                sales_op_ids = list(OperationType.objects.filter(Q(direction='outbound') | Q(name__icontains='فروش')).values_list('id', flat=True))
                 return render(request, "weighbridge/ticket_edit.html", {
                     "form": form, "ticket": ticket, "title": "اصلاح و ویرایش مدیریتی قبض",
+                    "sales_op_ids": sales_op_ids,
                 })
 
             new_values = {
@@ -516,10 +522,12 @@ def ticket_edit(request, pk):
     else:
         form = TicketEditManagerForm(instance=ticket)
 
+    sales_op_ids = list(OperationType.objects.filter(Q(direction='outbound') | Q(name__icontains='فروش')).values_list('id', flat=True))
     return render(request, "weighbridge/ticket_edit.html", {
         "form": form,
         "ticket": ticket,
         "title": f"اصلاح و ویرایش مدیریتی قبض {ticket.serial_number}",
+        "sales_op_ids": sales_op_ids,
     })
 
 

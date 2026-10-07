@@ -62,8 +62,12 @@ class FreightReportService:
 
     @staticmethod
     def summarize(qs):
-        result = qs.aggregate(total_tickets=Count("id"), recorded_count=Count("freight_amount"),
-                              total_amount=Sum("freight_amount", default=Decimal("0")))
+        result = qs.aggregate(
+            total_tickets=Count("id"),
+            recorded_count=Count("freight_amount"),
+            total_amount=Sum("freight_amount", default=Decimal("0")),
+            sum_sent=Sum("sent_weight", default=Decimal("0")),
+        )
         result["missing_count"] = result["total_tickets"] - result["recorded_count"]
         return result
 

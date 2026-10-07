@@ -16,7 +16,7 @@
             </h4>
             {{ ticket.status|status_badge }}
         </div>
-        <p class="text-muted small mb-0">تاریخ ثبت سند: {{ ticket.jalali_first_date }} ساعت {{ ticket.first_time_str }} | ثبت شده توسط: {{ ticket.first_weight_operator.get_full_name|default:ticket.first_weight_operator.username }}</p>
+        <p class="text-muted small mb-0">تاریخ ثبت سند: {{ ticket.jalali_first_date }} ساعت {{ ticket.first_time_str }} | ثبت شده توسط: {% if ticket.first_weight_operator %}{{ ticket.first_weight_operator.get_full_name|default:ticket.first_weight_operator.username }}{% else %}-{% endif %}</p>
     </div>
     
     <div class="d-flex flex-wrap gap-2">
@@ -223,6 +223,12 @@
                         <td class="text-muted">وزن ارسالی در بارنامه:</td>
                         <td class="font-monospace">{{ ticket.sent_weight|weight_fmt }} Kg</td>
                     </tr>
+                    {% if ticket.ingot_count %}
+                    <tr>
+                        <td class="text-primary fw-bold">تعداد شمش (فروش):</td>
+                        <td class="font-monospace fw-bold fs-6 text-primary">{{ ticket.ingot_count }} عدد</td>
+                    </tr>
+                    {% endif %}
                     <tr>
                         <td class="text-muted">نوع و درصد افت:</td>
                         <td>{{ ticket.loss_type.name|default:"بدون افت" }} ({{ ticket.loss_percent }}%) {% if ticket.is_loss_overridden %}<span class="badge bg-warning text-dark">اورراید دستی</span>{% endif %}</td>
@@ -292,7 +298,7 @@
                                 <strong class="text-primary">ثبت ورود و توزین اول</strong>
                                 <span class="small text-muted font-monospace">{{ ticket.jalali_first_date }} {{ ticket.first_time_str }}</span>
                             </div>
-                            <div class="small mt-1">وزن ثبت‌شده: <strong class="font-monospace">{{ ticket.first_weight|weight_fmt }} Kg</strong> (توسط {{ ticket.first_weight_operator.get_full_name|default:ticket.first_weight_operator.username }})</div>
+                            <div class="small mt-1">وزن ثبت‌شده: <strong class="font-monospace">{{ ticket.first_weight|weight_fmt }} Kg</strong> (توسط {% if ticket.first_weight_operator %}{{ ticket.first_weight_operator.get_full_name|default:ticket.first_weight_operator.username }}{% else %}-{% endif %})</div>
                         </div>
                     </li>
 
@@ -305,7 +311,7 @@
                                 <strong class="text-success">ثبت توزین دوم و خروج</strong>
                                 <span class="small text-muted font-monospace">{{ ticket.jalali_second_date }} {{ ticket.second_time_str }}</span>
                             </div>
-                            <div class="small mt-1">وزن ثبت‌شده: <strong class="font-monospace">{{ ticket.second_weight|weight_fmt }} Kg</strong> (توسط {{ ticket.second_weight_operator.get_full_name|default:ticket.second_weight_operator.username }})</div>
+                            <div class="small mt-1">وزن ثبت‌شده: <strong class="font-monospace">{{ ticket.second_weight|weight_fmt }} Kg</strong> (توسط {% if ticket.second_weight_operator %}{{ ticket.second_weight_operator.get_full_name|default:ticket.second_weight_operator.username }}{% else %}-{% endif %})</div>
                         </div>
                     </li>
                     {% endif %}

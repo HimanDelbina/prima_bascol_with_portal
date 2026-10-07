@@ -132,6 +132,12 @@ class WeighTicket(BaseModel):
         verbose_name="جایگاه تخلیه / بارگیری"
     )
     load_count = models.PositiveIntegerField(default=1, verbose_name="تعداد بار / سرویس")
+    ingot_count = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="تعداد شمش",
+        help_text="مختص عملیات فروش"
+    )
     
     # First Weight
     first_weight = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"), verbose_name="وزن اول (Kg)")
@@ -255,7 +261,7 @@ class WeighTicket(BaseModel):
 
     @property
     def first_time_str(self):
-        return format_time_hhmm(self.first_weight_time)
+        return format_time_hhmm(self.first_weight_time or getattr(self, "created_at", None))
 
     @property
     def second_time_str(self):

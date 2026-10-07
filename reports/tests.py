@@ -40,7 +40,7 @@ class FreightReportTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["summaries"], {
-            "total_tickets": 4, "recorded_count": 3, "missing_count": 1, "total_amount": Decimal("3000"),
+            "total_tickets": 4, "recorded_count": 3, "missing_count": 1, "total_amount": Decimal("3000"), "sum_sent": Decimal("0.00"),
         })
         self.assertContains(response, "3,000")
         self.assertContains(response, "ثبت نشده")
@@ -91,8 +91,8 @@ class FreightReportTests(TestCase):
         sheet = workbook.active
         self.assertTrue(sheet.sheet_view.rightToLeft)
         self.assertEqual(sheet.max_row, 35)
-        self.assertEqual(sheet["I35"].value, 3700)
-        self.assertEqual(sheet["I35"].data_type, "n")
+        self.assertEqual(sheet["L35"].value, 3700)
+        self.assertEqual(sheet["L35"].data_type, "n")
 
     def test_empty_results_and_export(self):
         response = self.client.get(self.url, {"plate": "not-found"})
@@ -100,18 +100,18 @@ class FreightReportTests(TestCase):
         self.assertEqual(response.context["summaries"]["total_amount"], 0)
         response = self.client.get(self.url, {"plate": "not-found", "export": "excel"})
         sheet = load_workbook(io.BytesIO(response.content)).active
-        self.assertEqual(sheet["I5"].value, 0)
+        self.assertEqual(sheet["L5"].value, 0)
 
     def test_exports_treat_ticket_text_as_text(self):
         WeighTicket.objects.filter(serial_number="F-1").update(waybill_number="=1+1")
         response = self.client.get(self.url, {"export": "excel"})
         sheet = load_workbook(io.BytesIO(response.content)).active
-        cells = [row[6] for row in sheet.iter_rows(min_row=5) if row[0].value == "F-1"]
+        cells = [row[8] for row in sheet.iter_rows(min_row=5) if row[0].value == "F-1"]
         self.assertEqual(cells[0].value, "=1+1")
         self.assertEqual(cells[0].data_type, "s")
         response = self.client.get(self.url, {"export": "csv"})
         rows = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig"))))
-        self.assertEqual(next(row for row in rows if row[0] == "F-1")[6], "'=1+1")
+        self.assertEqual(next(row for row in rows if row[0] == "F-1")[8], "'=1+1")
 
     def test_login_required_for_page_and_exports(self):
         self.client.logout()
@@ -330,3 +330,43 @@ class ReportBuilderViewFilterTests(TestCase):
         self.assertEqual(response_waybill.status_code, 200)
         self.assertContains(response_waybill, "REP-202")
         self.assertNotContains(response_waybill, "REP-101")
+
+    def test_report_builder_and_exports_contain_time_and_waybill_weight(self):
+        self.t1.first_weight_time = time(9, 15)
+        self.t1.second_weight_time = time(10, 45)
+        self.t1.sent_weight = Decimal("19500.00")
+        self.t1.save()
+
+        # Web view
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ساعت ورود")
+        self.assertContains(response, "ساعت خروج")
+        self.assertContains(response, "وزن بارنامه (Kg)")
+        self.assertContains(response, "09:15")
+        self.assertContains(response, "10:45")
+
+        # Excel export
+        excel_resp = self.client.get(self.url, {"export": "excel"})
+        self.assertEqual(excel_resp.status_code, 200)
+        wb = load_workbook(io.BytesIO(excel_resp.content))
+        ws = wb.active
+        headers = [ws.cell(row=4, column=col).value for col in range(1, 19)]
+        self.assertIn("ساعت ورود", headers)
+        self.assertIn("ساعت خروج", headers)
+        self.assertIn("وزن بارنامه (Kg)", headers)
+
+        # CSV export
+        csv_resp = self.client.get(self.url, {"export": "csv"})
+        self.assertEqual(csv_resp.status_code, 200)
+        csv_rows = list(csv.reader(io.StringIO(csv_resp.content.decode("utf-8-sig"))))
+        self.assertIn("ساعت ورود", csv_rows[0])
+        self.assertIn("ساعت خروج", csv_rows[0])
+        self.assertIn("وزن بارنامه (Kg)", csv_rows[0])
+
+        # Print preview
+        print_resp = self.client.get(self.url, {"export": "print"})
+        self.assertEqual(print_resp.status_code, 200)
+        self.assertContains(print_resp, "ساعت ورود")
+        self.assertContains(print_resp, "ساعت خروج")
+        self.assertContains(print_resp, "وزن بارنامه (Kg)")

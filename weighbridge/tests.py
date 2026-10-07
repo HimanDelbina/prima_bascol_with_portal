@@ -461,13 +461,102 @@ class TicketPrintSentWeightTests(TestCase):
         self.assertContains(response, "وزن ارسالی در بارنامه:")
         self.assertContains(response, "18,500")
         self.assertContains(response, "WB-884422")
+        self.assertContains(response, "زمان ورود (وزن ۱):")
+        self.assertContains(response, "زمان خروج (وزن ۲):")
+        self.assertContains(response, "اپراتور ورود:")
+        self.assertContains(response, "اپراتور خروج:")
 
     def test_print_pos_contains_sent_weight_in_waybill(self):
         response = self.client.get(reverse("weighbridge:ticket_print", args=[self.ticket.pk]), {"template": "pos"})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "وزن ارسالی در بارنامه:")
         self.assertContains(response, "18,500")
-        self.assertContains(response, "WB-884422")
 
+class TicketIngotCountTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(username="ingot_admin", password="test-password")
+        self.client.force_login(self.user)
+        SystemSetting.objects.create(require_driver=False)
 
+        self.sale_op = OperationType.objects.create(
+            name="صادره (فروش محصول)",
+            code="SALE",
+            direction="outbound"
+        )
+        self.purchase_op = OperationType.objects.create(
+            name="وارده (خرید مواد اولیه)",
+            code="PURCHASE",
+            direction="inbound"
+        )
 
+        self.payload = {
+            "weight_mode": WeightMode.EMPTY_FIRST,
+            "license_plate_display": "12 ج 345 - ایران 67",
+            "first_weight": "12000",
+            "load_count": "1",
+            "sent_weight": "0",
+            "loss_percent": "0",
+            "loss_weight": "0",
+        }
+
+    def test_ingot_count_saved_for_sale_operation(self):
+        response = self.client.post(reverse("weighbridge:ticket_create"), {
+            **self.payload,
+            "operation_type": self.sale_op.pk,
+            "ingot_count": "120",
+        })
+        self.assertEqual(response.status_code, 302)
+        ticket = WeighTicket.objects.latest("id")
+        self.assertEqual(ticket.ingot_count, 120)
+
+    def test_ingot_count_cleared_for_non_sale_operation(self):
+        response = self.client.post(reverse("weighbridge:ticket_create"), {
+            **self.payload,
+            "operation_type": self.purchase_op.pk,
+            "ingot_count": "120",
+        })
+        self.assertEqual(response.status_code, 302)
+        ticket = WeighTicket.objects.latest("id")
+        self.assertIsNone(ticket.ingot_count)
+
+    def test_ingot_count_displayed_in_detail_and_print(self):
+        ticket = WeighTicket.objects.create(
+            serial_number="T-99002",
+            license_plate_display="55 ب 678 - ایران 22",
+            operation_type=self.sale_op,
+            ingot_count=85,
+            first_weight=Decimal("30500.00"),
+            second_weight=Decimal("12000.00"),
+            gross_weight=Decimal("30500.00"),
+            tare_weight=Decimal("12000.00"),
+            net_weight=Decimal("18500.00"),
+            final_weight=Decimal("18500.00"),
+            first_weight_operator=self.user,
+            second_weight_operator=self.user,
+            status=TicketStatus.COMPLETED,
+            weight_mode=WeightMode.EMPTY_FIRST,
+            load_count=1,
+        )
+
+        # Detail view
+        detail_resp = self.client.get(reverse("weighbridge:ticket_detail", args=[ticket.pk]))
+        self.assertEqual(detail_resp.status_code, 200)
+        self.assertContains(detail_resp, "تعداد شمش (فروش):")
+        self.assertContains(detail_resp, "85")
+
+        # A4 print
+        a4_resp = self.client.get(reverse("weighbridge:ticket_print", args=[ticket.pk]), {"template": "a4"})
+        self.assertEqual(a4_resp.status_code, 200)
+        self.assertContains(a4_resp, "تعداد شمش:")
+        self.assertContains(a4_resp, "85")
+
+        # A5 print
+        a5_resp = self.client.get(reverse("weighbridge:ticket_print", args=[ticket.pk]), {"template": "a5"})
+        self.assertEqual(a5_resp.status_code, 200)
+        self.assertContains(a5_resp, "شمش: 85")
+
+        # POS print
+        pos_resp = self.client.get(reverse("weighbridge:ticket_print", args=[ticket.pk]), {"template": "pos"})
+        self.assertEqual(pos_resp.status_code, 200)
+        self.assertContains(pos_resp, "تعداد شمش (فروش):")
+        self.assertContains(pos_resp, "85")

@@ -51,19 +51,23 @@
     <div class="industrial-card-header"><h6 class="industrial-card-title">ریز مبالغ کرایه</h6></div>
     <div class="table-responsive">
         <table class="table custom-table table-hover align-middle mb-0">
-            <thead><tr><th>شماره قبض</th><th>تاریخ</th><th>طرف حساب</th><th>محصول</th><th>پلاک</th><th>راننده</th><th>شماره بارنامه</th><th>وضعیت</th><th class="text-end">کرایه (تومان)</th></tr></thead>
+            <thead><tr><th>شماره قبض</th><th>تاریخ</th><th>ساعت ورود</th><th>ساعت خروج</th><th>طرف حساب</th><th>محصول</th><th>پلاک</th><th>راننده</th><th>شماره بارنامه</th><th class="text-end">وزن بارنامه (Kg)</th><th>وضعیت</th><th class="text-end">کرایه (تومان)</th></tr></thead>
             <tbody>
             {% for ticket in page_obj %}
                 <tr>
                     <td>{% if user.is_superuser or user.profile.can_access_weighbridge %}<a class="fw-bold" href="{% url 'weighbridge:ticket_detail' ticket.id %}">{{ ticket.serial_number }}</a>{% else %}<span class="fw-bold font-monospace">{{ ticket.serial_number }}</span>{% endif %}</td>
                     <td class="text-nowrap">{{ ticket.report_date|jdate }}</td>
+                    <td class="font-monospace small text-nowrap">{{ ticket.first_time_str|default:"-" }}</td>
+                    <td class="font-monospace small text-nowrap">{{ ticket.second_time_str|default:"-" }}</td>
                     <td>{{ ticket.party.name|default:"-" }}</td><td>{{ ticket.product.name|default:"-" }}</td>
                     <td class="text-nowrap">{{ ticket.license_plate_display }}</td><td>{{ ticket.driver_display }}</td>
-                    <td>{{ ticket.waybill_number|default:"-" }}</td><td>{{ ticket.status|status_badge }}</td>
+                    <td>{{ ticket.waybill_number|default:"-" }}</td>
+                    <td class="text-end font-monospace">{% if ticket.sent_weight and ticket.sent_weight > 0 %}{{ ticket.sent_weight|weight_fmt }}{% else %}-{% endif %}</td>
+                    <td>{{ ticket.status|status_badge }}</td>
                     <td class="text-end fw-bold text-nowrap">{% if ticket.freight_amount is None %}<span class="text-muted fw-normal">ثبت نشده</span>{% else %}{{ ticket.freight_amount|weight_fmt:0 }}{% endif %}</td>
                 </tr>
             {% empty %}
-                <tr><td colspan="9" class="text-center text-muted py-5">قبضی با این فیلترها یافت نشد.</td></tr>
+                <tr><td colspan="12" class="text-center text-muted py-5">قبضی با این فیلترها یافت نشد.</td></tr>
             {% endfor %}
             </tbody>
         </table>

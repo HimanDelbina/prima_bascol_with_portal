@@ -48,7 +48,7 @@ class TicketCreateForm(forms.ModelForm):
             "vehicle", "vehicle_type", "vehicle_type_custom",
             "driver", "driver_name_custom", "driver_mobile_custom",
             "license_plate_display", "waybill_number", "freight_amount", "origin", "destination",
-            "unload_location", "load_count", "first_weight", "second_weight",
+            "unload_location", "load_count", "ingot_count", "first_weight", "second_weight",
             "sent_weight", "loss_type", "loss_percent", "loss_weight",
             "is_loss_overridden", "loss_override_reason", "notes"
         ]
@@ -70,6 +70,7 @@ class TicketCreateForm(forms.ModelForm):
             "destination": forms.Select(attrs={"class": "form-select"}),
             "unload_location": forms.Select(attrs={"class": "form-select"}),
             "load_count": forms.NumberInput(attrs={"class": "form-control", "min": "1"}),
+            "ingot_count": forms.NumberInput(attrs={"class": "form-control", "id": "id_ingot_count", "min": "1", "placeholder": "تعداد شمش"}),
             
             "first_weight": forms.NumberInput(attrs={"class": "form-control form-control-lg fw-bold text-primary", "id": "id_first_weight", "step": "any", "placeholder": "۰"}),
             "second_weight": forms.NumberInput(attrs={"class": "form-control form-control-lg fw-bold text-primary", "id": "id_second_weight", "step": "any", "placeholder": "۰"}),
@@ -106,6 +107,7 @@ class TicketCreateForm(forms.ModelForm):
         self.fields["driver_mobile_custom"].required = False
         self.fields["waybill_number"].required = False
         self.fields["license_plate_display"].required = False
+        self.fields["ingot_count"].required = False
 
         if not self.instance.pk:
             self.fields["first_weight_date_jalali"].initial = get_today_jalali()
@@ -183,6 +185,14 @@ class TicketCreateForm(forms.ModelForm):
         reason = cleaned_data.get("loss_override_reason", "").strip()
         if is_overridden and not reason:
             self.add_error("loss_override_reason", "در صورت تغییر دستی افت، وارد کردن دلیل الزامی است.")
+
+        op_type = cleaned_data.get("operation_type")
+        is_sale = False
+        if op_type:
+            is_sale = (getattr(op_type, "direction", None) == "outbound" or "فروش" in getattr(op_type, "name", ""))
+        ingot_count = cleaned_data.get("ingot_count")
+        if not is_sale and ingot_count:
+            cleaned_data["ingot_count"] = None
 
         return cleaned_data
 
@@ -283,12 +293,12 @@ class TicketEditManagerForm(forms.ModelForm):
             "operation_type", "party", "product", "vehicle", "vehicle_type", 
             "driver", "driver_name_custom", "driver_mobile_custom",
             "license_plate_display", "waybill_number", "freight_amount", "origin", "destination",
-            "unload_location", "load_count", "first_weight", "second_weight", 
+            "unload_location", "load_count", "ingot_count", "first_weight", "second_weight", 
             "sent_weight", "loss_type", "loss_percent", "loss_weight", 
             "is_loss_overridden", "loss_override_reason", "notes"
         ]
         widgets = {
-            "operation_type": forms.Select(attrs={"class": "form-select"}),
+            "operation_type": forms.Select(attrs={"class": "form-select", "id": "id_operation_type"}),
             "party": forms.Select(attrs={"class": "form-select"}),
             "product": forms.Select(attrs={"class": "form-select"}),
             "vehicle": forms.Select(attrs={"class": "form-select"}),
@@ -303,6 +313,7 @@ class TicketEditManagerForm(forms.ModelForm):
             "destination": forms.Select(attrs={"class": "form-select"}),
             "unload_location": forms.Select(attrs={"class": "form-select"}),
             "load_count": forms.NumberInput(attrs={"class": "form-control"}),
+            "ingot_count": forms.NumberInput(attrs={"class": "form-control", "id": "id_ingot_count", "min": "1"}),
             "first_weight": forms.NumberInput(attrs={"class": "form-control", "step": "any"}),
             "second_weight": forms.NumberInput(attrs={"class": "form-control", "step": "any"}),
             "sent_weight": forms.NumberInput(attrs={"class": "form-control", "step": "any"}),
@@ -334,7 +345,7 @@ class TicketEditManagerForm(forms.ModelForm):
             "loss_weight", "is_loss_overridden", "loss_override_reason", 
             "notes", "driver_name_custom", "driver_mobile_custom", 
             "waybill_number", "freight_amount", "origin", "destination", 
-            "unload_location", "vehicle", "vehicle_type", "driver", "load_count"
+            "unload_location", "vehicle", "vehicle_type", "driver", "load_count", "ingot_count"
         ]
         for field_name in optional_fields:
             if field_name in self.fields:
@@ -394,6 +405,14 @@ class TicketEditManagerForm(forms.ModelForm):
             cleaned_data["is_loss_overridden"] = True
             if not cleaned_data.get("loss_override_reason"):
                 cleaned_data["loss_override_reason"] = cleaned_data.get("manager_reason", "")
+
+        op_type = cleaned_data.get("operation_type")
+        is_sale = False
+        if op_type:
+            is_sale = (getattr(op_type, "direction", None) == "outbound" or "فروش" in getattr(op_type, "name", ""))
+        ingot_count = cleaned_data.get("ingot_count")
+        if not is_sale and ingot_count:
+            cleaned_data["ingot_count"] = None
 
         return cleaned_data
 

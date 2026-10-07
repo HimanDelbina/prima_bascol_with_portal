@@ -98,6 +98,13 @@
                             {{ form.freight_amount }}
                             {% if form.freight_amount.errors %}<div class="text-danger small">{{ form.freight_amount.errors }}</div>{% endif %}
                         </div>
+                        <div class="col-md-6 col-xl d-none" id="id_ingot_count_col">
+                            <label for="{{ form.ingot_count.id_for_label }}" class="form-label fw-bold small text-primary">
+                                تعداد شمش <span class="badge bg-warning text-dark border border-warning" style="font-size: 10px;">مختص فروش</span>
+                            </label>
+                            {{ form.ingot_count }}
+                            {% if form.ingot_count.errors %}<div class="text-danger small">{{ form.ingot_count.errors }}</div>{% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -450,6 +457,30 @@ document.addEventListener("DOMContentLoaded", function() {
             const calcNet = document.getElementById('calc-net-val');
             if (modalNet && calcNet) modalNet.textContent = calcNet.textContent;
         });
+    }
+
+    // Dynamic Ingot Count visibility (Only for sales operations)
+    const salesOpIds = {{ sales_op_ids|default:"[]"|safe }};
+    const opSelect = document.getElementById('id_operation_type');
+    const ingotCol = document.getElementById('id_ingot_count_col');
+    const ingotInput = document.getElementById('id_ingot_count');
+
+    function checkIngotVisibility() {
+        if (!opSelect || !ingotCol) return;
+        const selectedVal = parseInt(opSelect.value, 10);
+        const selectedText = opSelect.options[opSelect.selectedIndex] ? opSelect.options[opSelect.selectedIndex].text : '';
+        const isSale = salesOpIds.includes(selectedVal) || selectedText.includes('فروش') || selectedText.includes('صادره');
+        if (isSale) {
+            ingotCol.classList.remove('d-none');
+        } else {
+            ingotCol.classList.add('d-none');
+            if (ingotInput) ingotInput.value = '';
+        }
+    }
+
+    if (opSelect) {
+        opSelect.addEventListener('change', checkIngotVisibility);
+        checkIngotVisibility();
     }
 });
 </script>

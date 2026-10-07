@@ -66,6 +66,13 @@
                             {{ form.load_count }}
                             {% if form.load_count.errors %}<div class="text-danger small">{{ form.load_count.errors }}</div>{% endif %}
                         </div>
+                        <div class="col-md-4 d-none" id="id_ingot_count_col">
+                            <label class="form-label fw-bold text-primary">
+                                تعداد شمش <span class="badge bg-warning text-dark border border-warning" style="font-size: 10px;">مختص فروش</span>
+                            </label>
+                            {{ form.ingot_count }}
+                            {% if form.ingot_count.errors %}<div class="text-danger small">{{ form.ingot_count.errors }}</div>{% endif %}
+                        </div>
                         <div class="col-md-4">
                             <label class="form-label fw-bold">مبدأ بار</label>
                             {{ form.origin }}
@@ -160,6 +167,30 @@ document.addEventListener("DOMContentLoaded", function() {
                 }
             }
         });
+    }
+
+    // Dynamic Ingot Count visibility (Only for sales operations)
+    const salesOpIds = {{ sales_op_ids|default:"[]"|safe }};
+    const opSelect = document.getElementById('id_operation_type');
+    const ingotCol = document.getElementById('id_ingot_count_col');
+    const ingotInput = document.getElementById('id_ingot_count');
+
+    function checkIngotVisibility() {
+        if (!opSelect || !ingotCol) return;
+        const selectedVal = parseInt(opSelect.value, 10);
+        const selectedText = opSelect.options[opSelect.selectedIndex] ? opSelect.options[opSelect.selectedIndex].text : '';
+        const isSale = salesOpIds.includes(selectedVal) || selectedText.includes('فروش') || selectedText.includes('صادره');
+        if (isSale) {
+            ingotCol.classList.remove('d-none');
+        } else {
+            ingotCol.classList.add('d-none');
+            if (ingotInput) ingotInput.value = '';
+        }
+    }
+
+    if (opSelect) {
+        opSelect.addEventListener('change', checkIngotVisibility);
+        checkIngotVisibility();
     }
 });
 </script>

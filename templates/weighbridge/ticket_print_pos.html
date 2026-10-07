@@ -94,6 +94,12 @@
         <span class="font-monospace {% if ticket.is_tolerance_exceeded %}fw-bold text-danger{% endif %}">{{ ticket.weight_difference|weight_fmt }} Kg</span>
     </div>
     {% endif %}
+    {% if ticket.ingot_count %}
+    <div class="row-item">
+        <span>تعداد شمش (فروش):</span>
+        <span class="font-monospace fw-bold">{{ ticket.ingot_count }} عدد</span>
+    </div>
+    {% endif %}
     <div class="row-item">
         <span>تاریخ و ساعت پر:</span>
         <span>{{ ticket.jalali_gross_date|default:"-" }} {{ ticket.gross_time|default:"-" }}</span>

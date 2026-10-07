@@ -19,9 +19,15 @@
         th, td { border: 1px solid #334155; padding: 6px 8px; font-size: 11px; }
         th { background-color: #f1f5f9; font-weight: bold; text-align: center; }
         .summary-row { background-color: #e2e8f0; font-weight: bold; }
+        @page {
+            size: landscape;
+            margin: 5mm;
+        }
         @media print {
             .no-print { display: none !important; }
-            body { padding: 5mm; }
+            body { padding: 0 !important; font-size: 9px !important; }
+            table { margin-top: 8px !important; }
+            th, td { padding: 3px 4px !important; font-size: 8.5px !important; }
         }
     </style>
 </head>
@@ -88,11 +94,14 @@
             <th>شماره قبض</th>
             <th>شماره بارنامه</th>
             <th>تاریخ</th>
+            <th>ساعت ورود</th>
+            <th>ساعت خروج</th>
             <th>نوع عملیات</th>
             <th>طرف حساب</th>
             <th>محصول</th>
             <th>پلاک</th>
             <th>راننده</th>
+            <th>وزن بارنامه (Kg)</th>
             <th>وزن پر (Kg)</th>
             <th>وزن خالی (Kg)</th>
             <th>خالص (Kg)</th>
@@ -108,11 +117,14 @@
             <td class="fw-bold text-center">{{ t.serial_number }}</td>
             <td class="text-center">{{ t.waybill_number|default:"-" }}</td>
             <td class="text-center">{{ t.jalali_first_date }}</td>
+            <td class="text-center">{{ t.first_time_str|default:"-" }}</td>
+            <td class="text-center">{{ t.second_time_str|default:"-" }}</td>
             <td>{{ t.operation_type.name|default:"-" }}</td>
             <td>{{ t.party.name|default:"-" }}</td>
             <td>{{ t.product.name|default:"-" }}</td>
             <td style="direction: rtl; unicode-bidi: isolate; text-align: center;">{{ t.license_plate_display }}</td>
             <td>{{ t.driver_display }}</td>
+            <td class="text-end font-monospace">{% if t.sent_weight and t.sent_weight > 0 %}{{ t.sent_weight|weight_fmt }}{% else %}-{% endif %}</td>
             <td class="text-end">{{ t.gross_weight|weight_fmt }}</td>
             <td class="text-end">{{ t.tare_weight|weight_fmt }}</td>
             <td class="text-end fw-bold">{{ t.net_weight|weight_fmt }}</td>
@@ -123,8 +135,9 @@
         {% endfor %}
         {% if summaries %}
         <tr class="summary-row">
-            <td colspan="2" class="text-center">مجموع کل ({{ summaries.total_tickets }} قبض)</td>
-            <td colspan="7" class="text-center">{{ summaries.total_loads }} سرویس</td>
+            <td colspan="3" class="text-center">مجموع کل ({{ summaries.total_tickets }} قبض)</td>
+            <td colspan="8" class="text-center">{{ summaries.total_loads }} سرویس</td>
+            <td class="text-end font-monospace">{{ summaries.sum_sent|weight_fmt }}</td>
             <td class="text-end">{{ summaries.sum_gross|weight_fmt }}</td>
             <td class="text-end">{{ summaries.sum_tare|weight_fmt }}</td>
             <td class="text-end">{{ summaries.sum_net|weight_fmt }}</td>
