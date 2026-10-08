@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from masterdata.models import OperationType, Party, Product, VehicleType, Location, UnloadLocation
 from audit.models import AuditLog
 from core.jalali import format_jalali_date
 from core.models import SystemSetting
@@ -30,12 +31,34 @@ class DailyPlatePolicyTests(TestCase):
         cls.first = WeighTicket.objects.create(serial_number="PLATE-1", license_plate_display=cls.plate,
                                                first_weight_date=cls.today, first_weight=12000)
         SystemSetting.objects.create(require_driver=False)
+        cls.op_type = OperationType.objects.create(name="عملیات پلاک", code="OP-PL")
+        cls.party = Party.objects.create(name="طرف پلاک")
+        cls.product = Product.objects.create(name="محصول پلاک")
+        cls.v_type = VehicleType.objects.create(name="تریلی پلاک")
+        cls.origin = Location.objects.create(name="مبدأ پلاک")
+        cls.dest = Location.objects.create(name="مقصد پلاک")
+        cls.unload_loc = UnloadLocation.objects.create(name="جایگاه پلاک")
 
     def setUp(self):
         self.client.force_login(self.operator)
-        self.payload = {"license_plate_display": self.plate, "first_weight": "12000",
-                        "weight_mode": "empty_first", "load_count": "1", "sent_weight": "0",
-                        "loss_weight": "0", "loss_percent": "0"}
+        self.payload = {
+            "license_plate_display": self.plate,
+            "operation_type": self.op_type.pk,
+            "party": self.party.pk,
+            "product": self.product.pk,
+            "vehicle_type": self.v_type.pk,
+            "driver_name_custom": "راننده تست",
+            "driver_mobile_custom": "09121112233",
+            "origin": self.origin.pk,
+            "destination": self.dest.pk,
+            "unload_location": self.unload_loc.pk,
+            "first_weight": "12000",
+            "weight_mode": "empty_first",
+            "load_count": "1",
+            "sent_weight": "0",
+            "loss_weight": "0",
+            "loss_percent": "0",
+        }
 
     def grant(self):
         self.client.force_login(self.supervisor)

@@ -6,6 +6,7 @@
 <form method="post" id="weighbridge-form">
     {% csrf_token %}
     {% if form.errors %}<div class="alert alert-danger">{{ form.non_field_errors }}{% for field in form %}{% if field.errors %}<div>{{ field.label }}: {{ field.errors }}</div>{% endif %}{% endfor %}</div>{% endif %}
+    <div id="mandatory-validation-alert" class="alert alert-danger d-none shadow-sm border border-danger mb-3"></div>
     <div class="alert alert-info small mb-2">
         هر پلاک در تاریخ وزن اول فقط یک قبض فعال می‌تواند داشته باشد. برای پلاک‌های مجاز توسط سرپرست، ثبت چندباره امکان‌پذیر است.
         {% if can_manage_plate_exceptions %}<a href="{% url 'weighbridge:plate_exceptions' %}" class="fw-bold ms-2" target="_blank">مدیریت استثناهای پلاک</a>{% endif %}
@@ -133,7 +134,7 @@
                             {% if form.license_plate_display.errors %}<div class="text-danger small mt-1">{{ form.license_plate_display.errors }}</div>{% endif %}
                         </div>
                         <div class="col-12 col-sm-6 col-md-4 col-lg col-xl">
-                            <label class="form-label fw-bold small text-secondary">نوع خودرو</label>
+                            <label class="form-label fw-bold small text-secondary">نوع خودرو <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 {{ form.vehicle_type }}
                                 <button type="button" class="btn btn-outline-primary btn-quick-add" data-entity="vehicle_type" data-target="id_vehicle_type" title="افزودن نوع خودرو جدید">
@@ -143,12 +144,12 @@
                             {% if form.vehicle_type.errors %}<div class="text-danger small mt-1">{{ form.vehicle_type.errors }}</div>{% endif %}
                         </div>
                         <div class="col-12 col-sm-6 col-md-4 col-lg col-xl">
-                            <label class="form-label fw-bold small text-secondary">نام راننده</label>
+                            <label class="form-label fw-bold small text-secondary">نام راننده <span class="text-danger">*</span></label>
                             {{ form.driver_name_custom }}
                             {% if form.driver_name_custom.errors %}<div class="text-danger small mt-1">{{ form.driver_name_custom.errors }}</div>{% endif %}
                         </div>
                         <div class="col-12 col-sm-12 col-md-4 col-lg col-xl">
-                            <label class="form-label fw-bold small text-secondary">موبایل راننده</label>
+                            <label class="form-label fw-bold small text-secondary">موبایل راننده <span class="text-danger">*</span></label>
                             {{ form.driver_mobile_custom }}
                             {% if form.driver_mobile_custom.errors %}<div class="text-danger small mt-1">{{ form.driver_mobile_custom.errors }}</div>{% endif %}
                         </div>
@@ -165,31 +166,34 @@
                 <div class="industrial-card-body p-3">
                     <div class="row g-3">
                         <div class="col-md-3">
-                            <label class="form-label fw-bold small text-secondary">مبدأ بار</label>
+                            <label class="form-label fw-bold small text-secondary">مبدأ بار <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 {{ form.origin }}
                                 <button type="button" class="btn btn-outline-primary btn-quick-add" data-entity="origin" data-target="id_origin" title="افزودن مبدأ جدید">
                                     <i class="bi bi-plus-lg"></i>
                                 </button>
                             </div>
+                            {% if form.origin.errors %}<div class="text-danger small mt-1">{{ form.origin.errors }}</div>{% endif %}
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-bold small text-secondary">مقصد بار</label>
+                            <label class="form-label fw-bold small text-secondary">مقصد بار <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 {{ form.destination }}
                                 <button type="button" class="btn btn-outline-primary btn-quick-add" data-entity="destination" data-target="id_destination" title="افزودن مقصد جدید">
                                     <i class="bi bi-plus-lg"></i>
                                 </button>
                             </div>
+                            {% if form.destination.errors %}<div class="text-danger small mt-1">{{ form.destination.errors }}</div>{% endif %}
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-bold small text-secondary">جایگاه تخلیه / بارگیری</label>
+                            <label class="form-label fw-bold small text-secondary">جایگاه تخلیه / بارگیری <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 {{ form.unload_location }}
                                 <button type="button" class="btn btn-outline-primary btn-quick-add" data-entity="unload_location" data-target="id_unload_location" title="افزودن جایگاه تخلیه جدید">
                                     <i class="bi bi-plus-lg"></i>
                                 </button>
                             </div>
+                            {% if form.unload_location.errors %}<div class="text-danger small mt-1">{{ form.unload_location.errors }}</div>{% endif %}
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold small text-secondary">تعداد بار / سرویس</label>
@@ -438,8 +442,138 @@ document.addEventListener("DOMContentLoaded", function() {
     // Blocked plate UI helper integration
     window.setPlateBlockedState = window.setPlateBlockedState || function(isBlocked, blockReason = "") {};
 
-    // Populate modal previews on open, and prevent open if plate is blocked
+    const form = document.getElementById('weighbridge-form');
     const modal = document.getElementById('confirmCompleteModal');
+    const alertBox = document.getElementById('mandatory-validation-alert');
+
+    // 10 Mandatory fields validator
+    function getMissingMandatoryFields() {
+        const missing = [];
+
+        // 1. نوع عملیات
+        const opEl = document.getElementById('id_operation_type');
+        if (!opEl || !opEl.value || opEl.value === "") {
+            missing.push({ el: opEl, name: "نوع عملیات" });
+        }
+
+        // 2. طرف حساب
+        const partyEl = document.getElementById('id_party');
+        if (!partyEl || !partyEl.value || partyEl.value === "") {
+            missing.push({ el: partyEl, name: "طرف حساب" });
+        }
+
+        // 3. نام محصول (کالا)
+        const prodEl = document.getElementById('id_product');
+        if (!prodEl || !prodEl.value || prodEl.value === "") {
+            missing.push({ el: prodEl, name: "نام محصول (کالا)" });
+        }
+
+        // 4. پلاک ملی خودرو
+        const p1 = document.getElementById('plate_part1');
+        const pL = document.getElementById('plate_letter');
+        const p2 = document.getElementById('plate_part2');
+        const pIran = document.getElementById('plate_iran');
+        const pDisp = document.getElementById('license_plate_display');
+        const partsOk = p1 && pL && p2 && pIran && p1.value.trim() && pL.value.trim() && p2.value.trim() && pIran.value.trim();
+        const dispOk = pDisp && pDisp.value.trim();
+        if (!partsOk && !dispOk) {
+            missing.push({ el: p1 || pDisp, name: "پلاک ملی خودرو" });
+        }
+
+        // 5. نوع خودرو
+        const vtEl = document.getElementById('id_vehicle_type');
+        if (!vtEl || !vtEl.value || vtEl.value === "") {
+            missing.push({ el: vtEl, name: "نوع خودرو" });
+        }
+
+        // 6. نام راننده
+        const dNameEl = document.getElementById('id_driver_name_custom');
+        const dFk = document.getElementById('id_driver');
+        if ((!dNameEl || !dNameEl.value.trim()) && (!dFk || !dFk.value)) {
+            missing.push({ el: dNameEl, name: "نام راننده" });
+        }
+
+        // 7. موبایل راننده
+        const dMobEl = document.getElementById('id_driver_mobile_custom');
+        if (!dMobEl || !dMobEl.value.trim()) {
+            missing.push({ el: dMobEl, name: "موبایل راننده" });
+        }
+
+        // 8. مبدأ بار
+        const origEl = document.getElementById('id_origin');
+        if (!origEl || !origEl.value || origEl.value === "") {
+            missing.push({ el: origEl, name: "مبدأ بار" });
+        }
+
+        // 9. مقصد بار
+        const destEl = document.getElementById('id_destination');
+        if (!destEl || !destEl.value || destEl.value === "") {
+            missing.push({ el: destEl, name: "مقصد بار" });
+        }
+
+        // 10. جایگاه تخلیه / بارگیری
+        const unlEl = document.getElementById('id_unload_location');
+        if (!unlEl || !unlEl.value || unlEl.value === "") {
+            missing.push({ el: unlEl, name: "جایگاه تخلیه / بارگیری" });
+        }
+
+        return missing;
+    }
+
+    function checkAndShowMandatoryValidation() {
+        const missing = getMissingMandatoryFields();
+
+        // Clear previous marks
+        document.querySelectorAll('.is-invalid.mandatory-field').forEach(el => {
+            el.classList.remove('is-invalid', 'mandatory-field');
+        });
+
+        if (missing.length === 0) {
+            if (alertBox) {
+                alertBox.classList.add('d-none');
+                alertBox.innerHTML = '';
+            }
+            return true;
+        }
+
+        // Highlight missing elements and setup self-clearing listeners
+        missing.forEach(item => {
+            if (item.el) {
+                item.el.classList.add('is-invalid', 'mandatory-field');
+                const clearFn = function() {
+                    item.el.classList.remove('is-invalid', 'mandatory-field');
+                    item.el.removeEventListener('input', clearFn);
+                    item.el.removeEventListener('change', clearFn);
+                };
+                item.el.addEventListener('input', clearFn);
+                item.el.addEventListener('change', clearFn);
+            }
+        });
+
+        const namesList = missing.map(m => `«<strong>${m.name}</strong>»`).join('، ');
+        const errorMsg = `لطفاً فیلدهای الزامی زیر را تکمیل فرمایید (تا پر نشوند امکان ثبت وجود ندارد):<br>${namesList}`;
+
+        if (alertBox) {
+            alertBox.innerHTML = `<div class="d-flex align-items-center gap-2"><i class="bi bi-exclamation-octagon-fill fs-5 text-danger"></i><div>${errorMsg}</div></div>`;
+            alertBox.classList.remove('d-none');
+            alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        if (typeof window.showToast === 'function') {
+            window.showToast("خطا: فیلدهای الزامی مشخص‌شده را پر کنید.", "danger");
+        }
+
+        // Focus first missing element
+        if (missing[0] && missing[0].el) {
+            try {
+                missing[0].el.focus();
+            } catch(e) {}
+        }
+
+        return false;
+    }
+
+    // Intercept Modal Open (Ctrl+Enter or "ثبت و تکمیل نهایی باسکول" button)
     if (modal) {
         modal.addEventListener('show.bs.modal', function (e) {
             if (document.body.dataset.plateBlocked === "true") {
@@ -449,6 +583,12 @@ document.addEventListener("DOMContentLoaded", function() {
                 }
                 return false;
             }
+
+            if (!checkAndShowMandatoryValidation()) {
+                e.preventDefault();
+                return false;
+            }
+
             const modalGross = document.getElementById('modal-gross-preview');
             const calcGross = document.getElementById('calc-gross-val');
             if (modalGross && calcGross) modalGross.textContent = calcGross.textContent;
@@ -456,6 +596,22 @@ document.addEventListener("DOMContentLoaded", function() {
             const modalNet = document.getElementById('modal-net-preview');
             const calcNet = document.getElementById('calc-net-val');
             if (modalNet && calcNet) modalNet.textContent = calcNet.textContent;
+        });
+    }
+
+    // Intercept form submit (for Save Draft, Save & Print, Complete Ticket)
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            if (document.body.dataset.plateBlocked === "true") {
+                e.preventDefault();
+                return false;
+            }
+
+            if (!checkAndShowMandatoryValidation()) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return false;
+            }
         });
     }
 

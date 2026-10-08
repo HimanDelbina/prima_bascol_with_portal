@@ -5,7 +5,7 @@ from datetime import date, time
 
 from weighbridge.models import WeighTicket, TicketStatus, WeightMode
 from weighbridge.services import TicketCalculationService, SerialNumberService
-from masterdata.models import Product, Party, Driver, VehicleType, Vehicle, OperationType, LossType
+from masterdata.models import Product, Party, Driver, VehicleType, Vehicle, OperationType, LossType, Location, UnloadLocation
 from accounts.models import UserProfile, RoleChoices
 from core.models import SystemSetting
 from core.weight_provider import ManualWeightProvider, WeightUnit
@@ -18,8 +18,24 @@ class FreightAmountTests(TestCase):
         self.user = User.objects.create_superuser(username="freight_admin", password="test-password")
         self.client.force_login(self.user)
         SystemSetting.objects.create(require_driver=False)
+        self.op_type = OperationType.objects.create(name="خرید تست", code="OP-FR")
+        self.party = Party.objects.create(name="طرف حساب کرایه")
+        self.product = Product.objects.create(name="محصول کرایه")
+        self.v_type = VehicleType.objects.create(name="کامیون")
+        self.origin = Location.objects.create(name="مبدأ کرایه")
+        self.dest = Location.objects.create(name="مقصد کرایه")
+        self.unload_loc = UnloadLocation.objects.create(name="جایگاه کرایه")
         self.payload = {
             "weight_mode": WeightMode.EMPTY_FIRST,
+            "operation_type": self.op_type.pk,
+            "party": self.party.pk,
+            "product": self.product.pk,
+            "vehicle_type": self.v_type.pk,
+            "driver_name_custom": "راننده تست کرایه",
+            "driver_mobile_custom": "09121112233",
+            "origin": self.origin.pk,
+            "destination": self.dest.pk,
+            "unload_location": self.unload_loc.pk,
             "license_plate_display": "12 ج 345 - ایران 67",
             "first_weight": "12000", "load_count": "1",
             "sent_weight": "0", "loss_percent": "0", "loss_weight": "0",
@@ -374,6 +390,9 @@ class PlateLookupAutoFillTests(TestCase):
         product = Product.objects.create(name="آهن اسفنجی", code="P-1")
         party = Party.objects.create(name="شرکت فولاد غرب")
         op_type = OperationType.objects.create(name="خرید داخلی", code="OP-1")
+        origin = Location.objects.create(name="مبدأ رجیستر")
+        destination = Location.objects.create(name="مقصد رجیستر")
+        unload_location = UnloadLocation.objects.create(name="جایگاه رجیستر")
 
         response = self.client.post(reverse("weighbridge:ticket_create"), {
             "weight_mode": WeightMode.EMPTY_FIRST,
@@ -388,6 +407,9 @@ class PlateLookupAutoFillTests(TestCase):
             "vehicle_type": self.v_type.id,
             "driver_name_custom": "حمید رضایی",
             "driver_mobile_custom": "09127776655",
+            "origin": origin.id,
+            "destination": destination.id,
+            "unload_location": unload_location.id,
             "first_weight": "15200",
             "load_count": "1",
             "sent_weight": "0",
@@ -488,9 +510,23 @@ class TicketIngotCountTests(TestCase):
             code="PURCHASE",
             direction="inbound"
         )
+        self.party = Party.objects.create(name="طرف حساب شمش")
+        self.product = Product.objects.create(name="شمش فولادی")
+        self.v_type = VehicleType.objects.create(name="تریلی شمش")
+        self.origin = Location.objects.create(name="مبدأ شمش")
+        self.dest = Location.objects.create(name="مقصد شمش")
+        self.unload_loc = UnloadLocation.objects.create(name="جایگاه شمش")
 
         self.payload = {
             "weight_mode": WeightMode.EMPTY_FIRST,
+            "party": self.party.pk,
+            "product": self.product.pk,
+            "vehicle_type": self.v_type.pk,
+            "driver_name_custom": "راننده شمش",
+            "driver_mobile_custom": "09121112233",
+            "origin": self.origin.pk,
+            "destination": self.dest.pk,
+            "unload_location": self.unload_loc.pk,
             "license_plate_display": "12 ج 345 - ایران 67",
             "first_weight": "12000",
             "load_count": "1",
@@ -560,3 +596,118 @@ class TicketIngotCountTests(TestCase):
         self.assertEqual(pos_resp.status_code, 200)
         self.assertContains(pos_resp, "تعداد شمش (فروش):")
         self.assertContains(pos_resp, "85")
+
+
+class TicketMandatoryFieldsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(username="mandatory_admin", password="test-password")
+        self.client.force_login(self.user)
+        SystemSetting.objects.create(require_driver=False)
+
+        self.op_type = OperationType.objects.create(name="خرید تست", code="OP-M")
+        self.party = Party.objects.create(name="طرف حساب تست")
+        self.product = Product.objects.create(name="محصول تست")
+        self.v_type = VehicleType.objects.create(name="تریلی لبه‌دار")
+        self.origin = Location.objects.create(name="مبدأ تهران")
+        self.dest = Location.objects.create(name="مقصد اصفهان")
+        self.unload_loc = UnloadLocation.objects.create(name="انبار مرکزی")
+
+        self.valid_payload = {
+            "weight_mode": WeightMode.EMPTY_FIRST,
+            "operation_type": self.op_type.pk,
+            "party": self.party.pk,
+            "product": self.product.pk,
+            "vehicle_type": self.v_type.pk,
+            "driver_name_custom": "حسین احمدی",
+            "driver_mobile_custom": "09123456789",
+            "origin": self.origin.pk,
+            "destination": self.dest.pk,
+            "unload_location": self.unload_loc.pk,
+            "plate_part1": "12",
+            "plate_letter": "ج",
+            "plate_part2": "345",
+            "plate_iran": "67",
+            "license_plate_display": "12 ج 345 - ایران 67",
+            "first_weight": "14500",
+            "load_count": "1",
+            "sent_weight": "0",
+            "loss_percent": "0",
+            "loss_weight": "0",
+        }
+
+    def test_all_10_mandatory_fields_valid_submission(self):
+        response = self.client.post(reverse("weighbridge:ticket_create"), self.valid_payload)
+        self.assertEqual(response.status_code, 302)
+        ticket = WeighTicket.objects.latest("id")
+        self.assertEqual(ticket.operation_type, self.op_type)
+        self.assertEqual(ticket.party, self.party)
+        self.assertEqual(ticket.product, self.product)
+        self.assertEqual(ticket.vehicle_type, self.v_type)
+        self.assertEqual(ticket.driver_name_custom, "حسین احمدی")
+        self.assertEqual(ticket.driver_mobile_custom, "09123456789")
+        self.assertEqual(ticket.origin, self.origin)
+        self.assertEqual(ticket.destination, self.dest)
+        self.assertEqual(ticket.unload_location, self.unload_loc)
+        self.assertEqual(ticket.license_plate_display, "12 ج 345 - ایران 67")
+
+    def test_empty_form_rejects_all_mandatory_fields(self):
+        response = self.client.post(reverse("weighbridge:ticket_create"), {
+            "weight_mode": WeightMode.EMPTY_FIRST,
+            "first_weight": "14500",
+        })
+        self.assertEqual(response.status_code, 200)
+        errors = response.context["form"].errors
+        for field in [
+            "operation_type", "party", "product", "vehicle_type",
+            "license_plate_display", "driver_name_custom",
+            "driver_mobile_custom", "origin", "destination", "unload_location"
+        ]:
+            self.assertIn(field, errors, f"Expected {field} to be mandatory and present in errors")
+
+    def test_missing_each_field_individually(self):
+        fields_to_test = [
+            ("operation_type", ""),
+            ("party", ""),
+            ("product", ""),
+            ("vehicle_type", ""),
+            ("driver_name_custom", ""),
+            ("driver_mobile_custom", ""),
+            ("origin", ""),
+            ("destination", ""),
+            ("unload_location", ""),
+        ]
+        for field, bad_val in fields_to_test:
+            with self.subTest(field=field):
+                payload = dict(self.valid_payload)
+                payload[field] = bad_val
+                response = self.client.post(reverse("weighbridge:ticket_create"), payload)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(field, response.context["form"].errors)
+
+    def test_missing_plate_is_rejected(self):
+        payload = dict(self.valid_payload)
+        payload["license_plate_display"] = ""
+        payload["plate_part1"] = ""
+        payload["plate_letter"] = ""
+        payload["plate_part2"] = ""
+        payload["plate_iran"] = ""
+        response = self.client.post(reverse("weighbridge:ticket_create"), payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("license_plate_display", response.context["form"].errors)
+
+    def test_driver_mobile_validation_and_normalization(self):
+        # Invalid mobile format
+        payload = dict(self.valid_payload)
+        payload["driver_mobile_custom"] = "091212"
+        response = self.client.post(reverse("weighbridge:ticket_create"), payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("driver_mobile_custom", response.context["form"].errors)
+
+        # Persian digits normalized
+        payload["driver_mobile_custom"] = "۰۹۱۲۹۸۷۶۵۴۳"
+        payload["license_plate_display"] = "77 ج 888 - ایران 99"
+        response = self.client.post(reverse("weighbridge:ticket_create"), payload)
+        self.assertEqual(response.status_code, 302)
+        ticket = WeighTicket.objects.latest("id")
+        self.assertEqual(ticket.driver_mobile_custom, "09129876543")
+

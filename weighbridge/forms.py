@@ -66,9 +66,9 @@ class TicketCreateForm(forms.ModelForm):
             "license_plate_display": forms.TextInput(attrs={"class": "form-control", "id": "license_plate_display", "placeholder": "مثلاً ۱۲ ج ۳۴۵ - ایران ۶۷"}),
             "waybill_number": forms.TextInput(attrs={"class": "form-control", "placeholder": "شماره بارنامه / حواله"}),
             "freight_amount": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "مبلغ به تومان", "inputmode": "numeric"}),
-            "origin": forms.Select(attrs={"class": "form-select"}),
-            "destination": forms.Select(attrs={"class": "form-select"}),
-            "unload_location": forms.Select(attrs={"class": "form-select"}),
+            "origin": forms.Select(attrs={"class": "form-select", "id": "id_origin"}),
+            "destination": forms.Select(attrs={"class": "form-select", "id": "id_destination"}),
+            "unload_location": forms.Select(attrs={"class": "form-select", "id": "id_unload_location"}),
             "load_count": forms.NumberInput(attrs={"class": "form-control", "min": "1"}),
             "ingot_count": forms.NumberInput(attrs={"class": "form-control", "id": "id_ingot_count", "min": "1", "placeholder": "تعداد شمش"}),
             
@@ -91,9 +91,29 @@ class TicketCreateForm(forms.ModelForm):
         self.fields["party"].queryset = Party.objects.filter(is_active=True)
         self.fields["driver"].queryset = Driver.objects.filter(is_active=True)
         self.fields["vehicle"].queryset = Vehicle.objects.filter(is_active=True)
+        self.fields["vehicle_type"].queryset = VehicleType.objects.filter(is_active=True)
         self.fields["operation_type"].queryset = OperationType.objects.filter(is_active=True)
         self.fields["loss_type"].queryset = LossType.objects.filter(is_active=True)
         self.fields["origin"].queryset = Location.objects.filter(is_active=True)
+        self.fields["destination"].queryset = Location.objects.filter(is_active=True)
+        self.fields["unload_location"].queryset = UnloadLocation.objects.filter(is_active=True)
+
+        # Mandatory fields for new weighbridge registration
+        self.fields["operation_type"].required = True
+        self.fields["operation_type"].error_messages["required"] = "انتخاب نوع عملیات الزامی است."
+        self.fields["party"].required = True
+        self.fields["party"].error_messages["required"] = "انتخاب طرف حساب الزامی است."
+        self.fields["product"].required = True
+        self.fields["product"].error_messages["required"] = "انتخاب نام محصول (کالا) الزامی است."
+        self.fields["vehicle_type"].required = True
+        self.fields["vehicle_type"].error_messages["required"] = "انتخاب نوع خودرو الزامی است."
+        self.fields["origin"].required = True
+        self.fields["origin"].error_messages["required"] = "انتخاب مبدأ بار الزامی است."
+        self.fields["destination"].required = True
+        self.fields["destination"].error_messages["required"] = "انتخاب مقصد بار الزامی است."
+        self.fields["unload_location"].required = True
+        self.fields["unload_location"].error_messages["required"] = "انتخاب جایگاه تخلیه / بارگیری الزامی است."
+
         self.fields["second_weight"].required = False
         self.fields["sent_weight"].required = False
         self.fields["loss_type"].required = False
@@ -118,19 +138,12 @@ class TicketCreateForm(forms.ModelForm):
             self.initial["loss_percent"] = ""
             self.initial["loss_weight"] = ""
 
-
         # Dynamic requirements based on system settings
         sys_settings = SystemSetting.get_settings()
         if sys_settings.require_waybill:
             self.fields["waybill_number"].required = True
         if sys_settings.require_driver:
             self.fields["driver"].required = False  # can be driver or driver_name_custom
-        if sys_settings.require_origin:
-            self.fields["origin"].required = True
-        if sys_settings.require_destination:
-            self.fields["destination"].required = True
-        if sys_settings.require_unload_location:
-            self.fields["unload_location"].required = True
 
     def clean(self):
         cleaned_data = super().clean()
@@ -143,19 +156,31 @@ class TicketCreateForm(forms.ModelForm):
             self.add_error("first_weight_date_jalali", "تاریخ وزن اول معتبر نیست.")
         else:
             self.instance.first_weight_date = parsed_date
+
+        # 1. Operation Type
+        if not cleaned_data.get("operation_type"):
+            self.add_error("operation_type", "انتخاب نوع عملیات الزامی است.")
+
+        # 2. Party
+        if not cleaned_data.get("party"):
+            self.add_error("party", "انتخاب طرف حساب الزامی است.")
+
+        # 3. Product
+        if not cleaned_data.get("product"):
+            self.add_error("product", "انتخاب نام محصول (کالا) الزامی است.")
+
+        # 4. National Plate
         plate = cleaned_data.get("license_plate_display", "").strip()
-        if not plate:
-            # Try construct from parts
-            p1 = cleaned_data.get("plate_part1", "").strip()
-            pL = cleaned_data.get("plate_letter", "").strip()
-            p2 = cleaned_data.get("plate_part2", "").strip()
-            pIran = cleaned_data.get("plate_iran", "").strip()
-            if p1 and pL and p2 and pIran:
-                plate = f"{p1} {pL} {p2} - ایران {pIran}"
-                cleaned_data["license_plate_display"] = plate
+        p1 = cleaned_data.get("plate_part1", "").strip()
+        pL = cleaned_data.get("plate_letter", "").strip()
+        p2 = cleaned_data.get("plate_part2", "").strip()
+        pIran = cleaned_data.get("plate_iran", "").strip()
+        if not plate and p1 and pL and p2 and pIran:
+            plate = f"{p1} {pL} {p2} - ایران {pIran}"
+            cleaned_data["license_plate_display"] = plate
 
         if not plate:
-            self.add_error("license_plate_display", "شماره پلاک خودرو الزامی است.")
+            self.add_error("license_plate_display", "ورود پلاک ملی خودرو الزامی است.")
         else:
             from weighbridge.models import BlockedPlate
             from weighbridge.plate_policy import normalize_plate
@@ -163,6 +188,50 @@ class TicketCreateForm(forms.ModelForm):
             blocked = BlockedPlate.objects.filter(normalized_plate=norm, is_active=True).first()
             if blocked:
                 self.add_error("license_plate_display", f"⛔ این خودرو در لیست سیاه پلاک‌های مسدود قرار دارد و امکان بارگیری ندارد! علت مسدودی: {blocked.reason}")
+
+        # 5. Vehicle Type
+        v_type = cleaned_data.get("vehicle_type")
+        v_custom = (cleaned_data.get("vehicle_type_custom") or "").strip()
+        if not v_type and not v_custom:
+            self.add_error("vehicle_type", "انتخاب نوع خودرو الزامی است.")
+
+        # 6. Driver Name
+        driver = cleaned_data.get("driver")
+        driver_name = (cleaned_data.get("driver_name_custom") or "").strip()
+        if not driver and not driver_name:
+            self.add_error("driver_name_custom", "ورود نام راننده الزامی است.")
+        elif driver and not driver_name:
+            cleaned_data["driver_name_custom"] = driver.full_name
+
+        # 7. Driver Mobile
+        driver_mobile = (cleaned_data.get("driver_mobile_custom") or "").strip()
+        if not driver_mobile and driver and getattr(driver, "mobile", None):
+            driver_mobile = driver.mobile.strip()
+            cleaned_data["driver_mobile_custom"] = driver_mobile
+
+        if not driver_mobile:
+            self.add_error("driver_mobile_custom", "ورود شماره موبایل راننده الزامی است.")
+        else:
+            from core.jalali import to_english_digits
+            clean_mob = to_english_digits(driver_mobile).replace(" ", "").replace("-", "")
+            if clean_mob.startswith("+98"):
+                clean_mob = "0" + clean_mob[3:]
+            if len(clean_mob) != 11 or not clean_mob.startswith("09") or not clean_mob.isdigit():
+                self.add_error("driver_mobile_custom", "شماره موبایل راننده معتبر نیست (باید ۱۱ رقم و با ۰۹ آغاز شود).")
+            else:
+                cleaned_data["driver_mobile_custom"] = clean_mob
+
+        # 8. Origin
+        if not cleaned_data.get("origin"):
+            self.add_error("origin", "انتخاب مبدأ بار الزامی است.")
+
+        # 9. Destination
+        if not cleaned_data.get("destination"):
+            self.add_error("destination", "انتخاب مقصد بار الزامی است.")
+
+        # 10. Unload Location
+        if not cleaned_data.get("unload_location"):
+            self.add_error("unload_location", "انتخاب جایگاه تخلیه / بارگیری الزامی است.")
 
         w1 = cleaned_data.get("first_weight")
         if w1 is None or w1 <= 0:
