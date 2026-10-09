@@ -638,6 +638,13 @@ document.addEventListener("DOMContentLoaded", function() {
         opSelect.addEventListener('change', checkIngotVisibility);
         checkIngotVisibility();
     }
+
+    // Disable mouse wheel value changes on all number and numeric inputs
+    document.querySelectorAll('input[type="number"], input[inputmode="numeric"], .iran-plate-input-part1, .iran-plate-input-part2, #plate_iran').forEach(function(input) {
+        input.addEventListener('wheel', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+    });
 });
 </script>
 {% endblock %}

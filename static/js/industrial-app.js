@@ -83,6 +83,106 @@
     }
   };
 
+  // 1b. Disable Mouse Wheel Scroll on Number Inputs & Numeric Form Fields
+  function initDisableWheelOnInputs() {
+    function isNumericInput(el) {
+      if (!el || el.tagName !== "INPUT") return false;
+      const type = (el.type || el.getAttribute("type") || "").toLowerCase();
+      const inputMode = (el.getAttribute("inputmode") || "").toLowerCase();
+      return (
+        type === "number" ||
+        inputMode === "numeric" ||
+        inputMode === "decimal" ||
+        el.classList.contains("no-wheel") ||
+        el.classList.contains("weight-input") ||
+        el.classList.contains("iran-plate-part") ||
+        (el.id && (el.id.includes("weight") || el.id.includes("loss") || el.id.includes("freight") || el.id.includes("count") || el.id.includes("plate"))) ||
+        (el.name && (el.name.includes("weight") || el.name.includes("loss") || el.name.includes("freight") || el.name.includes("count") || el.name.includes("plate")))
+      );
+    }
+
+    // Capture wheel events on window with passive: false to cancel value mutation
+    window.addEventListener(
+      "wheel",
+      function (e) {
+        const target = e.target;
+        if (isNumericInput(target)) {
+          // Block browser's native stepUp / stepDown
+          e.preventDefault();
+
+          // Smoothly forward scroll to containing scrollable element or window
+          const scrollContainer =
+            target.closest(
+              ".modal.show .modal-body, .modal.show, .overflow-auto, .overflow-y-auto"
+            ) || window;
+
+          let dy = e.deltaY;
+          let dx = e.deltaX;
+          if (e.deltaMode === 1) {
+            dy *= 33;
+            dx *= 33;
+          } else if (e.deltaMode === 2) {
+            dy *= window.innerHeight;
+            dx *= window.innerWidth;
+          }
+
+          if (scrollContainer === window) {
+            window.scrollBy({
+              top: dy,
+              left: dx,
+              behavior: "auto",
+            });
+          } else {
+            scrollContainer.scrollBy({
+              top: dy,
+              left: dx,
+              behavior: "auto",
+            });
+          }
+        }
+      },
+      { passive: false }
+    );
+
+    // Also attach directly to all existing numeric inputs
+    function attachInputPreventWheel(el) {
+      if (!el || el.dataset.wheelPreventAttached) return;
+      el.dataset.wheelPreventAttached = "true";
+      el.addEventListener(
+        "wheel",
+        function (e) {
+          e.preventDefault();
+        },
+        { passive: false }
+      );
+    }
+
+    document
+      .querySelectorAll('input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"], .weight-input, .iran-plate-part')
+      .forEach(attachInputPreventWheel);
+
+    // Dynamic support for any newly added inputs (e.g., in quick-add modals)
+    if (window.MutationObserver) {
+      const observer = new MutationObserver(function (mutations) {
+        mutations.forEach(function (mutation) {
+          mutation.addedNodes.forEach(function (node) {
+            if (node.nodeType === 1) {
+              if (isNumericInput(node)) {
+                attachInputPreventWheel(node);
+              }
+              if (node.querySelectorAll) {
+                node
+                  .querySelectorAll('input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"], .weight-input, .iran-plate-part')
+                  .forEach(attachInputPreventWheel);
+              }
+            }
+          });
+        });
+      });
+      observer.observe(document.documentElement || document.body, { childList: true, subtree: true });
+    }
+  }
+
   // 2. Global Keyboard Shortcuts & Enter-Key Field Navigation
   function initKeyboardUX() {
     document.addEventListener("keydown", function (e) {
@@ -1023,6 +1123,7 @@
   // DOM Ready Initializations
   document.addEventListener("DOMContentLoaded", function () {
     initKeyboardUX();
+    initDisableWheelOnInputs();
     initDoubleSubmitPrevention();
     initPlateWidget();
     initLiveWeightCalculations();

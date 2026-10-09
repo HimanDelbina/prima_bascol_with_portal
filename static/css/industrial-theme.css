@@ -468,6 +468,17 @@ body.operator-fullscreen .operator-exit-fullscreen-btn {
   text-align: left;
 }
 
+/* Disable spin buttons on number inputs across industrial UI */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 .weight-hero-box .unit-tag {
   font-size: 1.1rem;
   font-weight: 800;
