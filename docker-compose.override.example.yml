@@ -1,0 +1,28 @@
+# ==============================================================================
+# Prima Bascol - Docker Compose Override Template (Optional)
+# ==============================================================================
+# Use this file if Nginx Proxy Manager (NPM) runs in an external Docker network
+# and needs direct internal container DNS access to `bascol_web:8000`.
+#
+# SECURITY ARCHITECTURE MANDATE:
+# 1. Gunicorn MUST NEVER be exposed directly to the LAN or 0.0.0.0.
+# 2. All traffic (both domain https://bascol.ferion.ir and LAN https://<LAN_IP>)
+#    must terminate TLS at Nginx Proxy Manager on ports 80/443.
+# 3. Port 8000 remains strictly isolated to localhost (127.0.0.1) or internal Docker networks.
+#
+# Scenario A (NPM on same Docker host in custom network, e.g., 'npm_network'):
+# Uncomment the block below to join the reverse proxy network:
+#
+# services:
+#   web:
+#     networks:
+#       - bascol_network
+#       - npm_network
+#
+# networks:
+#   npm_network:
+#     external: true
+#
+# Scenario B (NPM via host networking or localhost):
+# No override is needed. The default `docker-compose.yml` binds `127.0.0.1:8000:8000`.
+# ==============================================================================

@@ -5,6 +5,7 @@ Comprehensive Industrial Weighbridge Management System (سامانه جامع ب
 
 from pathlib import Path
 import os
+import ipaddress
 from datetime import timedelta
 
 # Try loading environment variables from .env if present
@@ -26,10 +27,13 @@ SECRET_KEY = os.environ.get(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() in ('true', '1', 'yes')
 
-# Allowed Hosts configuration
+# Allowed Hosts & Internal Network configuration
 raw_allowed_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', os.environ.get('ALLOWED_HOSTS', ''))
 if raw_allowed_hosts:
     ALLOWED_HOSTS = [h.strip() for h in raw_allowed_hosts.split(',') if h.strip()]
+    for primary_host in ('bascol.ferion.ir', 'www.bascol.ferion.ir', 'localhost', '127.0.0.1'):
+        if primary_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(primary_host)
 elif DEBUG:
     ALLOWED_HOSTS = ['*']
 else:
@@ -41,6 +45,27 @@ else:
         'web',
         'testserver',
     ]
+
+# Optional Internal / LAN IPs support (e.g. DJANGO_INTERNAL_IPS=192.168.10.50,192.168.10.51)
+raw_internal_ips = os.environ.get('DJANGO_INTERNAL_IPS', os.environ.get('INTERNAL_IPS', ''))
+INTERNAL_IPS_LIST = []
+if raw_internal_ips:
+    for raw_ip in raw_internal_ips.split(','):
+        clean_ip = raw_ip.strip()
+        if not clean_ip:
+            continue
+        try:
+            ip_obj = ipaddress.ip_address(clean_ip)
+            # Bracket IPv6 addresses per RFC 3986, keep IPv4 plain
+            formatted_ip = f"[{ip_obj}]" if ip_obj.version == 6 else str(ip_obj)
+            INTERNAL_IPS_LIST.append(formatted_ip)
+            if formatted_ip not in ALLOWED_HOSTS:
+                ALLOWED_HOSTS.append(formatted_ip)
+            if ip_obj.version == 6 and str(ip_obj) not in ALLOWED_HOSTS:
+                ALLOWED_HOSTS.append(str(ip_obj))
+        except ValueError:
+            # Skip invalid non-IP strings to prevent misconfiguration in production
+            pass
 
 # Application definition
 INSTALLED_APPS = [
@@ -258,21 +283,24 @@ SPECTACULAR_SETTINGS = {
 # ==========================================
 # CORS & CSRF Configuration
 # ==========================================
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+# CORS is strictly for Cross-Origin API clients (SPA / external web apps).
+# Standard server-rendered Django templates DO NOT require CORS.
+CORS_ALLOW_ALL_ORIGINS = False  # NEVER True in production
 CORS_ALLOW_CREDENTIALS = True
 
 raw_cors = os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', os.environ.get('CORS_ALLOWED_ORIGINS', ''))
 if raw_cors:
     CORS_ALLOWED_ORIGINS = [c.strip() for c in raw_cors.split(',') if c.strip()]
+elif DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOWED_ORIGINS = []
 else:
     CORS_ALLOWED_ORIGINS = [
         "https://bascol.ferion.ir",
         "https://www.bascol.ferion.ir",
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
     ]
 
+# CSRF Trusted Origins Configuration
 raw_csrf = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', os.environ.get('CSRF_TRUSTED_ORIGINS', ''))
 if raw_csrf:
     CSRF_TRUSTED_ORIGINS = [c.strip() for c in raw_csrf.split(',') if c.strip()]
@@ -286,22 +314,38 @@ else:
         "http://127.0.0.1",
     ]
 
+# Add specific internal IP endpoints (strictly HTTPS in production via reverse proxy + Private CA)
+for ip in INTERNAL_IPS_LIST:
+    https_origin = f"https://{ip}"
+    if https_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(https_origin)
+    if DEBUG:
+        for dev_origin in (f"http://{ip}", f"http://{ip}:8000"):
+            if dev_origin not in CSRF_TRUSTED_ORIGINS:
+                CSRF_TRUSTED_ORIGINS.append(dev_origin)
+
 # ==========================================
 # Security & Reverse Proxy Settings
 # ==========================================
+# Trusted proxy SSL header configuration
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_PORT = True
 
 if not DEBUG:
-    SESSION_COOKIE_SECURE = os.environ.get('DJANGO_SESSION_COOKIE_SECURE', 'True').lower() in ('true', '1', 'yes')
-    CSRF_COOKIE_SECURE = os.environ.get('DJANGO_CSRF_COOKIE_SECURE', 'True').lower() in ('true', '1', 'yes')
+    # Cookie security: Strict HTTPS on both domain and internal IP (Private CA with IP SAN).
+    # Browsers strictly enforce Secure cookies over TLS (RFC 6265).
+    # No middleware or configuration dynamically removes the Secure flag.
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_REFERRER_POLICY = 'same-origin'
     X_FRAME_OPTIONS = 'DENY'
     
-    # HSTS: Safe default value (1 hour), easily configurable via env without locking domain
+    # HSTS: Strict-Transport-Security policy.
+    # SecurityMiddleware sends this header ONLY on HTTPS responses (request.is_secure() is True).
+    # Browsers ignore HSTS on IP addresses (RFC 6797), preserving full domain security.
     SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '3600'))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', 'False').lower() in ('true', '1')
     SECURE_HSTS_PRELOAD = False
