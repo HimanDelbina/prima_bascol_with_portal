@@ -122,6 +122,45 @@ class FreightAmountTests(TestCase):
         self.assertEqual(ticket.net_weight, Decimal("15000.00"))
         self.assertEqual(ticket.final_weight, Decimal("14879.50"))
 
+    def test_manager_edit_preserves_vehicle_and_vehicle_type_when_not_in_post(self):
+        ticket = self.create_ticket("1250000")
+        self.assertIsNotNone(ticket.vehicle)
+        self.assertEqual(ticket.vehicle_type, self.v_type)
+        self.assertEqual(ticket.vehicle_type_display, self.v_type.name)
+
+        # POST without 'vehicle' or 'vehicle_type'
+        edit_payload = {
+            "operation_type": self.op_type.pk,
+            "party": self.party.pk,
+            "product": self.product.pk,
+            "license_plate_display": ticket.license_plate_display,
+            "first_weight": "12000",
+            "manager_reason": "ویرایش بدون فیلد نوع خودرو در پست",
+        }
+        response = self.client.post(reverse("weighbridge:ticket_edit", args=[ticket.pk]), edit_payload)
+        self.assertEqual(response.status_code, 302)
+        ticket.refresh_from_db()
+        self.assertIsNotNone(ticket.vehicle)
+        self.assertEqual(ticket.vehicle_type, self.v_type)
+        self.assertEqual(ticket.vehicle_type_display, self.v_type.name)
+
+    def test_manager_edit_updates_vehicle_type(self):
+        ticket = self.create_ticket("1250000")
+        new_vtype = VehicleType.objects.create(name="تریلی کفی ۱۸ چرخ")
+        edit_payload = {
+            **self.payload,
+            "license_plate_display": ticket.license_plate_display,
+            "vehicle_type": new_vtype.pk,
+            "first_weight": "12000",
+            "manager_reason": "تغییر نوع خودرو",
+        }
+        response = self.client.post(reverse("weighbridge:ticket_edit", args=[ticket.pk]), edit_payload)
+        self.assertEqual(response.status_code, 302)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.vehicle_type, new_vtype)
+        self.assertEqual(ticket.vehicle_type_display, new_vtype.name)
+
+
 class WeighbridgeCalculationTests(TestCase):
     def setUp(self):
         self.settings = SystemSetting.objects.create(
@@ -579,23 +618,33 @@ class TicketIngotCountTests(TestCase):
         self.assertEqual(detail_resp.status_code, 200)
         self.assertContains(detail_resp, "تعداد شمش (فروش):")
         self.assertContains(detail_resp, "85")
+        self.assertContains(detail_resp, "تعداد بار و شمش:")
+        self.assertContains(detail_resp, "1 (بار) - 85 (شمش)")
 
         # A4 print
         a4_resp = self.client.get(reverse("weighbridge:ticket_print", args=[ticket.pk]), {"template": "a4"})
         self.assertEqual(a4_resp.status_code, 200)
         self.assertContains(a4_resp, "تعداد شمش:")
         self.assertContains(a4_resp, "85")
+        self.assertContains(a4_resp, "تعداد بار و شمش:")
+        self.assertContains(a4_resp, "1 (بار) - 85 (شمش)")
 
         # A5 print
         a5_resp = self.client.get(reverse("weighbridge:ticket_print", args=[ticket.pk]), {"template": "a5"})
         self.assertEqual(a5_resp.status_code, 200)
         self.assertContains(a5_resp, "شمش: 85")
+        self.assertContains(a5_resp, "تعداد بار و شمش:")
+        self.assertContains(a5_resp, "1 (بار) - 85 (شمش)")
 
         # POS print
         pos_resp = self.client.get(reverse("weighbridge:ticket_print", args=[ticket.pk]), {"template": "pos"})
         self.assertEqual(pos_resp.status_code, 200)
         self.assertContains(pos_resp, "تعداد شمش (فروش):")
         self.assertContains(pos_resp, "85")
+        self.assertContains(pos_resp, "تعداد بار و شمش:")
+        self.assertContains(pos_resp, "1 (بار) - 85 (شمش)")
+
+        self.assertEqual(ticket.load_and_ingot_display, "1 (بار) - 85 (شمش)")
 
 
 class TicketMandatoryFieldsTests(TestCase):

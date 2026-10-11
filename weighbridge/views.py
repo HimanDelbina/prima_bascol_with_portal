@@ -441,6 +441,7 @@ def ticket_edit(request, pk):
             "product": str(ticket.product) if ticket.product else "-",
             "party": str(ticket.party) if ticket.party else "-",
             "plate": ticket.license_plate_display,
+            "vehicle_type": str(ticket.vehicle_type_display),
         }
 
         form = TicketEditManagerForm(request.POST, instance=ticket)
@@ -449,6 +450,14 @@ def ticket_edit(request, pk):
             ticket = form.save(commit=False)
             ticket.last_edited_by = request.user
             ticket.last_edit_reason = reason
+
+            # Auto-register or link Vehicle and Driver into system MasterData
+            VehicleDriverRegistrationService.resolve_or_create(ticket, form.cleaned_data)
+            if form.cleaned_data.get("vehicle_type"):
+                ticket.vehicle_type = form.cleaned_data["vehicle_type"]
+                if ticket.vehicle and ticket.vehicle.vehicle_type != ticket.vehicle_type:
+                    ticket.vehicle.vehicle_type = ticket.vehicle_type
+                    ticket.vehicle.save(update_fields=["vehicle_type"])
 
             if ticket.loss_weight and ticket.loss_weight > 0:
                 ticket.is_loss_overridden = True
@@ -500,6 +509,7 @@ def ticket_edit(request, pk):
                 "product": str(ticket.product) if ticket.product else "-",
                 "party": str(ticket.party) if ticket.party else "-",
                 "plate": ticket.license_plate_display,
+                "vehicle_type": str(ticket.vehicle_type_display),
             }
 
             log_audit(

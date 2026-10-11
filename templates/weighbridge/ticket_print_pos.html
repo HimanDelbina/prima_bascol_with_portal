@@ -94,6 +94,10 @@
         <span class="font-monospace {% if ticket.is_tolerance_exceeded %}fw-bold text-danger{% endif %}">{{ ticket.weight_difference|weight_fmt }} Kg</span>
     </div>
     {% endif %}
+    <div class="row-item">
+        <span>تعداد بار و شمش:</span>
+        <span class="font-monospace fw-bold">{{ ticket.load_and_ingot_display }}</span>
+    </div>
     {% if ticket.ingot_count %}
     <div class="row-item">
         <span>تعداد شمش (فروش):</span>

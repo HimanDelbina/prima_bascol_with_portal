@@ -223,6 +223,10 @@
                         <td class="text-muted">وزن ارسالی در بارنامه:</td>
                         <td class="font-monospace">{{ ticket.sent_weight|weight_fmt }} Kg</td>
                     </tr>
+                    <tr>
+                        <td class="text-muted">تعداد بار و شمش:</td>
+                        <td class="font-monospace fw-bold fs-6 text-primary">{{ ticket.load_and_ingot_display }}</td>
+                    </tr>
                     {% if ticket.ingot_count %}
                     <tr>
                         <td class="text-primary fw-bold">تعداد شمش (فروش):</td>

@@ -128,6 +128,7 @@ class TicketCreateForm(forms.ModelForm):
         self.fields["waybill_number"].required = False
         self.fields["license_plate_display"].required = False
         self.fields["ingot_count"].required = False
+        self.fields["load_count"].label = "تعداد بار و شمش"
 
         if not self.instance.pk:
             self.fields["first_weight_date_jalali"].initial = get_today_jalali()
@@ -370,12 +371,12 @@ class TicketEditManagerForm(forms.ModelForm):
             "operation_type": forms.Select(attrs={"class": "form-select", "id": "id_operation_type"}),
             "party": forms.Select(attrs={"class": "form-select"}),
             "product": forms.Select(attrs={"class": "form-select"}),
-            "vehicle": forms.Select(attrs={"class": "form-select"}),
-            "vehicle_type": forms.Select(attrs={"class": "form-select"}),
-            "driver": forms.Select(attrs={"class": "form-select"}),
-            "driver_name_custom": forms.TextInput(attrs={"class": "form-control"}),
-            "driver_mobile_custom": forms.TextInput(attrs={"class": "form-control"}),
-            "license_plate_display": forms.TextInput(attrs={"class": "form-control"}),
+            "vehicle": forms.Select(attrs={"class": "form-select", "id": "id_vehicle"}),
+            "vehicle_type": forms.Select(attrs={"class": "form-select", "id": "id_vehicle_type"}),
+            "driver": forms.Select(attrs={"class": "form-select", "id": "id_driver"}),
+            "driver_name_custom": forms.TextInput(attrs={"class": "form-control", "placeholder": "نام دستی راننده"}),
+            "driver_mobile_custom": forms.TextInput(attrs={"class": "form-control", "placeholder": "شماره موبایل راننده"}),
+            "license_plate_display": forms.TextInput(attrs={"class": "form-control", "id": "license_plate_display"}),
             "waybill_number": forms.TextInput(attrs={"class": "form-control"}),
             "freight_amount": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "1", "inputmode": "numeric"}),
             "origin": forms.Select(attrs={"class": "form-select"}),
@@ -398,7 +399,7 @@ class TicketEditManagerForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for f, model_cls in [
             ("product", Product), ("party", Party), ("driver", Driver),
-            ("vehicle", Vehicle), ("operation_type", OperationType),
+            ("vehicle", Vehicle), ("vehicle_type", VehicleType), ("operation_type", OperationType),
             ("loss_type", LossType), ("origin", Location),
             ("destination", Location), ("unload_location", UnloadLocation)
         ]:
@@ -429,12 +430,37 @@ class TicketEditManagerForm(forms.ModelForm):
                 self.initial["sent_weight"] = ""
             if not self.instance.load_count:
                 self.initial["load_count"] = 1
+            if not self.instance.vehicle_type_id and self.instance.vehicle and self.instance.vehicle.vehicle_type_id:
+                self.initial["vehicle_type"] = self.instance.vehicle.vehicle_type_id
+            if not self.instance.driver_name_custom and self.instance.driver:
+                self.initial["driver_name_custom"] = self.instance.driver.full_name
+            if not self.instance.driver_mobile_custom and self.instance.driver and self.instance.driver.mobile:
+                self.initial["driver_mobile_custom"] = self.instance.driver.mobile
+        if "load_count" in self.fields:
+            self.fields["load_count"].label = "تعداد بار و شمش"
 
     def clean(self):
         cleaned_data = super().clean()
         for field in ("sent_weight", "loss_percent", "loss_weight"):
             if cleaned_data.get(field) is None and field not in self.errors:
                 cleaned_data[field] = Decimal("0")
+
+        if self.instance and self.instance.pk:
+            curr_plate = (cleaned_data.get("license_plate_display") or "").strip()
+            if not cleaned_data.get("vehicle") and self.instance.vehicle:
+                if not curr_plate or curr_plate == self.instance.license_plate_display:
+                    cleaned_data["vehicle"] = self.instance.vehicle
+
+            if not cleaned_data.get("vehicle_type"):
+                if self.instance.vehicle_type:
+                    cleaned_data["vehicle_type"] = self.instance.vehicle_type
+                elif cleaned_data.get("vehicle") and cleaned_data["vehicle"].vehicle_type:
+                    cleaned_data["vehicle_type"] = cleaned_data["vehicle"].vehicle_type
+
+            if not cleaned_data.get("driver_name_custom") and self.instance.driver_name_custom:
+                cleaned_data["driver_name_custom"] = self.instance.driver_name_custom
+            if not cleaned_data.get("driver_mobile_custom") and self.instance.driver_mobile_custom:
+                cleaned_data["driver_mobile_custom"] = self.instance.driver_mobile_custom
 
         if cleaned_data.get("load_count") is None or cleaned_data.get("load_count") == "":
             cleaned_data["load_count"] = (self.instance.load_count if self.instance and self.instance.pk else 1) or 1

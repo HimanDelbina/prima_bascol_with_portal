@@ -286,11 +286,11 @@
             <tr>
                 <th>جایگاه تخلیه:</th>
                 <td>{{ ticket.unload_location.name|default:"-" }}</td>
-                <th>تعداد بار / سرویس:</th>
+                <th>تعداد بار و شمش:</th>
                 <td>
-                    {{ ticket.load_count }}
+                    <span class="font-monospace fw-bold">{{ ticket.load_and_ingot_display }}</span>
                     {% if ticket.ingot_count %}
-                    <span class="ms-1 font-monospace fw-bold">(شمش: {{ ticket.ingot_count }})</span>
+                    <span class="ms-1 font-monospace text-muted small">(شمش: {{ ticket.ingot_count }})</span>
                     {% endif %}
                 </td>
             </tr>

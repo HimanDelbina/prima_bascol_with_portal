@@ -131,7 +131,7 @@ class WeighTicket(BaseModel):
         related_name="tickets", 
         verbose_name="جایگاه تخلیه / بارگیری"
     )
-    load_count = models.PositiveIntegerField(default=1, verbose_name="تعداد بار / سرویس")
+    load_count = models.PositiveIntegerField(default=1, verbose_name="تعداد بار و شمش")
     ingot_count = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -281,10 +281,10 @@ class WeighTicket(BaseModel):
 
     @property
     def vehicle_type_display(self):
-        if self.vehicle and self.vehicle.vehicle_type:
-            return self.vehicle.vehicle_type.name
         if self.vehicle_type:
             return self.vehicle_type.name
+        if self.vehicle and self.vehicle.vehicle_type:
+            return self.vehicle.vehicle_type.name
         return self.vehicle_type_custom or "-"
 
     @property
@@ -337,6 +337,17 @@ class WeighTicket(BaseModel):
     @property
     def jalali_tare_date(self):
         return format_jalali_date(self.tare_date)
+
+    @property
+    def load_and_ingot_display(self):
+        lc = self.load_count or 1
+        if self.ingot_count:
+            return f"{lc} (بار) - {self.ingot_count} (شمش)"
+        return f"{lc} (بار)"
+
+    @property
+    def load_count_display(self):
+        return self.load_and_ingot_display
 
 
 class PlateRegistrationException(BaseModel):
