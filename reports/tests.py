@@ -370,3 +370,192 @@ class ReportBuilderViewFilterTests(TestCase):
         self.assertContains(print_resp, "ساعت ورود")
         self.assertContains(print_resp, "ساعت خروج")
         self.assertContains(print_resp, "وزن بارنامه (Kg)")
+
+
+class ProductMultiSelectFilterTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser("prod_filter_admin", password="test-password")
+        cls.p_sponge = Product.objects.create(name="آهن اسفنجی", code="SP-01")
+        cls.p_pellet = Product.objects.create(name="گندله", code="PL-02")
+        cls.p_billet = Product.objects.create(name="شمش فولادی", code="BL-03")
+        cls.party = Party.objects.create(name="مجتمع فولاد")
+
+        today = timezone.localdate()
+        cls.t_sponge = WeighTicket.objects.create(
+            serial_number="TK-SPONGE",
+            product=cls.p_sponge,
+            party=cls.party,
+            gross_weight=Decimal("30000"),
+            tare_weight=Decimal("10000"),
+            net_weight=Decimal("20000"),
+            final_weight=Decimal("20000"),
+            first_weight_date=today,
+            status=TicketStatus.COMPLETED,
+        )
+        cls.t_pellet = WeighTicket.objects.create(
+            serial_number="TK-PELLET",
+            product=cls.p_pellet,
+            party=cls.party,
+            gross_weight=Decimal("35000"),
+            tare_weight=Decimal("12000"),
+            net_weight=Decimal("23000"),
+            final_weight=Decimal("23000"),
+            first_weight_date=today,
+            status=TicketStatus.COMPLETED,
+        )
+        cls.t_billet = WeighTicket.objects.create(
+            serial_number="TK-BILLET",
+            product=cls.p_billet,
+            party=cls.party,
+            gross_weight=Decimal("40000"),
+            tare_weight=Decimal("15000"),
+            net_weight=Decimal("25000"),
+            final_weight=Decimal("25000"),
+            first_weight_date=today,
+            status=TicketStatus.COMPLETED,
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_service_filter_single_product(self):
+        qs = ReportService.filter_tickets({"product": str(self.p_sponge.id)})
+        self.assertEqual(qs.count(), 1)
+        self.assertEqual(qs.first().serial_number, "TK-SPONGE")
+
+    def test_service_filter_multiple_products(self):
+        from django.http import QueryDict
+        qd = QueryDict(f"product={self.p_sponge.id}&product={self.p_billet.id}")
+        qs = ReportService.filter_tickets(qd)
+        self.assertEqual(qs.count(), 2)
+        serials = set(qs.values_list("serial_number", flat=True))
+        self.assertEqual(serials, {"TK-SPONGE", "TK-BILLET"})
+
+    def test_report_builder_view_multiple_products(self):
+        url = reverse("reports:report_builder")
+        response = self.client.get(url, {"product": [str(self.p_sponge.id), str(self.p_pellet.id)]})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(str(self.p_sponge.id), response.context["selected_products"])
+        self.assertIn(str(self.p_pellet.id), response.context["selected_products"])
+        self.assertNotIn(str(self.p_billet.id), response.context["selected_products"])
+        
+        # Verify tickets in response
+        self.assertContains(response, "TK-SPONGE")
+        self.assertContains(response, "TK-PELLET")
+        self.assertNotContains(response, "TK-BILLET")
+
+    def test_preset_report_view_multiple_products(self):
+        url = reverse("reports:preset_report_view", args=["daily"])
+        response = self.client.get(url, {"product": [str(self.p_pellet.id), str(self.p_billet.id)]})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(str(self.p_pellet.id), response.context["selected_products"])
+        self.assertIn(str(self.p_billet.id), response.context["selected_products"])
+        
+        # Verify tickets in response
+        self.assertContains(response, "TK-PELLET")
+        self.assertContains(response, "TK-BILLET")
+        self.assertNotContains(response, "TK-SPONGE")
+
+    def test_export_preserves_multiple_products_filter(self):
+        url = reverse("reports:report_builder")
+        response = self.client.get(url, {
+            "product": [str(self.p_sponge.id)],
+            "export": "csv"
+        })
+        self.assertEqual(response.status_code, 200)
+        csv_text = response.content.decode("utf-8-sig")
+        self.assertIn("TK-SPONGE", csv_text)
+        self.assertNotIn("TK-PELLET", csv_text)
+        self.assertNotIn("TK-BILLET", csv_text)
+
+
+class FinancialExcelExportTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser("finance_admin", password="test-password")
+        cls.product = Product.objects.create(name="آهن اسفنجی ویژه", code="SP-FIN")
+        cls.party = Party.objects.create(name="فولاد مالی پریما")
+        cls.date = timezone.localdate()
+        cls.t1 = WeighTicket.objects.create(
+            serial_number="FIN-100",
+            waybill_number="WB-8899",
+            product=cls.product,
+            party=cls.party,
+            gross_weight=Decimal("32000"),
+            tare_weight=Decimal("12000"),
+            net_weight=Decimal("20000"),
+            final_weight=Decimal("20000"),
+            freight_amount=Decimal("4500000"),
+            notes="توضیحات مالی: پرداخت کرایه نقدی انجام شد",
+            status=TicketStatus.COMPLETED,
+            first_weight_date=cls.date,
+        )
+        cls.t2 = WeighTicket.objects.create(
+            serial_number="FIN-200",
+            product=cls.product,
+            party=cls.party,
+            gross_weight=Decimal("40000"),
+            tare_weight=Decimal("15000"),
+            net_weight=Decimal("25000"),
+            final_weight=Decimal("25000"),
+            freight_amount=Decimal("6000000"),
+            notes="توضیحات حسابداری: نیازمند تأیید مدیر مالی",
+            status=TicketStatus.COMPLETED,
+            first_weight_date=cls.date,
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_report_builder_financial_excel_export_contains_notes_and_freight(self):
+        url = reverse("reports:report_builder")
+        response = self.client.get(url, {"export": "excel_financial"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        wb = load_workbook(io.BytesIO(response.content))
+        ws = wb.active
+        self.assertTrue(ws.sheet_view.rightToLeft)
+        
+        # Verify Headers
+        headers = [ws.cell(row=4, column=col).value for col in range(1, 22)]
+        self.assertIn("توضیحات", headers)
+        self.assertIn("مبلغ کرایه (تومان)", headers)
+        self.assertIn("تعداد بار و شمش", headers)
+        notes_col_idx = headers.index("توضیحات") + 1
+        freight_col_idx = headers.index("مبلغ کرایه (تومان)") + 1
+
+        # Check rows content
+        all_notes = {ws.cell(row=r, column=notes_col_idx).value for r in range(5, 7)}
+        self.assertIn("توضیحات مالی: پرداخت کرایه نقدی انجام شد", all_notes)
+        self.assertIn("توضیحات حسابداری: نیازمند تأیید مدیر مالی", all_notes)
+
+        all_freights = {ws.cell(row=r, column=freight_col_idx).value for r in range(5, 7)}
+        self.assertIn(4500000, all_freights)
+        self.assertIn(6000000, all_freights)
+
+    def test_preset_report_financial_excel_export(self):
+        url = reverse("reports:preset_report_view", args=["daily"])
+        response = self.client.get(url, {"export": "excel_financial"})
+        self.assertEqual(response.status_code, 200)
+        wb = load_workbook(io.BytesIO(response.content))
+        ws = wb.active
+        headers = [ws.cell(row=4, column=col).value for col in range(1, 22)]
+        self.assertIn("توضیحات", headers)
+        notes_col_idx = headers.index("توضیحات") + 1
+        all_notes = [ws.cell(row=r, column=notes_col_idx).value for r in range(5, ws.max_row)]
+        self.assertTrue(any("پرداخت کرایه نقدی" in str(n) for n in all_notes))
+
+    def test_freight_report_financial_excel_export(self):
+        url = reverse("reports:freight_report")
+        response = self.client.get(url, {"export": "excel_financial"})
+        self.assertEqual(response.status_code, 200)
+        wb = load_workbook(io.BytesIO(response.content))
+        ws = wb.active
+        headers = [ws.cell(row=4, column=col).value for col in range(1, 22)]
+        self.assertIn("توضیحات", headers)
+
+

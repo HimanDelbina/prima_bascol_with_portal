@@ -10,7 +10,7 @@ from rest_framework.test import APIClient
 from audit.models import AuditLog
 from core.jalali import format_jalali_date
 from core.models import SystemSetting
-from masterdata.models import Product, Party
+from masterdata.models import Product, Party, OperationType, Location, UnloadLocation, VehicleType
 from reports.services import ReportService
 from weighbridge.models import WeighTicket, TicketStatus
 
@@ -26,6 +26,11 @@ class SystemRegressionTests(TestCase):
         SystemSetting.objects.create(require_driver=False)
         cls.product = Product.objects.create(name="محصول تست")
         cls.party = Party.objects.create(name="طرف حساب تست")
+        cls.op_type = OperationType.objects.create(name="ورود بار", direction="inbound")
+        cls.origin = Location.objects.create(name="مبدأ تست")
+        cls.destination = Location.objects.create(name="مقصد تست")
+        cls.unload_loc = UnloadLocation.objects.create(name="جایگاه ۱")
+        cls.vehicle_type = VehicleType.objects.create(name="تریلی")
         cls.ticket = WeighTicket.objects.create(serial_number="SYSTEM-1", license_plate_display="12 ع 345 - ایران 67",
             first_weight=12000, second_weight=30000, status=TicketStatus.COMPLETED, first_weight_date=timezone.localdate())
 
@@ -42,6 +47,15 @@ class SystemRegressionTests(TestCase):
             "load_count": "1", "sent_weight": "", "loss_weight": "", "loss_percent": "",
             "license_plate_display": "", "plate_part1": "98", "plate_letter": "ع", "plate_part2": "765", "plate_iran": "43",
             "freight_amount": "250000",
+            "operation_type": self.op_type.pk,
+            "party": self.party.pk,
+            "product": self.product.pk,
+            "origin": self.origin.pk,
+            "destination": self.destination.pk,
+            "unload_location": self.unload_loc.pk,
+            "vehicle_type": self.vehicle_type.pk,
+            "driver_name_custom": "راننده تست",
+            "driver_mobile_custom": "09123456789",
         })
         self.assertEqual(response.status_code, 302)
         ticket = WeighTicket.objects.latest("id")

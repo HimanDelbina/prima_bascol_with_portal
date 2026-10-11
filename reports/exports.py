@@ -272,6 +272,211 @@ def export_excel(queryset, summaries=None, title="گزارش باسکول"):
     response["Content-Disposition"] = f'attachment; filename="weighbridge_report.xlsx"'
     return response
 
+def export_financial_excel(queryset, summaries=None, title="گزارش مالی باسکول"):
+    """
+    Generate a dedicated, beautifully formatted Financial Excel (.xlsx) file
+    specifically for the Accounting and Financial department.
+    Includes all core ticket fields PLUS notes (توضیحات), freight amount (مبلغ کرایه),
+    and load/ingot counts with Persian RTL styling.
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "گزارش مالی باسکول"
+    ws.sheet_view.rightToLeft = True
+
+    font_family = "Tahoma"
+    title_font = Font(name=font_family, size=14, bold=True, color="0F766E")
+    subtitle_font = Font(name=font_family, size=10, italic=True, color="475569")
+    header_font = Font(name=font_family, size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="0F766E", end_color="0F766E", fill_type="solid")
+    
+    data_font = Font(name=font_family, size=10)
+    summary_font = Font(name=font_family, size=11, bold=True, color="0F172A")
+    summary_fill = PatternFill(start_color="CCFBF1", end_color="CCFBF1", fill_type="solid")
+    
+    thin_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1")
+    )
+    align_center = Alignment(horizontal="center", vertical="center")
+    align_right = Alignment(horizontal="right", vertical="center")
+    align_left = Alignment(horizontal="left", vertical="center")
+    align_notes = Alignment(horizontal="right", vertical="center", wrap_text=True)
+
+    # 21 columns from A to U
+    last_col_letter = "U"
+    settings_obj = SystemSetting.get_settings()
+    ws.merge_cells(f"A1:{last_col_letter}1")
+    ws["A1"] = f"{settings_obj.company_name} - {title}"
+    ws["A1"].font = title_font
+    ws["A1"].alignment = align_center
+
+    ws.merge_cells(f"A2:{last_col_letter}2")
+    ws["A2"] = f"تاریخ تهیه گزارش: {get_today_jalali()} | تعداد رکورد: {queryset.count()} | گزارش اختصاصی واحد مالی و حسابداری (شامل توضیحات و مبالغ)"
+    ws["A2"].font = subtitle_font
+    ws["A2"].alignment = align_center
+
+    headers = [
+        "ردیف",
+        "شماره قبض",
+        "شماره بارنامه",
+        "تاریخ",
+        "ساعت ورود",
+        "ساعت خروج",
+        "نوع عملیات",
+        "طرف حساب",
+        "نام محصول",
+        "تعداد بار و شمش",
+        "شماره پلاک",
+        "نام راننده",
+        "مبلغ کرایه (تومان)",
+        "وزن بارنامه (Kg)",
+        "وزن پر (Kg)",
+        "وزن خالی (Kg)",
+        "وزن خالص (Kg)",
+        "افت (Kg)",
+        "وزن نهایی (Kg)",
+        "وضعیت",
+        "توضیحات",
+    ]
+
+    header_row_idx = 4
+    for col_idx, header_text in enumerate(headers, 1):
+        cell = ws.cell(row=header_row_idx, column=col_idx, value=header_text)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = align_center
+        cell.border = thin_border
+    
+    ws.freeze_panes = "A5"
+
+    current_row = header_row_idx + 1
+    num_fmt = "#,##0"
+
+    total_freight = Decimal("0")
+
+    for idx, ticket in enumerate(queryset, 1):
+        date_str = format_jalali_date(ticket.first_weight_date or ticket.created_at.date())
+        op_name = ticket.operation_type.name if ticket.operation_type else "-"
+        party_name = ticket.party.name if ticket.party else "-"
+        prod_name = ticket.product.name if ticket.product else "-"
+        driver_name = ticket.driver_display
+        status_name = ticket.get_status_display()
+        load_ingot_str = ticket.load_and_ingot_display
+        freight_val = int(ticket.freight_amount) if ticket.freight_amount is not None else 0
+        if ticket.freight_amount is not None:
+            total_freight += ticket.freight_amount
+        notes_val = ticket.notes.strip() if ticket.notes else "-"
+
+        row_values = [
+            idx,
+            ticket.serial_number,
+            ticket.waybill_number or "-",
+            date_str,
+            ticket.first_time_str or "-",
+            ticket.second_time_str or "-",
+            op_name,
+            party_name,
+            prod_name,
+            load_ingot_str,
+            ticket.license_plate_display,
+            driver_name,
+            freight_val,
+            float(ticket.sent_weight or 0),
+            float(ticket.gross_weight or 0),
+            float(ticket.tare_weight or 0),
+            float(ticket.net_weight or 0),
+            float(ticket.loss_weight or 0),
+            float(ticket.final_weight or 0),
+            status_name,
+            notes_val,
+        ]
+
+        for col_idx, val in enumerate(row_values, 1):
+            cell = ws.cell(row=current_row, column=col_idx, value=val)
+            cell.font = data_font
+            cell.border = thin_border
+
+            # Alignments and number formats
+            if col_idx in [1, 2, 3, 4, 5, 6, 10, 11, 20]:
+                cell.alignment = align_center
+            elif col_idx in [13, 14, 15, 16, 17, 18, 19]:
+                cell.alignment = align_left
+                cell.number_format = num_fmt
+            elif col_idx == 21:
+                cell.alignment = align_notes
+            else:
+                cell.alignment = align_right
+
+        current_row += 1
+
+    # Summary Row
+    if summaries:
+        sum_freight_val = float(summaries.get("sum_freight") or summaries.get("total_amount") or total_freight or 0)
+        tickets_cnt = summaries.get("total_tickets", len(queryset))
+        loads_str = f"{summaries['total_loads']} بار" if "total_loads" in summaries else "-"
+        summary_row_values = [
+            "مجموع کل",
+            f"{tickets_cnt} قبض",
+            "-",
+            "-",
+            "-",
+            "-",
+            "-",
+            "-",
+            "-",
+            loads_str,
+            "-",
+            "-",
+            sum_freight_val,
+            float(summaries.get("sum_sent", 0) or 0),
+            float(summaries.get("sum_gross", 0) or 0),
+            float(summaries.get("sum_tare", 0) or 0),
+            float(summaries.get("sum_net", 0) or 0),
+            float(summaries.get("sum_loss", 0) or 0),
+            float(summaries.get("sum_final", 0) or 0),
+            "-",
+            "-",
+        ]
+        for col_idx, val in enumerate(summary_row_values, 1):
+            cell = ws.cell(row=current_row, column=col_idx, value=val)
+            cell.font = summary_font
+            cell.fill = summary_fill
+            cell.border = thin_border
+            if col_idx in [13, 14, 15, 16, 17, 18, 19]:
+                cell.number_format = num_fmt
+                cell.alignment = align_left
+            else:
+                cell.alignment = align_center
+
+    # Column widths
+    for col in ws.columns:
+        col_letter = get_column_letter(col[0].column)
+        if col[0].column == 21:  # توضیحات
+            ws.column_dimensions[col_letter].width = 38
+        else:
+            max_len = 0
+            for cell in col:
+                if cell.row in [1, 2]:
+                    continue
+                if cell.value:
+                    val_str = str(cell.value)
+                    max_len = max(max_len, len(val_str))
+            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = 'attachment; filename="financial_weighbridge_report.xlsx"'
+    return response
+
 def export_csv(queryset, title="گزارش باسکول"):
     """
     Generate CSV file with UTF-8 BOM encoding for perfect Excel Persian support.

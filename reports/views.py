@@ -11,7 +11,7 @@ from masterdata.models import (
 )
 from reports.services import ReportService
 from reports.preset_reports import PRESET_REPORTS, get_preset_report_by_code, get_preset_report_by_id
-from reports.exports import export_excel, export_csv
+from reports.exports import export_excel, export_csv, export_financial_excel
 from core.jalali import get_today_jalali, get_jalali_range_gregorian, format_jalali_date
 from accounts.decorators import role_required
 from django.contrib.auth.models import User
@@ -30,7 +30,9 @@ def freight_report(request):
     qs = FreightReportService.filter_tickets(form.cleaned_data) if valid else WeighTicket.objects.none()
     summaries = FreightReportService.summarize(qs)
     export_format = request.GET.get("export")
-    if valid and export_format in ("excel", "csv"):
+    if valid and export_format in ("excel", "csv", "excel_financial"):
+        if export_format == "excel_financial":
+            return export_financial_excel(qs, summaries, title="گزارش مالی مبالغ کرایه و قبوض")
         return export_freight_report(qs, summaries, export_format)
     params = request.GET.copy()
     params.pop("page", None)
@@ -71,6 +73,8 @@ def report_builder(request):
     # Export handling
     if export_format == "excel":
         return export_excel(qs, summaries, title="گزارش جامع باسکول")
+    elif export_format == "excel_financial":
+        return export_financial_excel(qs, summaries, title="گزارش مالی جامع باسکول (ویژه واحد مالی)")
     elif export_format == "csv":
         return export_csv(qs, title="گزارش جامع باسکول")
     elif export_format == "print":
@@ -95,6 +99,18 @@ def report_builder(request):
     params.pop("page", None)
     params.pop("export", None)
 
+    # Extract selected products for multi-select filter
+    if hasattr(params, "getlist"):
+        selected_products = [str(p) for p in params.getlist("product") if p]
+    else:
+        raw_p = params.get("product")
+        if isinstance(raw_p, list):
+            selected_products = [str(p) for p in raw_p if p]
+        elif raw_p:
+            selected_products = [str(raw_p)]
+        else:
+            selected_products = []
+
     # Filter dropdown data
     products = Product.objects.filter(is_active=True)
     parties = Party.objects.filter(is_active=True)
@@ -113,6 +129,7 @@ def report_builder(request):
         "group_by": group_by,
         "total_count": paginator.count,
         "products": products,
+        "selected_products": selected_products,
         "parties": parties,
         "drivers": drivers,
         "vehicles": vehicles,
@@ -192,6 +209,8 @@ def preset_report_view(request, code):
     export_format = None if filter_error else request.GET.get("export")
     if export_format == "excel":
         return export_excel(qs, summaries, title=report_meta["title"])
+    elif export_format == "excel_financial":
+        return export_financial_excel(qs, summaries, title=f"{report_meta['title']} (ویژه واحد مالی)")
     elif export_format == "csv":
         return export_csv(qs, title=report_meta["title"])
     elif export_format == "print":
@@ -212,6 +231,18 @@ def preset_report_view(request, code):
     combined_params.pop("page", None)
     combined_params.pop("export", None)
 
+    products = Product.objects.filter(is_active=True)
+    if hasattr(combined_params, "getlist"):
+        selected_products = [str(p) for p in combined_params.getlist("product") if p]
+    else:
+        raw_p = combined_params.get("product")
+        if isinstance(raw_p, list):
+            selected_products = [str(p) for p in raw_p if p]
+        elif raw_p:
+            selected_products = [str(raw_p)]
+        else:
+            selected_products = []
+
     return render(request, "reports/preset_report_detail.html", {
         "report_meta": report_meta,
         "page_obj": page_obj,
@@ -219,6 +250,8 @@ def preset_report_view(request, code):
         "group_data": group_data,
         "group_by": group_by,
         "total_count": paginator.count,
+        "products": products,
+        "selected_products": selected_products,
         "params": combined_params,
         "title": report_meta["title"],
     })

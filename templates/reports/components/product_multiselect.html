@@ -1,0 +1,203 @@
+{% comment %}
+Reusable Product Multi-Select Component for Reports
+Usage:
+    {% include 'reports/components/product_multiselect.html' with filter_id='builderProductFilter' %}
+Parameters:
+    filter_id: Unique string ID for this instance (optional, defaults to 'productMultiselect')
+Context required:
+    products: QuerySet or iterable of Product models
+    selected_products: list of string product IDs currently selected
+{% endcomment %}
+<div class="product-multiselect-dropdown dropdown position-relative" id="{{ filter_id|default:'productMultiselect' }}">
+    <button class="btn btn-outline-secondary form-select text-start d-flex justify-content-between align-items-center bg-white shadow-none text-truncate w-100" 
+            type="button" 
+            data-bs-toggle="dropdown" 
+            data-bs-auto-close="outside" 
+            aria-expanded="false"
+            id="{{ filter_id|default:'productMultiselect' }}Btn"
+            style="min-height: 38px; border-color: #cbd5e1;">
+        <span class="product-multiselect-label text-truncate d-inline-flex align-items-center me-1" style="font-size: 0.88rem;">
+            {% if selected_products %}
+                <span class="badge bg-primary rounded-pill me-1">{{ selected_products|length }}</span>
+                {% if selected_products|length == 1 %}
+                    {% for p in products %}
+                        {% if p.id|stringformat:"s" in selected_products %}
+                            <span class="fw-bold text-dark text-truncate">{{ p.name }}</span>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <span class="fw-bold text-dark">{{ selected_products|length }} محصول انتخاب شده</span>
+                {% endif %}
+            {% else %}
+                <span class="text-muted"><i class="bi bi-box-seam text-secondary me-1"></i>همه محصولات (انتخاب یک یا چند)</span>
+            {% endif %}
+        </span>
+        <i class="bi bi-chevron-down text-muted ms-1" style="font-size: 0.75rem;"></i>
+    </button>
+
+    <div class="dropdown-menu p-2 shadow border rounded-3 w-100 product-multiselect-menu" 
+         style="min-width: 290px; max-width: 380px; z-index: 1060; border-color: #e2e8f0;">
+        
+        <!-- Search filter input inside dropdown -->
+        <div class="mb-2 position-relative">
+            <input type="text" 
+                   class="form-control form-control-sm product-search-input pe-4" 
+                   placeholder="جستجوی نام یا کد محصول..." 
+                   autocomplete="off"
+                   style="font-size: 0.82rem; border-color: #cbd5e1;">
+            <i class="bi bi-search position-absolute top-50 end-0 translate-middle-y me-2 text-muted" style="font-size: 0.8rem; pointer-events: none;"></i>
+        </div>
+        
+        <!-- Action Toolbar: Select All / Clear All -->
+        <div class="d-flex justify-content-between align-items-center mb-2 px-1 pb-2 border-bottom">
+            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none select-all-products text-primary fw-bold" style="font-size: 0.78rem;">
+                <i class="bi bi-check-all me-1"></i>انتخاب همه
+            </button>
+            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none clear-all-products text-danger" style="font-size: 0.78rem;">
+                <i class="bi bi-x-circle me-1"></i>پاک کردن
+            </button>
+        </div>
+
+        <!-- Product Checkboxes List -->
+        <div class="product-options-list" style="max-height: 220px; overflow-y: auto;">
+            {% for p in products %}
+            <div class="form-check product-item py-1 px-2 rounded d-flex align-items-center">
+                <input class="form-check-input product-check-input mt-0 me-2" 
+                       type="checkbox" 
+                       name="product" 
+                       value="{{ p.id }}" 
+                       id="chk_{{ filter_id|default:'pm' }}_{{ p.id }}"
+                       data-product-name="{{ p.name }}"
+                       {% if p.id|stringformat:"s" in selected_products %}checked{% endif %}>
+                <label class="form-check-label d-flex justify-content-between align-items-center cursor-pointer w-100 user-select-none mb-0" 
+                       for="chk_{{ filter_id|default:'pm' }}_{{ p.id }}"
+                       style="font-size: 0.85rem; cursor: pointer;">
+                    <span class="product-title text-dark">{{ p.name }}</span>
+                    {% if p.code %}
+                    <span class="badge bg-light text-secondary border font-monospace ms-1" style="font-size: 0.7rem;">{{ p.code }}</span>
+                    {% endif %}
+                </label>
+            </div>
+            {% empty %}
+            <div class="text-center text-muted small py-3">هیچ محصول فعالی در سامانه ثبت نشده است.</div>
+            {% endfor %}
+            <div class="no-product-found text-center text-muted small py-3 d-none">
+                <i class="bi bi-search text-secondary me-1"></i>محصولی با این عبارت یافت نشد.
+            </div>
+        </div>
+        
+        <!-- Status footer info -->
+        <div class="pt-2 mt-1 border-top d-flex justify-content-between align-items-center text-muted px-1" style="font-size: 0.72rem;">
+            <span class="product-counter-info">
+                {% if selected_products %}
+                    {{ selected_products|length }} از {{ products|length }} انتخاب شده
+                {% else %}
+                    همه موارد لحاظ می‌شود
+                {% endif %}
+            </span>
+            <span class="text-primary fw-bold"><i class="bi bi-check2-square me-1"></i>فیلتر چندگانه</span>
+        </div>
+    </div>
+</div>
+
+<style>
+.product-item {
+    transition: background-color 0.15s ease-in-out;
+}
+.product-item:hover {
+    background-color: #f1f5f9;
+}
+.product-item .cursor-pointer {
+    cursor: pointer;
+}
+.product-options-list::-webkit-scrollbar {
+    width: 6px;
+}
+.product-options-list::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+.product-options-list::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+</style>
+
+<script>
+(function() {
+    function setupProductMultiselects() {
+        if (typeof jQuery === 'undefined') return;
+        
+        $('.product-multiselect-dropdown').each(function() {
+            var container = $(this);
+            if (container.data('pm-initialized')) return;
+            container.data('pm-initialized', true);
+
+            var labelEl = container.find('.product-multiselect-label');
+            var counterEl = container.find('.product-counter-info');
+            var searchInput = container.find('.product-search-input');
+            var itemsList = container.find('.product-options-list');
+            var noFound = container.find('.no-product-found');
+
+            function updateDisplay() {
+                var allBoxes = container.find('.product-check-input');
+                var total = allBoxes.length;
+                var checked = allBoxes.filter(':checked');
+                var count = checked.length;
+
+                if (count === 0) {
+                    labelEl.html('<span class="text-muted"><i class="bi bi-box-seam text-secondary me-1"></i>همه محصولات (انتخاب یک یا چند)</span>');
+                    counterEl.text('همه موارد لحاظ می‌شود');
+                } else if (count === 1) {
+                    var name = checked.first().data('product-name') || checked.first().closest('.product-item').find('.product-title').text().trim();
+                    labelEl.html('<span class="badge bg-primary rounded-pill me-1">1</span> <span class="fw-bold text-dark text-truncate">' + name + '</span>');
+                    counterEl.text('1 از ' + total + ' انتخاب شده');
+                } else if (count === total && total > 0) {
+                    labelEl.html('<span class="badge bg-primary rounded-pill me-1">' + total + '</span> <span class="fw-bold text-dark">همه محصولات (' + total + ')</span>');
+                    counterEl.text('همه (' + total + ') انتخاب شده');
+                } else {
+                    labelEl.html('<span class="badge bg-primary rounded-pill me-1">' + count + '</span> <span class="fw-bold text-dark">' + count + ' محصول انتخاب شده</span>');
+                    counterEl.text(count + ' از ' + total + ' انتخاب شده');
+                }
+            }
+
+            container.on('change', '.product-check-input', function() {
+                updateDisplay();
+            });
+
+            searchInput.on('input', function() {
+                var q = $(this).val().trim().toLowerCase();
+                var visibleCount = 0;
+                container.find('.product-item').each(function() {
+                    var txt = $(this).text().toLowerCase();
+                    var match = (txt.indexOf(q) !== -1);
+                    $(this).toggle(match);
+                    if (match) visibleCount++;
+                });
+                noFound.toggleClass('d-none', visibleCount > 0);
+            });
+
+            container.find('.select-all-products').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                container.find('.product-item:visible .product-check-input').prop('checked', true);
+                updateDisplay();
+            });
+
+            container.find('.clear-all-products').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                container.find('.product-check-input').prop('checked', false);
+                updateDisplay();
+            });
+
+            updateDisplay();
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupProductMultiselects);
+    } else {
+        setupProductMultiselects();
+    }
+})();
+</script>

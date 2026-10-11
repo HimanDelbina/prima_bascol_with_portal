@@ -14,9 +14,15 @@ class FreightReportService:
             report_date=Coalesce("first_weight_date", TruncDate("created_at")),
         )
         for field, lookup in (("start_date", "report_date__gte"), ("end_date", "report_date__lte"),
-                              ("party", "party"), ("product", "product"), ("plate", "license_plate_display__icontains")):
+                              ("party", "party"), ("plate", "license_plate_display__icontains")):
             if params.get(field):
                 qs = qs.filter(**{lookup: params[field]})
+        product_val = params.get("product")
+        if product_val:
+            if hasattr(product_val, "__iter__") and not isinstance(product_val, (str, bytes)):
+                qs = qs.filter(product__in=product_val)
+            else:
+                qs = qs.filter(product=product_val)
         if params.get("driver_search"):
             qs = qs.filter(Q(driver__full_name__icontains=params["driver_search"]) |
                            Q(driver_name_custom__icontains=params["driver_search"]))
@@ -327,6 +333,7 @@ class ReportService:
             sum_sent=Sum("sent_weight"),
             sum_loss=Sum("loss_weight"),
             sum_final=Sum("final_weight"),
+            sum_freight=Sum("freight_amount"),
             avg_net=Avg("net_weight"),
             avg_loss_percent=Avg("loss_percent"),
             min_net=Min("net_weight"),
@@ -341,6 +348,7 @@ class ReportService:
             "sum_sent": metrics["sum_sent"] or Decimal("0.00"),
             "sum_loss": metrics["sum_loss"] or Decimal("0.00"),
             "sum_final": metrics["sum_final"] or Decimal("0.00"),
+            "sum_freight": metrics["sum_freight"] or Decimal("0"),
             "avg_net": round(metrics["avg_net"] or Decimal("0.00"), 2),
             "avg_loss_percent": round(metrics["avg_loss_percent"] or Decimal("0.00"), 2),
             "min_net": metrics["min_net"] or Decimal("0.00"),
