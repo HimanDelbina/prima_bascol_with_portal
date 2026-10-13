@@ -52,3 +52,23 @@ class ClientIPExtractionTests(TestCase):
         middleware = ThreadLocalRequestMiddleware(mock_view)
         middleware(req)
         self.assertEqual(captured_ip, "192.168.1.99")
+
+
+class PersianWordsTests(TestCase):
+    def test_number_to_persian_words_basic(self):
+        from core.jalali import number_to_persian_words
+        self.assertEqual(number_to_persian_words(0), "صفر")
+        self.assertEqual(number_to_persian_words("0"), "صفر")
+        self.assertEqual(number_to_persian_words(1000), "یک هزار")
+        self.assertEqual(number_to_persian_words(1250000), "یک میلیون و دویست و پنجاه هزار")
+        self.assertEqual(number_to_persian_words("10,000,000"), "ده میلیون")
+        self.assertEqual(number_to_persian_words("۵۰۰،۰۰۰"), "پانصد هزار")
+        self.assertEqual(number_to_persian_words(None), "")
+        self.assertEqual(number_to_persian_words(""), "")
+
+    def test_persian_words_template_filter(self):
+        from core.templatetags.bascol_tags import persian_words_filter
+        self.assertEqual(persian_words_filter(1250000), "یک میلیون و دویست و پنجاه هزار")
+        self.assertEqual(persian_words_filter(None), "")
+        self.assertEqual(persian_words_filter(""), "")
+

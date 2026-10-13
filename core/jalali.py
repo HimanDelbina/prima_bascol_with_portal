@@ -227,3 +227,63 @@ def get_comparison_period_gregorian(start_date, end_date, period_type: str = "")
         prev_end = start_date - timedelta(days=1)
         prev_start = prev_end - timedelta(days=delta_days - 1)
         return prev_start, prev_end
+
+
+def number_to_persian_words(num) -> str:
+    """Convert a number (int, float, Decimal, str) to Persian words."""
+    if num is None:
+        return ""
+    import re
+    clean_str = to_english_digits(str(num)).replace(",", "").replace("،", "").strip()
+    digits = re.sub(r"\D", "", clean_str).lstrip("0")
+    if not digits:
+        return "صفر" if clean_str in ("0", "۰") else ""
+
+    units = ["", "یک", "دو", "سه", "چهار", "پنج", "شش", "هفت", "هشت", "نه"]
+    teens = [
+        "ده", "یازده", "دوازده", "سیزده", "چهارده",
+        "پانزده", "شانزده", "هفده", "هجده", "نوزده"
+    ]
+    tens = [
+        "", "", "بیست", "سی", "چهل", "پنجاه",
+        "شصت", "هفتاد", "هشتاد", "نود"
+    ]
+    hundreds = [
+        "", "یکصد", "دویست", "سیصد", "چهارصد",
+        "پانصد", "ششصد", "هفتصد", "هشتصد", "نهصد"
+    ]
+    scales = ["", "هزار", "میلیون", "میلیارد", "تریلیون", "کوآدریلیون"]
+
+    def convert_group(n):
+        parts = []
+        h = n // 100
+        rem = n % 100
+        if h > 0:
+            parts.append(hundreds[h])
+        if 10 <= rem <= 19:
+            parts.append(teens[rem - 10])
+        else:
+            t = rem // 10
+            u = rem % 10
+            if t > 0:
+                parts.append(tens[t])
+            if u > 0:
+                parts.append(units[u])
+        return " و ".join(parts)
+
+    groups = []
+    while digits:
+        groups.append(digits[-3:])
+        digits = digits[:-3]
+
+    parts = []
+    for i, g in enumerate(groups):
+        val = int(g)
+        if val > 0:
+            gw = convert_group(val)
+            if i > 0 and i < len(scales) and scales[i]:
+                gw += " " + scales[i]
+            parts.append(gw)
+
+    return " و ".join(reversed(parts))
+

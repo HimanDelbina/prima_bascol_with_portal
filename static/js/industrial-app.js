@@ -1265,6 +1265,12 @@
       }
 
       input.addEventListener("input", updateFormattingAndWords);
+      input.addEventListener("keyup", updateFormattingAndWords);
+      input.addEventListener("change", updateFormattingAndWords);
+      input.addEventListener("focus", updateFormattingAndWords);
+      input.addEventListener("paste", function () {
+        setTimeout(updateFormattingAndWords, 20);
+      });
 
       // Handle Backspace when immediately following a comma
       input.addEventListener("keydown", function (e) {
@@ -1283,6 +1289,11 @@
       if (input.value && input.value.trim() !== "") {
         updateFormattingAndWords();
       }
+      window.addEventListener("load", function () {
+        if (input.value && input.value.trim() !== "") {
+          updateFormattingAndWords();
+        }
+      });
     });
   }
   window.initAmountWordsFormatters = initAmountWordsFormatters;

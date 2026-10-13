@@ -44,5 +44,9 @@ echo "PostgreSQL is ready."
 echo "Applying database migrations..."
 python manage.py migrate --noinput
 
+# Automatically synchronize static files on startup
+echo "Collecting static files..."
+python manage.py collectstatic --noinput
+
 # Execute the given command
 exec "$@"

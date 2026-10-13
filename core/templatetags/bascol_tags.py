@@ -93,3 +93,13 @@ def get_item(dictionary, key):
     if isinstance(dictionary, dict):
         return dictionary.get(key)
     return None
+
+from core.jalali import number_to_persian_words
+
+@register.filter(name="persian_words")
+def persian_words_filter(value):
+    """Convert number or amount to Persian words."""
+    if value is None or value == "":
+        return ""
+    return number_to_persian_words(value)
+

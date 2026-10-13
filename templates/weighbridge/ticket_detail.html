@@ -205,7 +205,18 @@
                     </tr>
                     <tr>
                         <td class="text-muted">مبلغ کرایه (ریال):</td>
-                        <td class="font-monospace fw-bold">{{ ticket.freight_amount|weight_fmt:0 }}</td>
+                        <td>
+                            {% if ticket.freight_amount is not None %}
+                                <div class="font-monospace fw-bold">{{ ticket.freight_amount|weight_fmt:0 }}</div>
+                                <div class="mt-1">
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle py-1 px-2 text-wrap text-start">
+                                        <i class="bi bi-cash-coin me-1"></i>{{ ticket.freight_amount|persian_words }} ریال
+                                    </span>
+                                </div>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     <tr>
                         <td class="text-muted">مبدأ بار:</td>
