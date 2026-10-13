@@ -188,21 +188,18 @@ class PlateAutoFillTests(TestCase):
         self.assertFalse(data.get("is_autofill_enabled"))
         self.assertIsNone(data.get("autofill_data"))
 
-    def test_ajax_plate_lookup_plate_with_history_autofills_everything(self):
-        # Plate with previous tickets automatically populates all metadata
+    def test_ajax_plate_lookup_plate_with_history_not_in_autofill_list_does_not_autofill_cargo(self):
+        # A vehicle with ticket history that is NOT registered in PlateAutoFill must NOT have cargo autofilled
         url = reverse("weighbridge:ajax_plate_lookup")
         response = self.client.get(url, {"plate": self.plate_display})
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertTrue(data.get("is_autofill_enabled"))
-        af = data.get("autofill_data")
-        self.assertIsNotNone(af)
-        self.assertEqual(af["party_id"], self.party.id)
-        self.assertEqual(af["product_id"], self.product.id)
-        self.assertEqual(af["operation_type_id"], self.op_type.id)
-        self.assertEqual(af["origin_id"], self.origin.id)
-        self.assertEqual(af["destination_id"], self.destination.id)
-        self.assertEqual(af["unload_location_id"], self.unload_loc.id)
+        self.assertTrue(data.get("found"))
+        self.assertFalse(data.get("is_autofill_enabled"))
+        self.assertIsNone(data.get("autofill_data"))
+        # Basic truck/driver recognition still provides driver & vehicle type
+        self.assertEqual(data.get("driver_name"), "علی محمدی")
+        self.assertEqual(data.get("vehicle_type_name"), "تریلی کفی")
 
     def test_ajax_plate_lookup_with_autofill_rule(self):
         # Register in PlateAutoFill
@@ -249,3 +246,20 @@ class PlateAutoFillTests(TestCase):
         self.assertNotIn("final_weight", af)
         self.assertNotIn("sent_weight", af)
         self.assertNotIn("loss_weight", af)
+
+    def test_ajax_plate_lookup_with_inactive_autofill_rule_does_not_autofill(self):
+        # Even if a plate is registered, if it is disabled (is_active=False), autofill must NOT trigger
+        PlateAutoFill.objects.create(
+            license_plate_display=self.plate_display,
+            notes="غیرفعال شده",
+            created_by=self.super_admin,
+            is_active=False,
+        )
+
+        url = reverse("weighbridge:ajax_plate_lookup")
+        response = self.client.get(url, {"plate": self.plate_display})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        self.assertFalse(data.get("is_autofill_enabled"))
+        self.assertIsNone(data.get("autofill_data"))

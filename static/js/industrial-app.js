@@ -422,15 +422,15 @@
               window.setPlateBlockedState(false);
             }
 
-            // Indicator badge update
+            // Indicator badge update: only show if plate is registered in PlateAutoFill
             const indicator = document.getElementById("plate-autofill-indicator");
             if (indicator) {
               if (data.is_autofill_enabled) {
-                indicator.className = "badge bg-primary text-white border border-primary small fw-normal d-none d-sm-inline";
+                indicator.className = "badge bg-primary text-white border border-primary small fw-normal d-inline";
                 indicator.innerHTML = '<i class="bi bi-lightning-charge-fill me-1"></i>پلاک تکمیل خودکار (اطلاعات آخرین ورود)';
               } else {
-                indicator.className = "badge bg-light text-muted border small fw-normal d-none d-sm-inline";
-                indicator.innerHTML = '<i class="bi bi-magic text-primary me-1"></i>تکمیل خودکار سوابق تکراری فعال است';
+                indicator.className = "d-none";
+                indicator.innerHTML = "";
               }
             }
 
@@ -575,6 +575,27 @@
                   window.showToast(`تمام اطلاعات از آخرین قبض (#${escapeHtml(af.last_ticket_serial)}) بارگذاری شد (فیلدهای وزن خالی ماندند).`, "primary");
                 }
               } else {
+                // Not in autofill list: clear any cargo/operation fields previously autofilled from an autofill plate
+                const clearAutoFilled = (id, defaultValue = "") => {
+                  const el = document.getElementById(id);
+                  if (el && el.dataset.autofilled === "true") {
+                    el.value = defaultValue;
+                    delete el.dataset.autofilled;
+                    el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input", { bubbles: true }));
+                  }
+                };
+                clearAutoFilled("id_operation_type");
+                clearAutoFilled("id_party");
+                clearAutoFilled("id_product");
+                clearAutoFilled("id_origin");
+                clearAutoFilled("id_destination");
+                clearAutoFilled("id_unload_location");
+                clearAutoFilled("id_freight_amount");
+                clearAutoFilled("id_load_count", "1");
+                clearAutoFilled("id_ingot_count");
+                clearAutoFilled("id_loss_type");
+                clearAutoFilled("id_loss_percent");
+
                 if (typeof window.showToast === "function") {
                   window.showToast("مشخصات خودرو و راننده از سوابق پلاک بارگذاری شد.", "success");
                 }

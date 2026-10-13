@@ -779,10 +779,11 @@ def ajax_plate_lookup(request):
             "driver", "product", "party", "operation_type", "origin", "destination", "unload_location", "loss_type", "vehicle_type"
         ).first()
 
-    is_autofill_enabled = (autofill_entry is not None) or (last_valid_ticket is not None)
+    # ONLY enable autofill of cargo/operation fields if the plate is registered in active PlateAutoFill!
+    is_autofill_enabled = bool(autofill_entry and autofill_entry.is_active)
     autofill_data = None
 
-    if last_valid_ticket:
+    if is_autofill_enabled and last_valid_ticket:
         # Fallbacks to any previous ticket of this vehicle if a field was null on the latest ticket
         def get_fallback_field(field_name):
             val = getattr(last_valid_ticket, field_name)
