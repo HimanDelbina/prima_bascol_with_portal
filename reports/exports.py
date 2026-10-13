@@ -12,7 +12,7 @@ from core.models import SystemSetting
 
 def export_freight_report(queryset, summaries, export_format):
     headers = ["شماره قبض", "تاریخ", "ساعت ورود", "ساعت خروج", "طرف حساب", "محصول", "پلاک", "راننده",
-               "شماره بارنامه", "وزن بارنامه (Kg)", "وضعیت", "مبلغ کرایه (تومان)"]
+               "شماره بارنامه", "وزن بارنامه (Kg)", "وضعیت", "مبلغ کرایه (ریال)"]
 
     def rows():
         for ticket in queryset.iterator():
@@ -55,7 +55,7 @@ def export_freight_report(queryset, summaries, export_format):
     ws.title = "مبالغ کرایه"
     ws.sheet_view.rightToLeft = True
     ws.merge_cells("A1:L1")
-    ws["A1"] = "گزارش مبالغ کرایه (تومان)"
+    ws["A1"] = "گزارش مبالغ کرایه (ریال)"
     ws["A1"].font = Font(name="Tahoma", size=15, bold=True)
     ws["A1"].alignment = Alignment(horizontal="center")
     ws.merge_cells("A2:L2")
@@ -331,7 +331,7 @@ def export_financial_excel(queryset, summaries=None, title="گزارش مالی 
         "تعداد بار و شمش",
         "شماره پلاک",
         "نام راننده",
-        "مبلغ کرایه (تومان)",
+        "مبلغ کرایه (ریال)",
         "وزن بارنامه (Kg)",
         "وزن پر (Kg)",
         "وزن خالی (Kg)",

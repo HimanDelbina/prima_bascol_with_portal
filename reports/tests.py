@@ -523,10 +523,10 @@ class FinancialExcelExportTests(TestCase):
         # Verify Headers
         headers = [ws.cell(row=4, column=col).value for col in range(1, 22)]
         self.assertIn("توضیحات", headers)
-        self.assertIn("مبلغ کرایه (تومان)", headers)
+        self.assertIn("مبلغ کرایه (ریال)", headers)
         self.assertIn("تعداد بار و شمش", headers)
         notes_col_idx = headers.index("توضیحات") + 1
-        freight_col_idx = headers.index("مبلغ کرایه (تومان)") + 1
+        freight_col_idx = headers.index("مبلغ کرایه (ریال)") + 1
 
         # Check rows content
         all_notes = {ws.cell(row=r, column=notes_col_idx).value for r in range(5, 7)}

@@ -1120,6 +1120,173 @@
     });
   }
 
+  // 10. Persian Number to Words Converter
+  function numberToPersianWords(num) {
+    if (num === null || num === undefined) return "";
+    let str = toEnDigits(String(num)).replace(/\D/g, "");
+    if (!str) return "";
+    str = str.replace(/^0+/, "");
+    if (str === "") return "صفر";
+
+    const units = ["", "یک", "دو", "سه", "چهار", "پنج", "شش", "هفت", "هشت", "نه"];
+    const teens = [
+      "ده", "یازده", "دوازده", "سیزده", "چهارده",
+      "پانزده", "شانزده", "هفده", "هجده", "نوزده"
+    ];
+    const tens = [
+      "", "", "بیست", "سی", "چهل", "پنجاه",
+      "شصت", "هفتاد", "هشتاد", "نود"
+    ];
+    const hundreds = [
+      "", "یکصد", "دویست", "سیصد", "چهارصد",
+      "پانصد", "ششصد", "هفتصد", "هشتصد", "نهصد"
+    ];
+    const scales = ["", "هزار", "میلیون", "میلیارد", "تریلیون", "کوآدریلیون"];
+
+    function convertGroup(n) {
+      const parts = [];
+      const h = Math.floor(n / 100);
+      const rem = n % 100;
+      if (h > 0) parts.push(hundreds[h]);
+      if (rem >= 10 && rem <= 19) {
+        parts.push(teens[rem - 10]);
+      } else {
+        const t = Math.floor(rem / 10);
+        const u = rem % 10;
+        if (t > 0) parts.push(tens[t]);
+        if (u > 0) parts.push(units[u]);
+      }
+      return parts.join(" و ");
+    }
+
+    const groups = [];
+    while (str.length > 0) {
+      groups.push(str.slice(-3));
+      str = str.slice(0, -3);
+    }
+
+    const parts = [];
+    for (let i = 0; i < groups.length; i++) {
+      const val = parseInt(groups[i], 10);
+      if (val > 0) {
+        let groupWord = convertGroup(val);
+        if (i > 0 && scales[i]) {
+          groupWord += " " + scales[i];
+        }
+        parts.push(groupWord);
+      }
+    }
+
+    return parts.reverse().join(" و ");
+  }
+  window.numberToPersianWords = numberToPersianWords;
+
+  // 11. Amount Input 3-digit Separation & Real-time Words Underneath
+  function initAmountWordsFormatters() {
+    const amountInputs = document.querySelectorAll(
+      "#id_freight_amount, input[name='freight_amount'], .format-amount-words"
+    );
+
+    amountInputs.forEach((input) => {
+      if (input.dataset.amountFormatterInitialized === "true") return;
+      input.dataset.amountFormatterInitialized = "true";
+
+      const targetSelector = input.dataset.wordsContainer || "#freight-amount-words";
+      let wordsContainer = document.querySelector(targetSelector);
+      if (!wordsContainer) {
+        const parent = input.closest(".col-md-6, .col-md-4, .col-md-3, .col-xl, .col-12");
+        if (parent) {
+          wordsContainer = parent.querySelector("#freight-amount-words, .amount-words-display");
+        }
+      }
+
+      function updateFormattingAndWords() {
+        const oldVal = input.value;
+        const cursorPos = input.selectionStart || 0;
+
+        const enOld = toEnDigits(oldVal);
+        let digitsBeforeCursor = 0;
+        for (let i = 0; i < cursorPos; i++) {
+          if (/\d/.test(enOld[i])) {
+            digitsBeforeCursor++;
+          }
+        }
+
+        const cleanDigits = enOld.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+
+        if (!cleanDigits) {
+          input.value = "";
+          if (wordsContainer) {
+            wordsContainer.classList.add("d-none");
+            const textSpan = wordsContainer.querySelector(".words-text");
+            if (textSpan) textSpan.textContent = "";
+          }
+          return;
+        }
+
+        const formatted = cleanDigits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        input.value = formatted;
+
+        // Restore cursor position seamlessly
+        let newCursorPos = 0;
+        let countedDigits = 0;
+        for (let i = 0; i < formatted.length; i++) {
+          if (/\d/.test(formatted[i])) {
+            countedDigits++;
+          }
+          if (countedDigits >= digitsBeforeCursor) {
+            newCursorPos = i + 1;
+            break;
+          }
+        }
+        if (digitsBeforeCursor === 0) newCursorPos = 0;
+        if (newCursorPos > formatted.length) newCursorPos = formatted.length;
+
+        try {
+          input.setSelectionRange(newCursorPos, newCursorPos);
+        } catch (err) {}
+
+        // Update live words display
+        if (wordsContainer) {
+          const words = numberToPersianWords(cleanDigits);
+          const textSpan = wordsContainer.querySelector(".words-text");
+          if (words) {
+            if (textSpan) {
+              textSpan.textContent = words + " ریال";
+            } else {
+              wordsContainer.textContent = words + " ریال";
+            }
+            wordsContainer.classList.remove("d-none");
+          } else {
+            wordsContainer.classList.add("d-none");
+            if (textSpan) textSpan.textContent = "";
+          }
+        }
+      }
+
+      input.addEventListener("input", updateFormattingAndWords);
+
+      // Handle Backspace when immediately following a comma
+      input.addEventListener("keydown", function (e) {
+        if (e.key === "Backspace" && this.selectionStart === this.selectionEnd && this.selectionStart > 1) {
+          if (this.value[this.selectionStart - 1] === ",") {
+            const pos = this.selectionStart;
+            this.value = this.value.slice(0, pos - 2) + this.value.slice(pos - 1);
+            this.setSelectionRange(pos - 2, pos - 2);
+            e.preventDefault();
+            this.dispatchEvent(new Event("input"));
+          }
+        }
+      });
+
+      // Initial execution for pre-populated values
+      if (input.value && input.value.trim() !== "") {
+        updateFormattingAndWords();
+      }
+    });
+  }
+  window.initAmountWordsFormatters = initAmountWordsFormatters;
+
   // DOM Ready Initializations
   document.addEventListener("DOMContentLoaded", function () {
     initKeyboardUX();
@@ -1130,6 +1297,7 @@
     initAutoClearWeightInputs();
     initLiveClock();
     initSidebarActiveNav();
+    initAmountWordsFormatters();
 
     // Restore density preference
     const savedDensity = localStorage.getItem("bascol_table_density");

@@ -54,7 +54,7 @@ class FreightAmountTests(TestCase):
         self.assertEqual(ticket.freight_amount, Decimal("1250000"))
         response = self.client.get(reverse("weighbridge:ticket_detail", args=[ticket.pk]))
         self.assertContains(response, "1,250,000")
-        self.assertContains(response, "مبلغ کرایه (تومان)")
+        self.assertContains(response, "مبلغ کرایه (ریال)")
 
     def test_blank_is_distinct_from_zero(self):
         self.assertIsNone(self.create_ticket("").freight_amount)

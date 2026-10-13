@@ -104,7 +104,7 @@ class WeighTicket(BaseModel):
     freight_amount = models.DecimalField(
         max_digits=15, decimal_places=0, null=True, blank=True,
         validators=[MinValueValidator(Decimal("0"))],
-        verbose_name="مبلغ کرایه (تومان)",
+        verbose_name="مبلغ کرایه (ریال)",
     )
     waybill_number = models.CharField(max_length=60, blank=True, db_index=True, verbose_name="شماره بارنامه")
     origin = models.ForeignKey(

@@ -32,7 +32,7 @@
 {% else %}
 <div class="row g-3 mb-3">
     <div class="col-sm-6 col-xl-3"><div class="industrial-card p-3 h-100 bg-primary-subtle">
-        <div class="text-primary fw-bold small">مجموع کرایه (تومان)</div>
+        <div class="text-primary fw-bold small">مجموع کرایه (ریال)</div>
         <div class="fs-3 fw-bold text-primary mt-2">{{ summaries.total_amount|weight_fmt:0 }}</div>
     </div></div>
     <div class="col-sm-6 col-xl-3"><div class="industrial-card p-3 h-100">
@@ -52,7 +52,7 @@
     <div class="industrial-card-header"><h6 class="industrial-card-title">ریز مبالغ کرایه</h6></div>
     <div class="table-responsive">
         <table class="table custom-table table-hover align-middle mb-0">
-            <thead><tr><th>شماره قبض</th><th>تاریخ</th><th>ساعت ورود</th><th>ساعت خروج</th><th>طرف حساب</th><th>محصول</th><th>پلاک</th><th>راننده</th><th>شماره بارنامه</th><th class="text-end">وزن بارنامه (Kg)</th><th>وضعیت</th><th class="text-end">کرایه (تومان)</th></tr></thead>
+            <thead><tr><th>شماره قبض</th><th>تاریخ</th><th>ساعت ورود</th><th>ساعت خروج</th><th>طرف حساب</th><th>محصول</th><th>پلاک</th><th>راننده</th><th>شماره بارنامه</th><th class="text-end">وزن بارنامه (Kg)</th><th>وضعیت</th><th class="text-end">کرایه (ریال)</th></tr></thead>
             <tbody>
             {% for ticket in page_obj %}
                 <tr>

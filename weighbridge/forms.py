@@ -40,6 +40,17 @@ class TicketCreateForm(forms.ModelForm):
         required=False,
         widget=forms.TextInput(attrs={"class": "form-control auto-current-time text-center", "placeholder": "HH:MM", "id": "second_weight_time_str"})
     )
+    freight_amount = forms.CharField(
+        label="مبلغ کرایه (ریال)",
+        required=False,
+        widget=forms.TextInput(attrs={
+            "class": "form-control",
+            "placeholder": "مبلغ به ریال",
+            "inputmode": "numeric",
+            "id": "id_freight_amount",
+            "autocomplete": "off",
+        })
+    )
 
     class Meta:
         model = WeighTicket
@@ -65,7 +76,7 @@ class TicketCreateForm(forms.ModelForm):
             "driver_mobile_custom": forms.TextInput(attrs={"class": "form-control", "id": "id_driver_mobile_custom", "placeholder": "۰۹۱۲۳۴۵۶۷۸۹"}),
             "license_plate_display": forms.TextInput(attrs={"class": "form-control", "id": "license_plate_display", "placeholder": "مثلاً ۱۲ ج ۳۴۵ - ایران ۶۷"}),
             "waybill_number": forms.TextInput(attrs={"class": "form-control", "placeholder": "شماره بارنامه / حواله"}),
-            "freight_amount": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "مبلغ به تومان", "inputmode": "numeric"}),
+            "freight_amount": forms.TextInput(attrs={"class": "form-control", "placeholder": "مبلغ به ریال", "inputmode": "numeric", "id": "id_freight_amount", "autocomplete": "off"}),
             "origin": forms.Select(attrs={"class": "form-select", "id": "id_origin"}),
             "destination": forms.Select(attrs={"class": "form-select", "id": "id_destination"}),
             "unload_location": forms.Select(attrs={"class": "form-select", "id": "id_unload_location"}),
@@ -139,12 +150,37 @@ class TicketCreateForm(forms.ModelForm):
             self.initial["loss_percent"] = ""
             self.initial["loss_weight"] = ""
 
+        if "freight_amount" in self.initial and self.initial["freight_amount"] is not None:
+            try:
+                fa_val = int(Decimal(str(self.initial["freight_amount"]).replace(",", "")))
+                self.initial["freight_amount"] = f"{fa_val:,}"
+            except Exception:
+                pass
+        elif self.instance and self.instance.pk and self.instance.freight_amount is not None:
+            self.initial["freight_amount"] = f"{int(self.instance.freight_amount):,}"
+
         # Dynamic requirements based on system settings
         sys_settings = SystemSetting.get_settings()
         if sys_settings.require_waybill:
             self.fields["waybill_number"].required = True
         if sys_settings.require_driver:
             self.fields["driver"].required = False  # can be driver or driver_name_custom
+
+    def clean_freight_amount(self):
+        val = self.cleaned_data.get("freight_amount")
+        if val is None or val == "":
+            return None
+        from core.jalali import to_english_digits
+        clean_val = to_english_digits(str(val)).replace(",", "").replace("،", "").replace(" ", "").strip()
+        if not clean_val:
+            return None
+        try:
+            dec_val = Decimal(clean_val)
+            if dec_val < 0:
+                raise forms.ValidationError("مبلغ نمی‌تواند منفی باشد.")
+            return dec_val
+        except Exception:
+            raise forms.ValidationError("مبلغ وارد شده معتبر نیست.")
 
     def clean(self):
         cleaned_data = super().clean()
@@ -356,6 +392,17 @@ class TicketEditManagerForm(forms.ModelForm):
         required=True,
         widget=forms.Textarea(attrs={"class": "form-control border-danger", "rows": 2, "placeholder": "دلیل فنی و رسمی اصلاح سند را به طور دقیق وارد فرمایید."})
     )
+    freight_amount = forms.CharField(
+        label="مبلغ کرایه (ریال)",
+        required=False,
+        widget=forms.TextInput(attrs={
+            "class": "form-control",
+            "placeholder": "مبلغ به ریال",
+            "inputmode": "numeric",
+            "id": "id_freight_amount",
+            "autocomplete": "off",
+        })
+    )
 
     class Meta:
         model = WeighTicket
@@ -378,7 +425,7 @@ class TicketEditManagerForm(forms.ModelForm):
             "driver_mobile_custom": forms.TextInput(attrs={"class": "form-control", "placeholder": "شماره موبایل راننده"}),
             "license_plate_display": forms.TextInput(attrs={"class": "form-control", "id": "license_plate_display"}),
             "waybill_number": forms.TextInput(attrs={"class": "form-control"}),
-            "freight_amount": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "1", "inputmode": "numeric"}),
+            "freight_amount": forms.TextInput(attrs={"class": "form-control", "placeholder": "مبلغ به ریال", "inputmode": "numeric", "id": "id_freight_amount", "autocomplete": "off"}),
             "origin": forms.Select(attrs={"class": "form-select"}),
             "destination": forms.Select(attrs={"class": "form-select"}),
             "unload_location": forms.Select(attrs={"class": "form-select"}),
@@ -436,8 +483,32 @@ class TicketEditManagerForm(forms.ModelForm):
                 self.initial["driver_name_custom"] = self.instance.driver.full_name
             if not self.instance.driver_mobile_custom and self.instance.driver and self.instance.driver.mobile:
                 self.initial["driver_mobile_custom"] = self.instance.driver.mobile
+            if "freight_amount" in self.initial and self.initial["freight_amount"] is not None:
+                try:
+                    fa_val = int(Decimal(str(self.initial["freight_amount"]).replace(",", "")))
+                    self.initial["freight_amount"] = f"{fa_val:,}"
+                except Exception:
+                    pass
+            elif self.instance.freight_amount is not None:
+                self.initial["freight_amount"] = f"{int(self.instance.freight_amount):,}"
         if "load_count" in self.fields:
             self.fields["load_count"].label = "تعداد بار و شمش"
+
+    def clean_freight_amount(self):
+        val = self.cleaned_data.get("freight_amount")
+        if val is None or val == "":
+            return None
+        from core.jalali import to_english_digits
+        clean_val = to_english_digits(str(val)).replace(",", "").replace("،", "").replace(" ", "").strip()
+        if not clean_val:
+            return None
+        try:
+            dec_val = Decimal(clean_val)
+            if dec_val < 0:
+                raise forms.ValidationError("مبلغ نمی‌تواند منفی باشد.")
+            return dec_val
+        except Exception:
+            raise forms.ValidationError("مبلغ وارد شده معتبر نیست.")
 
     def clean(self):
         cleaned_data = super().clean()
