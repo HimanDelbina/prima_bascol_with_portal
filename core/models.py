@@ -12,7 +12,7 @@ class BaseModel(models.Model):
 
 class SystemSetting(models.Model):
     """Global system configuration for Prima Bascol Weighbridge."""
-    company_name = models.CharField(max_length=200, default="شرکت صنعتی و معدنی پریما", verbose_name="نام شرکت")
+    company_name = models.CharField(max_length=200, default="شرکت فولاد پریما", verbose_name="نام شرکت")
     company_logo = models.ImageField(upload_to="settings/", blank=True, null=True, verbose_name="لوگوی شرکت")
     company_address = models.TextField(blank=True, default="تهران، شهرک صنعتی، بلوار صنعت، پلاک ۱", verbose_name="آدرس شرکت")
     company_phone = models.CharField(max_length=50, blank=True, default="۰۲۱-۸۸۸۸۸۸۸۸", verbose_name="تلفن")

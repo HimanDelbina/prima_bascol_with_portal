@@ -34,7 +34,7 @@ def export_management_excel(curr_qs, start_date_jalali, end_date_jalali, title="
     )
 
     settings_obj = SystemSetting.get_settings()
-    company_name = settings_obj.company_name or "مجتمع صنعتی و معدنی فولاد پریما"
+    company_name = settings_obj.company_name or "شرکت فولاد پریما"
 
     # -------------------------------------------------------------
     # Sheet 1: Summary KPI
@@ -279,7 +279,7 @@ def export_party_ranking_excel(ranked_items, title="رتبه‌بندی طرف�
     )
 
     settings_obj = SystemSetting.get_settings()
-    company_name = settings_obj.company_name or "مجتمع صنعتی و معدنی فولاد پریما"
+    company_name = settings_obj.company_name or "شرکت فولاد پریما"
 
     ws.cell(row=1, column=1, value=company_name).font = title_font
     ws.cell(row=2, column=1, value=f"{title} - تاریخ گزارش: {get_today_jalali()}").font = Font(name="Tahoma", size=10, italic=True, color="475569")
@@ -380,7 +380,7 @@ def export_party_analytics_excel(party, analysis, trend_data=None):
     )
 
     settings_obj = SystemSetting.get_settings()
-    company_name = settings_obj.company_name or "مجتمع صنعتی و معدنی فولاد پریما"
+    company_name = settings_obj.company_name or "شرکت فولاد پریما"
 
     # --- Sheet 1: خلاصه امتیاز و عملکرد ---
     ws1 = wb.create_sheet(title="خلاصه ارزیابی و امتیاز")
@@ -569,7 +569,7 @@ def export_party_analytics_pdf(party, analysis, trend_data=None):
     styles = getSampleStyleSheet()
 
     settings_obj = SystemSetting.get_settings()
-    company_name = settings_obj.company_name or "مجتمع صنعتی و معدنی فولاد پریما"
+    company_name = settings_obj.company_name or "شرکت فولاد پریما"
 
     title_text = f"{company_name} - کارنامه عملکرد طرف‌حساب"
     elements.append(Paragraph(title_text, styles['Title']))

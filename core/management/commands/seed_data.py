@@ -36,7 +36,7 @@ class Command(BaseCommand):
 
         # 1. System Settings
         settings_obj, _ = SystemSetting.objects.get_or_create(id=1)
-        settings_obj.company_name = "مجتمع صنعتی و معدنی فولاد پریما"
+        settings_obj.company_name = "شرکت فولاد پریما"
         settings_obj.receipt_header_title = "قبض رسمی توزین و باسکول دیجیتال"
         settings_obj.company_address = "اصفهان، شهرک صنعتی رازی، بلوار فناوری، پلاک ۱۰۰"
         settings_obj.company_phone = "۰۳۱-۳۳۳۳۴۴۴۴"

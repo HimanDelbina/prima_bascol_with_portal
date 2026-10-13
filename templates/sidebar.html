@@ -5,7 +5,7 @@
         <a href="{% url 'dashboard:index' %}" class="sidebar-brand">
             <i class="bi bi-speedometer2 text-info fs-4"></i>
             <div>
-                <div class="fw-bold fs-6">سامانه باسکول پریما</div>
+                <div class="fw-bold fs-6">{{ sys_settings.company_name|default:"شرکت فولاد پریما" }}</div>
                 <div class="text-muted" style="font-size: 0.7rem;">Prima Weighbridge v2.0</div>
             </div>
         </a>
