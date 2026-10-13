@@ -7,9 +7,16 @@
     {% csrf_token %}
     {% if form.errors %}<div class="alert alert-danger">{{ form.non_field_errors }}{% for field in form %}{% if field.errors %}<div>{{ field.label }}: {{ field.errors }}</div>{% endif %}{% endfor %}</div>{% endif %}
     <div id="mandatory-validation-alert" class="alert alert-danger d-none shadow-sm border border-danger mb-3"></div>
-    <div class="alert alert-info small mb-2">
-        هر پلاک در تاریخ وزن اول فقط یک قبض فعال می‌تواند داشته باشد. برای پلاک‌های مجاز توسط سرپرست، ثبت چندباره امکان‌پذیر است.
-        {% if can_manage_plate_exceptions %}<a href="{% url 'weighbridge:plate_exceptions' %}" class="fw-bold ms-2" target="_blank">مدیریت استثناهای پلاک</a>{% endif %}
+    <div class="alert alert-info small mb-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+            <span>هر پلاک در تاریخ وزن اول فقط یک قبض فعال می‌تواند داشته باشد. برای پلاک‌های مجاز توسط سرپرست، ثبت چندباره امکان‌پذیر است.</span>
+            {% if can_manage_plate_exceptions %}<a href="{% url 'weighbridge:plate_exceptions' %}" class="fw-bold ms-2" target="_blank"><i class="bi bi-shield-check me-1"></i>مدیریت استثناهای پلاک</a>{% endif %}
+        </div>
+        {% if can_manage_plate_autofill %}
+        <a href="{% url 'weighbridge:plate_autofill' %}" class="btn btn-sm btn-outline-primary fw-bold" target="_blank">
+            <i class="bi bi-magic me-1"></i>مدیریت پلاک‌های تکمیل خودکار
+        </a>
+        {% endif %}
     </div>
 
     <div class="alert alert-warning py-2 small d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 shadow-sm border border-warning">

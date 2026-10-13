@@ -1,18 +1,21 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import datetime, time
 from decimal import Decimal
 import re
 
-from weighbridge.models import WeighTicket, TicketStatus, WeightMode
+from weighbridge.models import WeighTicket, TicketStatus, WeightMode, EmergencyWeighTicket, EmergencyTicketStatus
 from weighbridge.forms import TicketCreateForm, SecondWeightForm, TicketEditManagerForm
 from weighbridge.services import TicketCalculationService, VehicleDriverRegistrationService
 from core.weight_provider import get_active_weight_provider
-from core.jalali import jalali_to_gregorian, get_today_jalali, format_jalali_date, get_today_gregorian
+from core.jalali import (
+    jalali_to_gregorian, get_today_jalali, format_jalali_date,
+    get_today_gregorian, get_jalali_range_gregorian
+)
 from core.models import SystemSetting
 from masterdata.models import Product, Party, Driver, Vehicle, OperationType
 from accounts.decorators import role_required, manager_or_admin_required, weighbridge_role_required
@@ -20,7 +23,7 @@ from audit.services import log_audit
 from audit.models import AuditAction, AuditLog
 from monitoring.services.anomaly_engine import AnomalyDetectionEngine
 from django.core.exceptions import ValidationError
-from weighbridge.plate_policy import DailyPlatePolicy, can_manage_plate_exceptions, normalize_plate
+from weighbridge.plate_policy import DailyPlatePolicy, can_manage_plate_exceptions, can_manage_plate_autofill, normalize_plate
 
 @login_required
 @role_required("super_admin", "system_admin", "weighbridge_manager", "weighbridge_operator")
@@ -113,6 +116,7 @@ def ticket_create(request):
                 return render(request, "weighbridge/ticket_create.html", {
                     "form": form, "title": "ثبت باسکول و توزین جدید", "settings": SystemSetting.get_settings(),
                     "can_manage_plate_exceptions": can_manage_plate_exceptions(request.user),
+                    "can_manage_plate_autofill": can_manage_plate_autofill(request.user),
                     "sales_op_ids": sales_op_ids,
                 })
 
@@ -181,6 +185,7 @@ def ticket_create(request):
         "title": "ثبت باسکول و توزین جدید",
         "settings": settings_obj,
         "can_manage_plate_exceptions": can_manage_plate_exceptions(request.user),
+        "can_manage_plate_autofill": can_manage_plate_autofill(request.user),
         "sales_op_ids": sales_op_ids,
     })
 
@@ -393,7 +398,6 @@ def ticket_list(request):
 
 
 @login_required
-@weighbridge_role_required
 def ticket_detail(request, pk):
     ticket = get_object_or_404(
         WeighTicket.objects.select_related(
@@ -577,7 +581,6 @@ def ticket_cancel(request, pk):
 
 
 @login_required
-@weighbridge_role_required
 def ticket_print(request, pk):
     """
     High quality print preview supporting A4, A5, and POS thermal receipts.
@@ -762,10 +765,84 @@ def ajax_plate_lookup(request):
 
     is_duplicate = (vehicle is not None) or (trip_count > 0)
 
+    # Check if plate is registered for dedicated auto-fill or has previous tickets
+    from weighbridge.models import PlateAutoFill
+    autofill_entry = PlateAutoFill.objects.filter(normalized_plate=norm_plate, is_active=True).first() if norm_plate else None
+
+    # Retrieve latest non-cancelled ticket (or latest ticket) for this vehicle/plate
+    last_valid_ticket = tickets_qs.exclude(status=TicketStatus.CANCELLED).select_related(
+        "driver", "product", "party", "operation_type", "origin", "destination", "unload_location", "loss_type", "vehicle_type"
+    ).first()
+
+    if not last_valid_ticket and tickets_qs.exists():
+        last_valid_ticket = tickets_qs.select_related(
+            "driver", "product", "party", "operation_type", "origin", "destination", "unload_location", "loss_type", "vehicle_type"
+        ).first()
+
+    is_autofill_enabled = (autofill_entry is not None) or (last_valid_ticket is not None)
+    autofill_data = None
+
+    if last_valid_ticket:
+        # Fallbacks to any previous ticket of this vehicle if a field was null on the latest ticket
+        def get_fallback_field(field_name):
+            val = getattr(last_valid_ticket, field_name)
+            if val:
+                return val
+            hist_t = tickets_qs.filter(**{f"{field_name}__isnull": False}).select_related(field_name).first()
+            if hist_t:
+                return getattr(hist_t, field_name)
+            return None
+
+        origin_obj = get_fallback_field("origin")
+        dest_obj = get_fallback_field("destination")
+        unload_obj = get_fallback_field("unload_location")
+        op_obj = get_fallback_field("operation_type")
+        party_obj = get_fallback_field("party")
+        prod_obj = get_fallback_field("product")
+        loss_obj = get_fallback_field("loss_type")
+        vtype_obj = get_fallback_field("vehicle_type")
+
+        final_driver_id = last_valid_ticket.driver_id or driver_id
+        final_driver_name = (last_valid_ticket.driver.full_name if last_valid_ticket.driver else last_valid_ticket.driver_name_custom) or driver_name
+        final_driver_mobile = (last_valid_ticket.driver.mobile if last_valid_ticket.driver else last_valid_ticket.driver_mobile_custom) or driver_mobile
+
+        autofill_data = {
+            "last_ticket_serial": last_valid_ticket.serial_number,
+            "last_ticket_date": last_valid_ticket.jalali_first_date,
+            "operation_type_id": op_obj.id if op_obj else None,
+            "operation_type_name": op_obj.name if op_obj else "",
+            "party_id": party_obj.id if party_obj else None,
+            "party_name": party_obj.name if party_obj else "",
+            "product_id": prod_obj.id if prod_obj else None,
+            "product_name": prod_obj.name if prod_obj else "",
+            "origin_id": origin_obj.id if origin_obj else None,
+            "origin_name": origin_obj.name if origin_obj else "",
+            "destination_id": dest_obj.id if dest_obj else None,
+            "destination_name": dest_obj.name if dest_obj else "",
+            "unload_location_id": unload_obj.id if unload_obj else None,
+            "unload_location_name": unload_obj.name if unload_obj else "",
+            "freight_amount": int(last_valid_ticket.freight_amount) if last_valid_ticket.freight_amount is not None else "",
+            "load_count": last_valid_ticket.load_count or 1,
+            "ingot_count": last_valid_ticket.ingot_count if last_valid_ticket.ingot_count is not None else "",
+            "loss_type_id": loss_obj.id if loss_obj else None,
+            "loss_type_name": loss_obj.name if loss_obj else "",
+            "loss_percent": float(last_valid_ticket.loss_percent) if last_valid_ticket.loss_percent else "",
+            "weight_mode": last_valid_ticket.weight_mode or "empty_first",
+            "vehicle_type_id": vtype_obj.id if vtype_obj else vehicle_type_id,
+            "vehicle_type_name": (vtype_obj.name if vtype_obj else vehicle_type_name),
+            "vehicle_type_custom": last_valid_ticket.vehicle_type_custom or vehicle_type_custom,
+            "driver_id": final_driver_id,
+            "driver_name": final_driver_name,
+            "driver_mobile": final_driver_mobile,
+        }
+
     response_data = {
         "is_blocked": False,
         "found": is_duplicate,
         "is_duplicate": is_duplicate,
+        "is_autofill_enabled": is_autofill_enabled,
+        "autofill_notes": (autofill_entry.notes or "") if autofill_entry else "",
+        "autofill_data": autofill_data,
 
         "trip_count": trip_count,
         "plate_display": vehicle.plate_display if vehicle else (last_ticket.license_plate_display if last_ticket else plate),
@@ -1014,7 +1091,6 @@ def emergency_ticket_list(request):
 
 
 @login_required
-@weighbridge_role_required
 def emergency_ticket_detail(request, pk):
     """
     مشاهده جزئیات قبض متفرقه.
@@ -1027,7 +1103,6 @@ def emergency_ticket_detail(request, pk):
 
 
 @login_required
-@weighbridge_role_required
 def emergency_ticket_print(request, pk):
     """
     چاپ قبض توزین متفرقه ویژه شرکت‌های متقاضی (A5 / A4 / POS).
@@ -1073,4 +1148,373 @@ def emergency_ticket_cancel(request, pk):
         "ticket": ticket,
         "title": f"ابطال قبض متفرقه {ticket.serial_number}",
     })
+
+
+@login_required
+def print_center(request):
+    """
+    مرکز جامع و هوشمند چاپ قبض‌های باسکول
+    دسترسی آزاد برای تمامی کاربران با هر سطح دسترسی و نقش در سیستم.
+    قابلیت‌های حرفه‌ای:
+    - چاپ سریع تمام قبض‌های امروز با یک کلیک (در انواع قالب‌ها)
+    - فیلترهای پیشرفته زمانی (امروز، دیروز، ۷ روز گذشته، ماه جاری، بازه دلخواه جلالی)
+    - فیلتر وضعیت، طرف حساب، کالا، نوع عملیات، جستجوی پلاک و شماره قبض
+    - تفکیک قبوض رسمی و قبوض متفرقه (آزاد)
+    - چاپ گروهی موارد انتخاب شده در قالب‌های A4، A5، ۲ قبض در یک صفحه، POS، و کارنامه تجمیعی
+    """
+    tab = request.GET.get("tab", "regular")
+    date_preset = request.GET.get("date_preset", "")
+    start_date_j = request.GET.get("start_date", "").strip()
+    end_date_j = request.GET.get("end_date", "").strip()
+    status_filter = request.GET.get("status", "all")
+    product_filter = request.GET.get("product", "")
+    party_filter = request.GET.get("party", "")
+    op_filter = request.GET.get("operation_type", "")
+    q = request.GET.get("q", "").strip()
+
+    today_g = get_today_gregorian()
+    today_j = get_today_jalali()
+
+    # Determine date range based on preset or explicit dates
+    g_start = None
+    g_end = None
+
+    if date_preset and date_preset not in ("all", "custom"):
+        try:
+            g_start, g_end = get_jalali_range_gregorian(date_preset)
+        except Exception:
+            g_start, g_end = None, None
+    elif start_date_j or end_date_j:
+        date_preset = "custom"
+        if start_date_j:
+            g_start = jalali_to_gregorian(start_date_j)
+        if end_date_j:
+            g_end = jalali_to_gregorian(end_date_j)
+
+    # 1. Regular Tickets Queryset
+    reg_qs = WeighTicket.objects.select_related(
+        "operation_type", "party", "product", "driver", "vehicle", "vehicle_type",
+        "first_weight_operator", "second_weight_operator"
+    ).all().order_by("-id")
+
+    if g_start:
+        reg_qs = reg_qs.filter(first_weight_date__gte=g_start)
+    if g_end:
+        reg_qs = reg_qs.filter(first_weight_date__lte=g_end)
+
+    if status_filter and status_filter != "all":
+        reg_qs = reg_qs.filter(status=status_filter)
+
+    if product_filter:
+        reg_qs = reg_qs.filter(product_id=product_filter)
+
+    if party_filter:
+        reg_qs = reg_qs.filter(party_id=party_filter)
+
+    if op_filter:
+        reg_qs = reg_qs.filter(operation_type_id=op_filter)
+
+    if q:
+        reg_qs = reg_qs.filter(
+            Q(serial_number__icontains=q) |
+            Q(license_plate_display__icontains=q) |
+            Q(driver__full_name__icontains=q) |
+            Q(driver_name_custom__icontains=q) |
+            Q(party__name__icontains=q) |
+            Q(product__name__icontains=q) |
+            Q(waybill_number__icontains=q) |
+            Q(notes__icontains=q)
+        )
+
+    # 2. Emergency Tickets Queryset
+    emg_qs = EmergencyWeighTicket.objects.select_related("operator").all().order_by("-id")
+
+    if g_start:
+        emg_qs = emg_qs.filter(weight_date__gte=g_start)
+    if g_end:
+        emg_qs = emg_qs.filter(weight_date__lte=g_end)
+
+    if status_filter and status_filter != "all":
+        if status_filter in [EmergencyTicketStatus.WAITING_SECOND, EmergencyTicketStatus.COMPLETED, EmergencyTicketStatus.CANCELLED]:
+            emg_qs = emg_qs.filter(status=status_filter)
+
+    if q:
+        emg_qs = emg_qs.filter(
+            Q(serial_number__icontains=q) |
+            Q(license_plate__icontains=q) |
+            Q(driver_name__icontains=q) |
+            Q(company_name__icontains=q) |
+            Q(notes__icontains=q)
+        )
+
+    # General Today Counters for quick actions badge
+    today_reg_total = WeighTicket.objects.filter(first_weight_date=today_g).count()
+    today_reg_completed = WeighTicket.objects.filter(first_weight_date=today_g, status=TicketStatus.COMPLETED).count()
+    today_in_yard = WeighTicket.objects.filter(status=TicketStatus.WAITING_SECOND).count()
+    today_emg_total = EmergencyWeighTicket.objects.filter(weight_date=today_g).count()
+
+    # Active tab dataset & metrics
+    if tab == "emergency":
+        active_count = emg_qs.count()
+        aggregates = emg_qs.aggregate(
+            total_net=Sum("net_weight"),
+            total_gross=Sum("gross_weight"),
+            total_tare=Sum("tare_weight"),
+        )
+        total_net = aggregates["total_net"] or Decimal("0")
+        total_gross = aggregates["total_gross"] or Decimal("0")
+        total_tare = aggregates["total_tare"] or Decimal("0")
+        total_freight = Decimal("0")
+        total_loss = Decimal("0")
+
+        paginator = Paginator(emg_qs, 40)
+        page_number = request.GET.get("page", 1)
+        page_obj = paginator.get_page(page_number)
+    else:
+        active_count = reg_qs.count()
+        aggregates = reg_qs.aggregate(
+            total_net=Sum("net_weight"),
+            total_gross=Sum("gross_weight"),
+            total_tare=Sum("tare_weight"),
+            total_loss=Sum("loss_weight"),
+            total_freight=Sum("freight_amount"),
+        )
+        total_net = aggregates["total_net"] or Decimal("0")
+        total_gross = aggregates["total_gross"] or Decimal("0")
+        total_tare = aggregates["total_tare"] or Decimal("0")
+        total_loss = aggregates["total_loss"] or Decimal("0")
+        total_freight = aggregates["total_freight"] or Decimal("0")
+
+        paginator = Paginator(reg_qs, 40)
+        page_number = request.GET.get("page", 1)
+        page_obj = paginator.get_page(page_number)
+
+    regular_tab_count = reg_qs.count()
+    emergency_tab_count = emg_qs.count()
+
+    total_net_ton = round(total_net / Decimal("1000"), 3)
+    total_gross_ton = round(total_gross / Decimal("1000"), 3)
+
+    # Masterdata for dropdowns
+    products = Product.objects.filter(is_active=True).order_by("name")
+    parties = Party.objects.filter(is_active=True).order_by("name")
+    op_types = OperationType.objects.filter(is_active=True).order_by("name")
+
+    return render(request, "weighbridge/print_center.html", {
+        "tab": tab,
+        "page_obj": page_obj,
+        "active_count": active_count,
+        "regular_tab_count": regular_tab_count,
+        "emergency_tab_count": emergency_tab_count,
+        "total_net": total_net,
+        "total_gross": total_gross,
+        "total_tare": total_tare,
+        "total_loss": total_loss,
+        "total_freight": total_freight,
+        "total_net_ton": total_net_ton,
+        "total_gross_ton": total_gross_ton,
+        # Today counters for quick one-click badges
+        "today_reg_total": today_reg_total,
+        "today_reg_completed": today_reg_completed,
+        "today_in_yard": today_in_yard,
+        "today_emg_total": today_emg_total,
+        # Filters state
+        "date_preset": date_preset,
+        "start_date_j": start_date_j,
+        "end_date_j": end_date_j,
+        "status_filter": status_filter,
+        "product_filter": product_filter,
+        "party_filter": party_filter,
+        "op_filter": op_filter,
+        "q": q,
+        # Masterdata
+        "products": products,
+        "parties": parties,
+        "op_types": op_types,
+        "today_jalali": today_j,
+        "title": "مرکز جامع چاپ قبض‌های باسکول",
+    })
+
+
+@login_required
+def batch_print(request):
+    """
+    چاپ گروهی و دسته‌ای قبض‌های باسکول
+    پشتیبانی از قالب‌های A4، A5، ۲ قبض در یک برگه A4، فیش حرارتی POS، و جدول خلاصه.
+    """
+    ticket_type = request.GET.get("ticket_type") or request.POST.get("ticket_type", "regular")
+    layout = request.GET.get("layout") or request.POST.get("layout", "a4")
+    autoprint = (request.GET.get("autoprint", "1") == "1")
+    preset = request.GET.get("preset", "")
+
+    today_g = get_today_gregorian()
+
+    # Determine ticket IDs
+    ticket_ids = []
+    if request.method == "POST":
+        ticket_ids = request.POST.getlist("ticket_ids")
+        if not ticket_ids and request.POST.get("ids"):
+            ticket_ids = [x.strip() for x in request.POST.get("ids").split(",") if x.strip()]
+        if not ticket_ids and request.POST.get("ticket_ids_str"):
+            ticket_ids = [x.strip() for x in request.POST.get("ticket_ids_str").split(",") if x.strip()]
+    else:
+        ids_str = request.GET.get("ids") or request.GET.get("ticket_ids_str", "")
+        if ids_str:
+            ticket_ids = [x.strip() for x in ids_str.split(",") if x.strip()]
+        if not ticket_ids and request.GET.getlist("ticket_ids"):
+            ticket_ids = request.GET.getlist("ticket_ids")
+
+    tickets = []
+    if ticket_type == "emergency":
+        qs = EmergencyWeighTicket.objects.select_related("operator").all().order_by("-id")
+        if ticket_ids:
+            qs = qs.filter(id__in=ticket_ids)
+        elif preset == "today":
+            qs = qs.filter(weight_date=today_g)
+        elif preset == "in_yard":
+            qs = qs.filter(status=EmergencyTicketStatus.WAITING_SECOND)
+        else:
+            # apply any query filters
+            start_date_j = request.GET.get("start_date")
+            end_date_j = request.GET.get("end_date")
+            if start_date_j:
+                g_start = jalali_to_gregorian(start_date_j)
+                if g_start:
+                    qs = qs.filter(weight_date__gte=g_start)
+            if end_date_j:
+                g_end = jalali_to_gregorian(end_date_j)
+                if g_end:
+                    qs = qs.filter(weight_date__lte=g_end)
+            status = request.GET.get("status")
+            if status and status != "all":
+                qs = qs.filter(status=status)
+            q = request.GET.get("q", "").strip()
+            if q:
+                qs = qs.filter(
+                    Q(serial_number__icontains=q) |
+                    Q(license_plate__icontains=q) |
+                    Q(driver_name__icontains=q) |
+                    Q(company_name__icontains=q)
+                )
+
+        tickets = list(qs[:150])
+    else:
+        qs = WeighTicket.objects.select_related(
+            "operation_type", "party", "product", "driver", "vehicle", "vehicle_type",
+            "origin", "destination", "unload_location", "loss_type",
+            "first_weight_operator", "second_weight_operator"
+        ).all().order_by("-id")
+
+        if ticket_ids:
+            qs = qs.filter(id__in=ticket_ids)
+        elif preset == "today":
+            qs = qs.filter(first_weight_date=today_g)
+        elif preset == "today_completed":
+            qs = qs.filter(first_weight_date=today_g, status=TicketStatus.COMPLETED)
+        elif preset == "in_yard":
+            qs = qs.filter(status=TicketStatus.WAITING_SECOND)
+        else:
+            # Apply date preset or query filters
+            date_preset = request.GET.get("date_preset")
+            if date_preset and date_preset not in ("all", "custom"):
+                try:
+                    g_start, g_end = get_jalali_range_gregorian(date_preset)
+                    if g_start:
+                        qs = qs.filter(first_weight_date__gte=g_start)
+                    if g_end:
+                        qs = qs.filter(first_weight_date__lte=g_end)
+                except Exception:
+                    pass
+            else:
+                start_date_j = request.GET.get("start_date")
+                end_date_j = request.GET.get("end_date")
+                if start_date_j:
+                    g_start = jalali_to_gregorian(start_date_j)
+                    if g_start:
+                        qs = qs.filter(first_weight_date__gte=g_start)
+                if end_date_j:
+                    g_end = jalali_to_gregorian(end_date_j)
+                    if g_end:
+                        qs = qs.filter(first_weight_date__lte=g_end)
+
+            status = request.GET.get("status")
+            if status and status != "all":
+                qs = qs.filter(status=status)
+            product = request.GET.get("product")
+            if product:
+                qs = qs.filter(product_id=product)
+            party = request.GET.get("party")
+            if party:
+                qs = qs.filter(party_id=party)
+            op = request.GET.get("operation_type")
+            if op:
+                qs = qs.filter(operation_type_id=op)
+            q = request.GET.get("q", "").strip()
+            if q:
+                qs = qs.filter(
+                    Q(serial_number__icontains=q) |
+                    Q(license_plate_display__icontains=q) |
+                    Q(driver__full_name__icontains=q) |
+                    Q(party__name__icontains=q) |
+                    Q(product__name__icontains=q) |
+                    Q(waybill_number__icontains=q)
+                )
+
+        tickets = list(qs[:150])
+
+    if not tickets:
+        messages.warning(request, "هیچ قبض معتبری با معیارهای انتخابی برای چاپ یافت نشد.")
+        return redirect("weighbridge:print_center")
+
+    log_audit(
+        action=AuditAction.PRINT,
+        model_name="WeighTicketBatch",
+        record_id=f"batch_{len(tickets)}",
+        record_repr=f"چاپ گروهی {len(tickets)} قبض ({ticket_type})",
+        reason=f"چاپ در قالب {layout.upper()} - کاربر: {request.user.username}"
+    )
+
+    settings_obj = SystemSetting.get_settings()
+
+    total_net = sum([t.net_weight or Decimal("0") for t in tickets])
+    total_gross = sum([t.gross_weight or Decimal("0") for t in tickets])
+    total_tare = sum([t.tare_weight or Decimal("0") for t in tickets])
+    total_loss = sum([getattr(t, "loss_weight", Decimal("0")) or Decimal("0") for t in tickets])
+    total_freight = sum([getattr(t, "freight_amount", Decimal("0")) or Decimal("0") for t in tickets])
+
+    ticket_pairs = []
+    if layout == "two_in_one":
+        for i in range(0, len(tickets), 2):
+            ticket_pairs.append({
+                "first": tickets[i],
+                "second": tickets[i+1] if i+1 < len(tickets) else None
+            })
+
+    ticket_ids_str = ",".join(str(t.id) for t in tickets)
+
+    context = {
+        "tickets": tickets,
+        "ticket_pairs": ticket_pairs,
+        "tickets_count": len(tickets),
+        "ticket_ids_str": ticket_ids_str,
+        "layout": layout,
+        "ticket_type": ticket_type,
+        "settings": settings_obj,
+        "print_date": get_today_jalali(),
+        "print_time": timezone.localtime().strftime("%H:%M"),
+        "total_net": total_net,
+        "total_gross": total_gross,
+        "total_tare": total_tare,
+        "total_loss": total_loss,
+        "total_freight": total_freight,
+        "total_net_ton": round(total_net / Decimal("1000"), 3),
+        "total_gross_ton": round(total_gross / Decimal("1000"), 3),
+        "autoprint": autoprint,
+        "title": f"چاپ گروهی {len(tickets)} قبض - {settings_obj.company_name}",
+    }
+
+    if layout == "summary":
+        return render(request, "weighbridge/print_summary_sheet.html", context)
+    return render(request, "weighbridge/batch_ticket_print.html", context)
+
 

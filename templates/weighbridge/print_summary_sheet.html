@@ -1,0 +1,327 @@
+{% load bascol_tags %}
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title|default:"صورت‌جلسه تجمیعی قبوض باسکول" }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+        * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+        body {
+            font-family: 'Vazirmatn', Tahoma, sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            margin: 0;
+            padding: 10px;
+            font-size: 11px;
+        }
+
+        .summary-page {
+            background: #ffffff;
+            max-width: 285mm;
+            margin: 10px auto;
+            border: 2px solid #0f172a;
+            padding: 10mm;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+        }
+
+        .print-control-bar {
+            position: sticky;
+            top: 0;
+            z-index: 9999;
+            background: #1e293b;
+            color: #ffffff;
+            padding: 10px 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            margin: -10px -10px 15px -10px;
+        }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .summary-table th, .summary-table td {
+            border: 1px solid #334155;
+            padding: 4.5px 5px;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 10px;
+        }
+        .summary-table th {
+            background-color: #f1f5f9;
+            font-weight: 800;
+            color: #0f172a;
+        }
+        .summary-table tr:nth-child(even) td {
+            background-color: #f8fafc;
+        }
+        .summary-table td.num-cell {
+            font-family: monospace, Tahoma;
+            font-weight: bold;
+        }
+
+        .total-row td {
+            background-color: #e2e8f0 !important;
+            font-weight: 900;
+            font-size: 11px;
+            border-top: 2px solid #0f172a !important;
+            border-bottom: 2px solid #0f172a !important;
+        }
+
+        .signature-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 40px;
+            text-align: center;
+        }
+        .sig-block {
+            border-top: 1.5px dotted #334155;
+            padding-top: 8px;
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        @page {
+            size: A4 landscape;
+            margin: 6mm;
+        }
+
+        @media print {
+            body {
+                background: #ffffff !important;
+                padding: 0 !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .summary-page {
+                margin: 0 !important;
+                max-width: 100% !important;
+                border: 2px solid #000 !important;
+                box-shadow: none !important;
+                padding: 5mm !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Control Header (No Print) -->
+<div class="print-control-bar no-print d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div class="d-flex align-items-center gap-3">
+        <button onclick="window.print()" class="btn btn-primary fw-bold px-4 shadow">
+            <i class="bi bi-printer-fill me-1"></i> چاپ جدول و صورت‌جلسه (Ctrl + P)
+        </button>
+        <span class="badge bg-light text-dark fs-6 px-3 py-2">
+            تعداد قبوض: <strong>{{ tickets_count }}</strong> ردیف
+        </span>
+    </div>
+
+    <!-- Layout Switcher on the Fly -->
+    <div class="d-flex align-items-center gap-1">
+        <span class="small text-white-50 me-1">تغییر قالب:</span>
+        <button onclick="changeLayout('two_in_one')" class="btn btn-sm btn-outline-light">
+            ۲ در ۱ (اقتصادی A4)
+        </button>
+        <button onclick="changeLayout('a4')" class="btn btn-sm btn-outline-light">
+            A4 تک‌صفحه
+        </button>
+        <button onclick="changeLayout('a5')" class="btn btn-sm btn-outline-light">
+            A5 نیم‌صفحه
+        </button>
+        <button onclick="changeLayout('pos')" class="btn btn-sm btn-outline-light">
+            فیش رول POS
+        </button>
+    </div>
+
+    <div>
+        <a href="{% url 'weighbridge:print_center' %}" class="btn btn-sm btn-outline-light">
+            <i class="bi bi-arrow-right me-1"></i> بازگشت به مرکز چاپ
+        </a>
+    </div>
+</div>
+
+<!-- Main Printable Summary Document -->
+<div class="summary-page">
+
+    <!-- Official Header -->
+    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+        <div class="d-flex align-items-center gap-3">
+            {% if settings.company_logo %}
+            <img src="{{ settings.company_logo.url }}" alt="Logo" style="max-height: 48px;">
+            {% endif %}
+            <div>
+                <h5 class="fw-bold mb-0 text-dark">{{ settings.company_name }}</h5>
+                <div class="text-secondary small">صورت‌جلسه و فهرست تجمیعی کارنامه قبوض باسکول</div>
+            </div>
+        </div>
+
+        <div class="text-center">
+            <span class="badge bg-dark px-3 py-2 fs-6">
+                گزارش رسمی تحویل و بایگانی باسکول
+            </span>
+        </div>
+
+        <div class="text-end small">
+            <div><strong>تاریخ گزارش:</strong> <span class="font-monospace fw-bold">{{ print_date }}</span></div>
+            <div><strong>ساعت چاپ:</strong> <span class="font-monospace">{{ print_time }}</span></div>
+            <div><strong>کاربر صادرکننده:</strong> {{ request.user.get_full_name|default:request.user.username }}</div>
+        </div>
+    </div>
+
+    <!-- Summary Statistics Badge Row -->
+    <div class="d-flex justify-content-between align-items-center bg-light p-2 border rounded mb-2 small">
+        <div>تعداد کل قبوض این صورت‌جلسه: <strong class="text-primary">{{ tickets_count }}</strong> فقره</div>
+        <div>مجموع ناخالص: <strong class="font-monospace">{{ total_gross|weight_fmt }}</strong> Kg (≈ {{ total_gross_ton }} تن)</div>
+        <div>مجموع خالص: <strong class="font-monospace text-success">{{ total_net|weight_fmt }}</strong> Kg (≈ {{ total_net_ton }} تن)</div>
+        <div>مجموع افت کسر شده: <strong class="font-monospace text-danger">{{ total_loss|weight_fmt }}</strong> Kg</div>
+        {% if total_freight > 0 %}
+        <div>مجموع کرایه: <strong class="font-monospace text-dark">{{ total_freight|weight_fmt }}</strong> ریال</div>
+        {% endif %}
+    </div>
+
+    <!-- Detailed Ledger Table -->
+    <table class="summary-table">
+        <thead>
+            <tr>
+                <th style="width: 25px;">ردیف</th>
+                <th style="width: 70px;">شماره قبض</th>
+                <th style="width: 85px;">تاریخ و ساعت</th>
+                <th style="width: 80px;">شماره پلاک</th>
+                <th>نام راننده</th>
+                {% if ticket_type == 'regular' %}
+                <th>طرف حساب</th>
+                <th>نام کالا</th>
+                <th>نوع عملیات</th>
+                <th>وزن پر (Kg)</th>
+                <th>وزن خالی (Kg)</th>
+                <th>وزن خالص (Kg)</th>
+                <th>افت (Kg)</th>
+                <th>وزن نهایی (Kg)</th>
+                <th>کرایه (ریال)</th>
+                {% else %}
+                <th>شرکت / متقاضی</th>
+                <th>وزن پر (Kg)</th>
+                <th>وزن خالی (Kg)</th>
+                <th>وزن خالص (Kg)</th>
+                <th>اپراتور ثبت</th>
+                {% endif %}
+                <th style="width: 65px;">وضعیت</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ticket in tickets %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td class="num-cell text-primary">{{ ticket.serial_number }}</td>
+                <td class="small">
+                    {% if ticket_type == 'regular' %}
+                    {{ ticket.jalali_first_date|default:ticket.first_weight_date }}
+                    <span class="text-muted font-monospace">{{ ticket.first_weight_time|time:"H:i"|default:"" }}</span>
+                    {% else %}
+                    {{ ticket.jalali_weight_date }}
+                    <span class="text-muted font-monospace">{{ ticket.time_str|default:"" }}</span>
+                    {% endif %}
+                </td>
+                <td class="num-cell">
+                    {% if ticket_type == 'regular' %}{{ ticket.license_plate_display }}{% else %}{{ ticket.license_plate }}{% endif %}
+                </td>
+                <td>
+                    {% if ticket_type == 'regular' %}{{ ticket.driver_display }}{% else %}{{ ticket.driver_name }}{% endif %}
+                </td>
+
+                {% if ticket_type == 'regular' %}
+                <td class="fw-bold">{{ ticket.party.name|default:"-" }}</td>
+                <td class="fw-bold">{{ ticket.product.name|default:"-" }}</td>
+                <td>{{ ticket.operation_type.name|default:"-" }}</td>
+                <td class="num-cell">{{ ticket.gross_weight|weight_fmt }}</td>
+                <td class="num-cell">{{ ticket.tare_weight|weight_fmt }}</td>
+                <td class="num-cell text-success">{{ ticket.net_weight|weight_fmt }}</td>
+                <td class="num-cell text-danger">{{ ticket.loss_weight|weight_fmt }}</td>
+                <td class="num-cell text-primary fw-bold">{{ ticket.final_weight|weight_fmt }}</td>
+                <td class="num-cell">{{ ticket.freight_amount|weight_fmt }}</td>
+                {% else %}
+                <td class="fw-bold">{{ ticket.company_name|default:"متفرقه" }}</td>
+                <td class="num-cell">{{ ticket.gross_weight|weight_fmt }}</td>
+                <td class="num-cell">{{ ticket.tare_weight|weight_fmt }}</td>
+                <td class="num-cell text-success">{{ ticket.net_weight|weight_fmt }}</td>
+                <td>{{ ticket.operator_name }}</td>
+                {% endif %}
+
+                <td>{{ ticket.get_status_display }}</td>
+            </tr>
+            {% endfor %}
+
+            <!-- Total Aggregates Row -->
+            <tr class="total-row">
+                <td colspan="{% if ticket_type == 'regular' %}8{% else %}5{% endif %}" class="text-end px-3">
+                    جمع کل اوزان و مبالغ ({{ tickets_count }} فقره قبض):
+                </td>
+                {% if ticket_type == 'regular' %}
+                <td class="num-cell">{{ total_gross|weight_fmt }}</td>
+                <td class="num-cell">{{ total_tare|weight_fmt }}</td>
+                <td class="num-cell text-success">{{ total_net|weight_fmt }}</td>
+                <td class="num-cell text-danger">{{ total_loss|weight_fmt }}</td>
+                <td class="num-cell text-primary">{{ total_net|weight_fmt }}</td>
+                <td class="num-cell">{{ total_freight|weight_fmt }}</td>
+                {% else %}
+                <td class="num-cell">{{ total_gross|weight_fmt }}</td>
+                <td class="num-cell">{{ total_tare|weight_fmt }}</td>
+                <td class="num-cell text-success">{{ total_net|weight_fmt }}</td>
+                <td>-</td>
+                {% endif %}
+                <td>-</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- Official Signatures Section -->
+    <div class="signature-grid">
+        <div class="sig-block">
+            امضای مسئول و اپراتور باسکول
+        </div>
+        <div class="sig-block">
+            امضای سرپرست انبار / تحویل‌گیرنده
+        </div>
+        <div class="sig-block">
+            امضای امور مالی و حسابداری صنعتی
+        </div>
+        <div class="sig-block">
+            تأیید مدیریت کارخانه / مجتمع
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function changeLayout(newLayout) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('layout', newLayout);
+        {% if ticket_ids_str %}
+        url.searchParams.set('ids', '{{ ticket_ids_str }}');
+        {% endif %}
+        {% if ticket_type %}
+        url.searchParams.set('ticket_type', '{{ ticket_type }}');
+        {% endif %}
+        window.location.href = url.toString();
+    }
+
+    {% if autoprint %}
+    window.addEventListener('load', function() {
+        setTimeout(function() {
+            window.print();
+        }, 700);
+    });
+    {% endif %}
+</script>
+</body>
+</html>

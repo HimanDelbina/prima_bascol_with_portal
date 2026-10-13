@@ -34,6 +34,14 @@ def can_manage_blocked_plates(user):
     ))
 
 
+def can_manage_plate_autofill(user):
+    """فقط مدیر ارشد (Super Admin) مجاز به مدیریت و افزودن پلاک به سیستم تکمیل خودکار داده‌ها است."""
+    profile = getattr(user, "profile", None)
+    return bool(user and user.is_authenticated and user.is_active and (
+        user.is_superuser or (profile and profile.is_active and profile.role == "super_admin")
+    ))
+
+
 class DailyPlatePolicy:
     @staticmethod
     def registration_date(ticket):

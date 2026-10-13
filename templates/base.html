@@ -42,6 +42,12 @@
                 <span>داشبورد عملیاتی</span>
             </a>
 
+            <a href="{% url 'weighbridge:print_center' %}" class="nav-link {% if request.resolver_match.url_name in 'print_center,batch_print' %}active{% endif %}">
+                <i class="bi bi-printer-fill text-info"></i>
+                <span>مرکز چاپ قبض‌ها</span>
+                <span class="badge bg-primary ms-auto" style="font-size: 0.65rem;">عمومی</span>
+            </a>
+
             <!-- Smart Monitoring & Anomaly Detection Submenu -->
             {% if user.is_superuser or user.profile.can_view_monitoring %}
             <div class="nav-section-title text-danger">پایش هوشمند و کشف مغایرت</div>
@@ -178,6 +184,11 @@
                     <i class="bi bi-slash-circle text-danger"></i><span>پلاک‌های مسدود (لیست سیاه)</span>
                 </a>
                 {% endif %}
+                {% if user.is_superuser or user.profile.role == 'super_admin' %}
+                <a href="{% url 'weighbridge:plate_autofill' %}" class="nav-link text-primary {% if request.resolver_match.url_name == 'plate_autofill' %}active{% endif %}">
+                    <i class="bi bi-magic text-primary"></i><span>پلاک‌های تکمیل خودکار</span>
+                </a>
+                {% endif %}
                 <a href="{% url 'weighbridge:ticket_create' %}" class="nav-link text-warning fw-bold {% if request.resolver_match.app_name == 'weighbridge' and request.resolver_match.url_name == 'ticket_create' %}active{% endif %}">
                     <i class="bi bi-plus-circle-fill text-warning"></i>
                     <span>ثبت باسکول جدید</span>
@@ -205,6 +216,10 @@
                 <a href="{% url 'weighbridge:emergency_ticket_list' %}" class="nav-link {% if 'emergency' in request.resolver_match.url_name and request.resolver_match.url_name != 'emergency_ticket_create' %}active{% endif %}">
                     <i class="bi bi-journal-text text-warning"></i>
                     <span>لیست قبوض متفرقه (آزاد)</span>
+                </a>
+                <a href="{% url 'weighbridge:print_center' %}" class="nav-link text-info {% if request.resolver_match.url_name in 'print_center,batch_print' %}active{% endif %}">
+                    <i class="bi bi-printer text-info"></i>
+                    <span>مرکز چاپ و صدور مجدد</span>
                 </a>
             </div>
             {% endif %}
@@ -343,6 +358,12 @@
                     <i class="bi bi-hourglass-split"></i>
                     <span class="d-none d-sm-inline">داخل محوطه:</span>
                     <span class="badge bg-warning text-dark">{{ open_tickets_count|default:0 }}</span>
+                </a>
+
+                <!-- Print Center button -->
+                <a href="{% url 'weighbridge:print_center' %}" class="btn btn-sm btn-outline-info fw-bold d-flex align-items-center gap-1 shadow-sm" title="مرکز چاپ و صدور مجدد قبوض">
+                    <i class="bi bi-printer-fill"></i>
+                    <span class="d-none d-md-inline">مرکز چاپ</span>
                 </a>
 
                 <!-- Shortcuts button -->

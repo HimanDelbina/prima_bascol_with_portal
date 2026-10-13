@@ -396,6 +396,32 @@ class BlockedPlate(BaseModel):
         super().save(*args, **kwargs)
 
 
+class PlateAutoFill(BaseModel):
+    license_plate_display = models.CharField(max_length=60, verbose_name="شماره پلاک")
+    normalized_plate = models.CharField(max_length=60, unique=True, editable=False)
+    notes = models.TextField(blank=True, verbose_name="یادداشت / توضیحات")
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="plate_autofills",
+        verbose_name="کاربر ثبت‌کننده"
+    )
+
+    class Meta:
+        verbose_name = "پلاک تکمیل خودکار"
+        verbose_name_plural = "پلاک‌های تکمیل خودکار (بارگذاری از آخرین ورود)"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        status = "فعال" if self.is_active else "غیرفعال"
+        return f"{self.license_plate_display} ({status})"
+
+    def save(self, *args, **kwargs):
+        from weighbridge.plate_policy import normalize_plate
+        self.normalized_plate = normalize_plate(self.license_plate_display)
+        super().save(*args, **kwargs)
+
+
 class PlateDayLock(models.Model):
     plate = models.CharField(max_length=60)
     date = models.DateField()

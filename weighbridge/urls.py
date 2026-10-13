@@ -1,6 +1,7 @@
 from django.urls import path
 from weighbridge.exception_views import plate_exceptions
 from weighbridge.blocked_plate_views import blocked_plates
+from weighbridge import plate_autofill_views
 from weighbridge import views
 
 app_name = "weighbridge"
@@ -8,6 +9,7 @@ app_name = "weighbridge"
 urlpatterns = [
     path("plate-exceptions/", plate_exceptions, name="plate_exceptions"),
     path("blocked-plates/", blocked_plates, name="blocked_plates"),
+    path("plate-autofill/", plate_autofill_views.plate_autofill_list, name="plate_autofill"),
     path("tickets/create/", views.ticket_create, name="ticket_create"),
 
     path("tickets/<int:pk>/second-weight/", views.ticket_second_weight, name="ticket_second_weight"),
@@ -19,6 +21,10 @@ urlpatterns = [
     path("tickets/<int:pk>/print/", views.ticket_print, name="ticket_print"),
     path("search/", views.global_search, name="global_search"),
     path("ajax/plate-lookup/", views.ajax_plate_lookup, name="ajax_plate_lookup"),
+
+    # مرکز جامع چاپ و صدور مجدد قبوض (دسترس‌پذیر برای همه کاربران)
+    path("print-center/", views.print_center, name="print_center"),
+    path("print-center/batch-print/", views.batch_print, name="batch_print"),
 
     # توزین متفرقه و آزاد (شرکت‌های دیگر / اضطراری)
     path("emergency/", views.emergency_ticket_list, name="emergency_ticket_list"),

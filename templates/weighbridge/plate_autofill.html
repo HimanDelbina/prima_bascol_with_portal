@@ -1,0 +1,239 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1 small">
+                <li class="breadcrumb-item"><a href="{% url 'dashboard:index' %}">داشبورد</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'weighbridge:ticket_list' %}">مدیریت توزین</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+            </ol>
+        </nav>
+        <h4 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-magic text-primary me-2"></i>{{ title }}
+        </h4>
+        <p class="text-muted small mb-0 mt-1">
+            برای پلاک‌های ثبت‌شده در این بخش، هنگام ورود در فرم باسکول جدید، کلیه اطلاعات (طرف حساب، کالا، نوع عملیات، مبدأ، مقصد، کرایه، شمش و راننده) از آخرین مراجعه آن خودرو بارگذاری می‌شود. <strong>فیلدهای وزن همواره جهت ثبت دقیق اپراتور خالی می‌مانند.</strong>
+        </p>
+    </div>
+    <div>
+        <a href="{% url 'weighbridge:ticket_create' %}" class="btn btn-outline-primary btn-sm fw-bold">
+            <i class="bi bi-plus-circle me-1"></i> ثبت قبض باسکول جدید
+        </a>
+    </div>
+</div>
+
+<!-- Card 1: Registration Form with Iran Plate Input -->
+<div class="industrial-card mb-4 border-primary">
+    <div class="industrial-card-header d-flex justify-content-between align-items-center bg-light">
+        <h6 class="industrial-card-title mb-0 text-primary">
+            <i class="bi bi-plus-circle-fill text-primary"></i>افزودن پلاک به سیستم تکمیل خودکار داده‌ها
+        </h6>
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle small fw-normal">
+            <i class="bi bi-lightning-charge-fill me-1"></i>بارگذاری هوشمند از آخرین ورود
+        </span>
+    </div>
+    <form method="post" class="industrial-card-body p-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save">
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger p-2 small mb-3">
+            {{ form.non_field_errors }}
+        </div>
+        {% endif %}
+
+        <div class="row g-3 align-items-start">
+            <!-- Visual Iranian License Plate Component -->
+            <div class="col-12 col-xl-auto col-lg-auto text-center text-lg-start">
+                <label class="form-label fw-bold small text-secondary d-block">
+                    ورود پلاک ملی خودرو <span class="key-hint-badge">F2</span> <span class="text-danger">*</span>
+                </label>
+                <div class="d-inline-block">
+                    {% include 'components/iran_plate_input.html' with initial_part1=form.plate_part1.value initial_letter=form.plate_letter.value initial_part2=form.plate_part2.value initial_iran=form.plate_iran.value initial_plate_display=form.license_plate_display.value hide_hidden_input=True %}
+                </div>
+
+                {% if form.license_plate_display.errors %}
+                <div class="text-danger small mt-1">{{ form.license_plate_display.errors }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Auto-Calculated License Plate Display -->
+            <div class="col-12 col-md-5 col-xl-3 col-lg-4">
+                <label class="form-label fw-bold small text-secondary">
+                    متن کامل پلاک (تولید سیستمی)
+                </label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light text-muted"><i class="bi bi-card-text"></i></span>
+                    {{ form.license_plate_display }}
+                </div>
+                <div class="form-text small text-muted">همگام با ورود ارقام پلاک بالا</div>
+            </div>
+
+            <!-- Notes Field -->
+            <div class="col-12 col-md-7 col-xl col-lg">
+                <label class="form-label fw-bold small text-secondary">
+                    یادداشت / توضیحات اختیاری
+                </label>
+                {{ form.notes }}
+                {% if form.notes.errors %}
+                <div class="text-danger small mt-1">{{ form.notes.errors }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="col-12 pt-2 border-top d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">
+                        <i class="bi bi-check-circle-fill me-1"></i> ذخیره در لیست تکمیل خودکار
+                    </button>
+                    <a href="{% url 'weighbridge:ticket_create' %}" class="btn btn-outline-secondary px-3">
+                        <i class="bi bi-arrow-left me-1"></i> بازگشت به ثبت باسکول
+                    </a>
+                </div>
+                <span class="small text-muted">
+                    <i class="bi bi-info-circle me-1 text-primary"></i>در زمان صدور قبض، اطلاعات آخرین حضور خودرو خوانده شده و اوزان خالی می‌مانند.
+                </span>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Search Bar -->
+<div class="card shadow-sm border-0 mb-3">
+    <div class="card-body p-2">
+        <form method="get" class="row g-2 align-items-center">
+            <div class="col-md-5">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                    <input name="q" class="form-control" value="{{ query }}" placeholder="جستجو در پلاک‌های ثبت‌شده یا یادداشت‌ها..." aria-label="جستجوی پلاک">
+                </div>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm px-3">جستجو</button>
+                {% if query %}
+                <a href="{% url 'weighbridge:plate_autofill' %}" class="btn btn-outline-secondary btn-sm">پاک کردن فیلتر</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- List of Auto-fill Plates Table -->
+<div class="industrial-card">
+    <div class="industrial-card-header d-flex justify-content-between align-items-center bg-light">
+        <span class="fw-bold text-dark">
+            <i class="bi bi-list-check me-1"></i>فهرست پلاک‌های تکمیل خودکار ({{ page_obj.paginator.count }} مورد)
+        </span>
+    </div>
+    <div class="table-responsive p-0">
+        <table class="table industrial-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th style="width: 50px;">#</th>
+                    <th style="width: 220px;">پلاک ملی خودرو</th>
+                    <th>توضیحات / یادداشت</th>
+                    <th style="width: 240px;">آخرین سابقه بارگیری (کالا / طرف حساب)</th>
+                    <th style="width: 150px;">ثبت‌کننده</th>
+                    <th style="width: 140px;">آخرین بروزرسانی</th>
+                    <th style="width: 100px;">وضعیت</th>
+                    <th class="text-center" style="width: 150px;">عملیات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in page_obj %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>
+                        <span class="badge bg-white text-dark border border-dark font-monospace fs-6 px-2 py-1 shadow-sm" style="direction: rtl; unicode-bidi: isolate;">
+                            {{ item.license_plate_display }}
+                        </span>
+                    </td>
+                    <td class="small">{{ item.notes|default:'<span class="text-muted">-</span>'|safe }}</td>
+                    <td class="small">
+                        {% if item.last_ticket %}
+                        <div class="d-flex flex-column">
+                            <span class="fw-bold text-dark">
+                                <i class="bi bi-box-seam text-primary me-1"></i>{{ item.last_ticket.product.name|default:'بدون کالا' }}
+                            </span>
+                            <span class="text-muted" style="font-size: 0.78rem;">
+                                <i class="bi bi-building me-1"></i>{{ item.last_ticket.party.name|default:'بدون طرف حساب' }}
+                                (قبض #{{ item.last_ticket.serial_number }})
+                            </span>
+                        </div>
+                        {% else %}
+                        <span class="badge bg-light text-muted border">بدون سابقه قبض</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted">
+                        <i class="bi bi-person-badge text-secondary me-1"></i>{{ item.created_by.get_full_name|default:item.created_by.username }}
+                    </td>
+                    <td class="small font-monospace text-muted">{{ item.updated_at|jdatetime }}</td>
+                    <td>
+                        {% if item.is_active %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                            <i class="bi bi-check-circle me-1"></i>فعال
+                        </span>
+                        {% else %}
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">
+                            <i class="bi bi-pause-circle me-1"></i>غیرفعال
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <div class="d-inline-flex gap-1">
+                            <form method="post" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="item_id" value="{{ item.pk }}">
+                                {% if item.is_active %}
+                                <button name="action" value="deactivate" class="btn btn-sm btn-outline-warning" title="غیرفعال‌سازی تکمیل خودکار">
+                                    <i class="bi bi-toggle-on"></i>
+                                </button>
+                                {% else %}
+                                <button name="action" value="activate" class="btn btn-sm btn-outline-success" title="فعال‌سازی مجدد">
+                                    <i class="bi bi-toggle-off"></i>
+                                </button>
+                                {% endif %}
+                            </form>
+                            <form method="post" class="d-inline" onsubmit="return confirm('آیا از حذف این پلاک از لیست تکمیل خودکار اطمینان دارید؟');">
+                                {% csrf_token %}
+                                <input type="hidden" name="item_id" value="{{ item.pk }}">
+                                <button name="action" value="delete" class="btn btn-sm btn-outline-danger" title="حذف پلاک">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-muted text-center py-4">
+                        <i class="bi bi-magic fs-3 d-block text-secondary mb-1"></i>
+                        هیچ پلاکی در سیستم تکمیل خودکار ثبت نشده است.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if page_obj.has_other_pages %}
+<nav class="d-flex gap-2 justify-content-center mt-3">
+    {% if page_obj.has_previous %}
+    <a href="?q={{ query|urlencode }}&page={{ page_obj.previous_page_number }}" class="btn btn-sm btn-outline-secondary">قبلی</a>
+    {% endif %}
+    <span class="btn btn-sm btn-light disabled">صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="?q={{ query|urlencode }}&page={{ page_obj.next_page_number }}" class="btn btn-sm btn-outline-secondary">بعدی</a>
+    {% endif %}
+</nav>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{# Plate widget functionality is provided by industrial-app.js #}
+{% endblock %}

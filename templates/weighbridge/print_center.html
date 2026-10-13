@@ -1,0 +1,597 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+
+{% block title %}{{ title }} | {{ sys_settings.company_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .print-center-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+        transition: all 0.2s ease;
+    }
+    .quick-action-card {
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        background: linear-gradient(145deg, #ffffff, #f8fafc);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .quick-action-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+        border-color: #94a3b8;
+    }
+    .plate-badge-iran {
+        display: inline-flex;
+        align-items: center;
+        direction: rtl;
+        unicode-bidi: isolate;
+        border: 1.5px solid #1e293b;
+        border-radius: 4px;
+        padding: 2px 7px;
+        font-weight: 800;
+        font-size: 0.85rem;
+        background: #ffffff;
+        color: #0f172a;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .preset-btn.active {
+        background-color: #0d6efd;
+        color: #ffffff;
+        border-color: #0d6efd;
+        font-weight: bold;
+    }
+    .batch-bar-sticky {
+        position: sticky;
+        top: 65px;
+        z-index: 1010;
+        background: #ffffff;
+        border: 2px solid #0d6efd;
+        border-radius: 10px;
+        box-shadow: 0 4px 20px rgba(13, 110, 253, 0.15);
+    }
+    .table-print th {
+        background-color: #f1f5f9;
+        color: #334155;
+        font-weight: 700;
+        font-size: 0.83rem;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+    .table-print td {
+        font-size: 0.85rem;
+        vertical-align: middle;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-3">
+
+    <!-- Page Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 pb-2 border-bottom gap-2">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-primary fs-6 p-2 rounded-3 shadow-sm">
+                    <i class="bi bi-printer-fill fs-5"></i>
+                </span>
+                <div>
+                    <h4 class="fw-bold mb-0 text-dark">مرکز جامع چاپ و صدور مجدد قبض‌های باسکول</h4>
+                    <span class="text-muted small">
+                        مدیریت پرینت، فیلتر پیشرفته و چاپ یکپارچه قبض‌ها (دسترس‌پذیر برای تمامی کاربران با هر سطح دسترسی)
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-light text-dark border p-2">
+                <i class="bi bi-calendar-event text-primary me-1"></i> امروز: <strong>{{ today_jalali }}</strong>
+            </span>
+            <span class="badge bg-success-subtle text-success border border-success p-2">
+                <i class="bi bi-person-check me-1"></i> کاربر: <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>
+            </span>
+        </div>
+    </div>
+
+    <!-- Section 1: Quick Print Action Cards (1-Click Today's Batch Print) -->
+    <div class="mb-4">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="fw-bold text-dark small">
+                <i class="bi bi-lightning-charge-fill text-warning me-1"></i>
+                اقدامات چاپ سریع قبض‌های امروز (یک کلیک):
+            </div>
+            <div class="small text-muted">
+                تعداد قبض‌های امروز:
+                <span class="badge bg-primary">{{ today_reg_total }} رسمی</span>
+                <span class="badge bg-success">{{ today_reg_completed }} تکمیل شده</span>
+                <span class="badge bg-warning text-dark">{{ today_in_yard }} در محوطه</span>
+                <span class="badge bg-info text-dark">{{ today_emg_total }} متفرقه</span>
+            </div>
+        </div>
+
+        <div class="row g-2">
+            <!-- 1. Print All Today A4 -->
+            <div class="col-6 col-md-4 col-xl">
+                <a href="{% url 'weighbridge:batch_print' %}?preset=today&layout=a4&autoprint=1" target="_blank" class="text-decoration-none">
+                    <div class="quick-action-card p-2 text-center h-100">
+                        <i class="bi bi-file-earmark-text-fill text-primary fs-4 d-block mb-1"></i>
+                        <div class="fw-bold text-dark small">چاپ A4 امروز</div>
+                        <div class="text-muted" style="font-size: 0.72rem;">تمام قبض‌های امروز (صفحه کامل)</div>
+                    </div>
+                </a>
+            </div>
+
+            <!-- 2. Print All Today A5 -->
+            <div class="col-6 col-md-4 col-xl">
+                <a href="{% url 'weighbridge:batch_print' %}?preset=today&layout=a5&autoprint=1" target="_blank" class="text-decoration-none">
+                    <div class="quick-action-card p-2 text-center h-100">
+                        <i class="bi bi-file-earmark-break-fill text-success fs-4 d-block mb-1"></i>
+                        <div class="fw-bold text-dark small">چاپ A5 امروز</div>
+                        <div class="text-muted" style="font-size: 0.72rem;">قالب نیم‌صفحه استاندارد A5</div>
+                    </div>
+                </a>
+            </div>
+
+            <!-- 3. Print 2-in-1 A4 Today (Paper Saver) -->
+            <div class="col-6 col-md-4 col-xl">
+                <a href="{% url 'weighbridge:batch_print' %}?preset=today&layout=two_in_one&autoprint=1" target="_blank" class="text-decoration-none">
+                    <div class="quick-action-card p-2 text-center h-100 border-primary">
+                        <span class="badge bg-warning text-dark position-absolute top-0 start-0 m-1" style="font-size: 0.6rem;">اقتصادی</span>
+                        <i class="bi bi-scissors text-danger fs-4 d-block mb-1"></i>
+                        <div class="fw-bold text-primary small">۲ قبض در ۱ برگه A4</div>
+                        <div class="text-muted" style="font-size: 0.72rem;">صرفه‌جویی کاغذ (با خط برش)</div>
+                    </div>
+                </a>
+            </div>
+
+            <!-- 4. Print Today POS Roll -->
+            <div class="col-6 col-md-4 col-xl">
+                <a href="{% url 'weighbridge:batch_print' %}?preset=today&layout=pos&autoprint=1" target="_blank" class="text-decoration-none">
+                    <div class="quick-action-card p-2 text-center h-100">
+                        <i class="bi bi-receipt text-secondary fs-4 d-block mb-1"></i>
+                        <div class="fw-bold text-dark small">رول فیش حرارتی POS</div>
+                        <div class="text-muted" style="font-size: 0.72rem;">پرینترهای حرارتی ۸۰ میلی‌متری</div>
+                    </div>
+                </a>
+            </div>
+
+            <!-- 5. Print Today Summary Sheet -->
+            <div class="col-6 col-md-4 col-xl">
+                <a href="{% url 'weighbridge:batch_print' %}?preset=today&layout=summary&autoprint=1" target="_blank" class="text-decoration-none">
+                    <div class="quick-action-card p-2 text-center h-100 border-info">
+                        <i class="bi bi-table text-info fs-4 d-block mb-1"></i>
+                        <div class="fw-bold text-dark small">کارنامه خلاصه امروز</div>
+                        <div class="text-muted" style="font-size: 0.72rem;">جدول تجمیعی + امضای حسابداری</div>
+                    </div>
+                </a>
+            </div>
+
+            <!-- 6. Print Today Completed Only -->
+            <div class="col-6 col-md-4 col-xl">
+                <a href="{% url 'weighbridge:batch_print' %}?preset=today_completed&layout=two_in_one&autoprint=1" target="_blank" class="text-decoration-none">
+                    <div class="quick-action-card p-2 text-center h-100">
+                        <i class="bi bi-check2-all text-success fs-4 d-block mb-1"></i>
+                        <div class="fw-bold text-dark small">فقط تکمیل‌شده‌ها</div>
+                        <div class="text-muted" style="font-size: 0.72rem;">قبوضی که هر دو وزن ثبت شده</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 2: Advanced Search & Filter Box -->
+    <div class="print-center-card p-3 mb-3">
+        <form method="get" id="filterForm">
+            <input type="hidden" name="tab" id="activeTabInput" value="{{ tab }}">
+            
+            <!-- Quick Date Presets Row -->
+            <div class="d-flex flex-wrap align-items-center gap-1 mb-3 pb-2 border-bottom">
+                <span class="small fw-bold text-secondary me-2"><i class="bi bi-calendar-range me-1"></i>بازه زمانی سریع:</span>
+                <button type="submit" name="date_preset" value="today" class="btn btn-sm btn-outline-primary preset-btn {% if date_preset == 'today' %}active{% endif %}">امروز</button>
+                <button type="submit" name="date_preset" value="yesterday" class="btn btn-sm btn-outline-primary preset-btn {% if date_preset == 'yesterday' %}active{% endif %}">دیروز</button>
+                <button type="submit" name="date_preset" value="this_week" class="btn btn-sm btn-outline-primary preset-btn {% if date_preset == 'this_week' %}active{% endif %}">هفته جاری</button>
+                <button type="submit" name="date_preset" value="last_7_days" class="btn btn-sm btn-outline-primary preset-btn {% if date_preset == 'last_7_days' %}active{% endif %}">۷ روز گذشته</button>
+                <button type="submit" name="date_preset" value="this_month" class="btn btn-sm btn-outline-primary preset-btn {% if date_preset == 'this_month' %}active{% endif %}">ماه جاری</button>
+                <button type="submit" name="date_preset" value="all" class="btn btn-sm btn-outline-secondary preset-btn {% if date_preset == 'all' or not date_preset %}active{% endif %}">همه تاریخ‌ها</button>
+            </div>
+
+            <!-- Detailed Filter Fields -->
+            <div class="row g-2 align-items-end">
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted mb-1">از تاریخ (جلالی)</label>
+                    <input type="text" name="start_date" class="form-control form-control-sm font-monospace" placeholder="1405/07/01" value="{{ start_date_j }}">
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted mb-1">تا تاریخ (جلالی)</label>
+                    <input type="text" name="end_date" class="form-control form-control-sm font-monospace" placeholder="1405/07/30" value="{{ end_date_j }}">
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted mb-1">وضعیت سند</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>همه وضعیت‌ها</option>
+                        <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>تکمیل شده (خالص)</option>
+                        <option value="waiting_second" {% if status_filter == 'waiting_second' %}selected{% endif %}>در انتظار وزن ۲ (داخل محوطه)</option>
+                        <option value="first_registered" {% if status_filter == 'first_registered' %}selected{% endif %}>ثبت وزن اول</option>
+                        <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>باطل شده</option>
+                    </select>
+                </div>
+
+                {% if tab == 'regular' %}
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted mb-1">محصول / کالا</label>
+                    <select name="product" class="form-select form-select-sm">
+                        <option value="">همه محصولات</option>
+                        {% for p in products %}
+                        <option value="{{ p.id }}" {% if product_filter == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted mb-1">طرف حساب</label>
+                    <select name="party" class="form-select form-select-sm">
+                        <option value="">همه طرف‌های حساب</option>
+                        {% for pt in parties %}
+                        <option value="{{ pt.id }}" {% if party_filter == pt.id|stringformat:"s" %}selected{% endif %}>{{ pt.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted mb-1">نوع عملیات</label>
+                    <select name="operation_type" class="form-select form-select-sm">
+                        <option value="">همه عملیات‌ها</option>
+                        {% for op in op_types %}
+                        <option value="{{ op.id }}" {% if op_filter == op.id|stringformat:"s" %}selected{% endif %}>{{ op.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                <div class="col-12 {% if tab == 'regular' %}col-md-8{% else %}col-md-4{% endif %}">
+                    <label class="form-label small text-muted mb-1">جستجوی آزاد (شماره قبض، پلاک، راننده، بارنامه)</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" name="q" class="form-control form-control-sm" placeholder="مثال: 1042، 44ب721، احمدی..." value="{{ q }}">
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-4 text-start d-flex gap-2 justify-content-end">
+                    <button type="submit" class="btn btn-sm btn-primary px-3 fw-bold">
+                        <i class="bi bi-funnel-fill me-1"></i> اعمال فیلتر
+                    </button>
+                    <a href="{% url 'weighbridge:print_center' %}?tab={{ tab }}" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i> پاکسازی
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Section 3: Document Type Tabs & Quick Stats -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+        <!-- Tabs -->
+        <ul class="nav nav-pills">
+            <li class="nav-item">
+                <a class="nav-link fw-bold {% if tab == 'regular' %}active{% endif %}" href="?tab=regular{% if date_preset %}&date_preset={{ date_preset }}{% endif %}{% if q %}&q={{ q }}{% endif %}">
+                    <i class="bi bi-journal-check me-1"></i>
+                    قبوض رسمی باسکول
+                    <span class="badge {% if tab == 'regular' %}bg-light text-primary{% else %}bg-secondary{% endif %} ms-1">{{ regular_tab_count }}</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link fw-bold {% if tab == 'emergency' %}active{% endif %}" href="?tab=emergency{% if date_preset %}&date_preset={{ date_preset }}{% endif %}{% if q %}&q={{ q }}{% endif %}">
+                    <i class="bi bi-truck-front text-warning me-1"></i>
+                    قبوض متفرقه و آزاد (شرکت‌های دیگر)
+                    <span class="badge {% if tab == 'emergency' %}bg-light text-primary{% else %}bg-secondary{% endif %} ms-1">{{ emergency_tab_count }}</span>
+                </a>
+            </li>
+        </ul>
+
+        <!-- Tonnage Metrics Badges -->
+        <div class="d-flex flex-wrap gap-2 text-nowrap">
+            <span class="badge bg-light text-dark border p-2">
+                تعداد قبوض این نما: <strong class="text-primary fs-6">{{ active_count }}</strong>
+            </span>
+            <span class="badge bg-success-subtle text-success border border-success p-2">
+                مجموع وزن خالص: <strong class="font-monospace fs-6">{{ total_net|weight_fmt }}</strong> Kg ({{ total_net_ton }} تن)
+            </span>
+            <span class="badge bg-primary-subtle text-primary border border-primary p-2">
+                مجموع وزن ناخالص: <strong class="font-monospace fs-6">{{ total_gross|weight_fmt }}</strong> Kg ({{ total_gross_ton }} تن)
+            </span>
+            {% if total_freight > 0 %}
+            <span class="badge bg-warning-subtle text-dark border border-warning p-2">
+                مجموع کرایه: <strong class="font-monospace">{{ total_freight|weight_fmt }}</strong> ریال
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Section 4: Interactive Batch Action Toolbar (Sticky) -->
+    <div class="p-2 mb-3 bg-white border rounded-3 shadow-sm d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <div class="form-check m-0">
+                <input class="form-check-input" type="checkbox" id="selectAllCheckbox" title="انتخاب همه در این صفحه">
+                <label class="form-check-label fw-bold small text-dark" for="selectAllCheckbox">
+                    انتخاب همه
+                </label>
+            </div>
+
+            <div class="badge bg-primary-subtle text-primary border border-primary px-2 py-1">
+                انتخاب شده: <span id="selectedCountBadge" class="fw-bold">0</span> مورد
+            </div>
+
+            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none text-muted small" onclick="deselectAll()">
+                لغو انتخاب
+            </button>
+        </div>
+
+        <!-- Batch Print Submission Trigger Form -->
+        <form method="get" action="{% url 'weighbridge:batch_print' %}" target="_blank" id="batchPrintForm" class="d-flex flex-wrap align-items-center gap-2 m-0">
+            <input type="hidden" name="ticket_type" value="{{ tab }}">
+            <input type="hidden" name="ids" id="ticketIdsStrInput" value="">
+
+            <div class="input-group input-group-sm" style="width: auto;">
+                <span class="input-group-text bg-light fw-bold text-dark"><i class="bi bi-printer me-1"></i>قالب چاپ:</span>
+                <select name="layout" id="batchLayoutSelect" class="form-select form-select-sm fw-bold">
+                    <option value="two_in_one" selected>✂ ۲ قبض در یک صفحه A4 (صرفه‌جویی کاغذ)</option>
+                    <option value="a4">📄 استاندارد A4 (صفحه کامل شرکتی)</option>
+                    <option value="a5">📑 استاندارد A5 (نصف صفحه)</option>
+                    <option value="pos">🧾 فیش رول حرارتی POS (۸۰ میلی‌متری)</option>
+                    <option value="summary">📋 جدول و صورت‌جلسه خلاصه (Summary Sheet)</option>
+                </select>
+            </div>
+
+            <!-- Print Selected Button -->
+            <button type="submit" class="btn btn-sm btn-primary fw-bold px-3 shadow-sm" id="btnBatchPrintSelected" disabled>
+                <i class="bi bi-printer-fill me-1"></i> چاپ موارد انتخاب شده
+            </button>
+
+            <!-- Print All Matching Filter Button -->
+            <a href="{% url 'weighbridge:batch_print' %}?ticket_type={{ tab }}&date_preset={{ date_preset }}&start_date={{ start_date_j }}&end_date={{ end_date_j }}&status={{ status_filter }}&product={{ product_filter }}&party={{ party_filter }}&operation_type={{ op_filter }}&q={{ q }}&layout=two_in_one&autoprint=1" target="_blank" id="btnBatchPrintAllLink" class="btn btn-sm btn-outline-dark fw-bold">
+                <i class="bi bi-collection-fill me-1"></i> چاپ تمام نتایج این فیلتر ({{ active_count }})
+            </a>
+        </form>
+    </div>
+
+    <!-- Section 5: Tickets Data Table -->
+    <div class="print-center-card overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped table-print align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;" class="text-center">#</th>
+                        <th style="width: 40px;" class="text-center">انتخاب</th>
+                        <th>شماره قبض</th>
+                        <th>تاریخ و ساعت</th>
+                        <th>شماره پلاک</th>
+                        <th>راننده</th>
+                        {% if tab == 'regular' %}
+                        <th>طرف حساب</th>
+                        <th>کالا</th>
+                        <th>نوع عملیات</th>
+                        <th class="text-center">وزن پر (Kg)</th>
+                        <th class="text-center">وزن خالی (Kg)</th>
+                        <th class="text-center">وزن خالص (Kg)</th>
+                        <th class="text-center">افت (Kg)</th>
+                        {% else %}
+                        <th>شرکت / متقاضی</th>
+                        <th class="text-center">وزن پر (Kg)</th>
+                        <th class="text-center">وزن خالی (Kg)</th>
+                        <th class="text-center">وزن خالص (Kg)</th>
+                        <th>اپراتور</th>
+                        {% endif %}
+                        <th class="text-center">وضعیت</th>
+                        <th class="text-center" style="min-width: 140px;">عملیات چاپ تکی</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ticket in page_obj %}
+                    <tr>
+                        <td class="text-center text-muted small">{{ forloop.counter }}</td>
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input ticket-checkbox" value="{{ ticket.id }}" onchange="updateSelectedCount()">
+                        </td>
+                        <td>
+                            <strong class="font-monospace text-primary fs-6">{{ ticket.serial_number }}</strong>
+                            {% if ticket.waybill_number %}
+                            <div class="text-muted small" style="font-size: 0.72rem;">بارنامه: {{ ticket.waybill_number }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="small">
+                            {% if tab == 'regular' %}
+                            <div><i class="bi bi-calendar3 me-1 text-muted"></i>{{ ticket.jalali_first_date|default:ticket.first_weight_date }}</div>
+                            <div class="text-muted font-monospace"><i class="bi bi-clock me-1"></i>{{ ticket.first_weight_time|time:"H:i"|default:"-" }}</div>
+                            {% else %}
+                            <div><i class="bi bi-calendar3 me-1 text-muted"></i>{{ ticket.jalali_weight_date }}</div>
+                            <div class="text-muted font-monospace"><i class="bi bi-clock me-1"></i>{{ ticket.time_str|default:"-" }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="plate-badge-iran">
+                                {% if tab == 'regular' %}
+                                {{ ticket.license_plate_display }}
+                                {% else %}
+                                {{ ticket.license_plate }}
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td class="small">
+                            {% if tab == 'regular' %}
+                            {{ ticket.driver_display }}
+                            {% else %}
+                            {{ ticket.driver_name }}
+                            {% endif %}
+                        </td>
+
+                        {% if tab == 'regular' %}
+                        <td class="small fw-bold">{{ ticket.party.name|default:"-" }}</td>
+                        <td class="small fw-bold">{{ ticket.product.name|default:"-" }}</td>
+                        <td class="small">{{ ticket.operation_type.name|default:"-" }}</td>
+                        <td class="text-center font-monospace">{{ ticket.gross_weight|weight_fmt }}</td>
+                        <td class="text-center font-monospace">{{ ticket.tare_weight|weight_fmt }}</td>
+                        <td class="text-center font-monospace fw-bold text-success">{{ ticket.net_weight|weight_fmt }}</td>
+                        <td class="text-center font-monospace text-danger">{{ ticket.loss_weight|weight_fmt }}</td>
+                        {% else %}
+                        <td class="small fw-bold">{{ ticket.company_name|default:"متفرقه" }}</td>
+                        <td class="text-center font-monospace">{{ ticket.gross_weight|weight_fmt }}</td>
+                        <td class="text-center font-monospace">{{ ticket.tare_weight|weight_fmt }}</td>
+                        <td class="text-center font-monospace fw-bold text-success">{{ ticket.net_weight|weight_fmt }}</td>
+                        <td class="small text-muted">{{ ticket.operator_name }}</td>
+                        {% endif %}
+
+                        <td class="text-center">
+                            {% if tab == 'regular' %}
+                            {{ ticket.status|status_badge }}
+                            {% else %}
+                            <span class="badge {% if ticket.status == 'completed' %}bg-success{% elif ticket.status == 'cancelled' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                                {{ ticket.get_status_display }}
+                            </span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Individual Print Actions Dropdown & Fast Buttons -->
+                        <td class="text-center">
+                            <div class="btn-group btn-group-sm shadow-sm" role="group">
+                                {% if tab == 'regular' %}
+                                <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a4" target="_blank" class="btn btn-outline-primary" title="چاپ A4 تکی">
+                                    A4
+                                </a>
+                                <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a5" target="_blank" class="btn btn-outline-success" title="چاپ A5 تکی">
+                                    A5
+                                </a>
+                                <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=pos" target="_blank" class="btn btn-outline-secondary" title="فیش پرینتر POS">
+                                    POS
+                                </a>
+                                <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-outline-dark" title="مشاهده جزئیات">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% else %}
+                                <a href="{% url 'weighbridge:emergency_ticket_print' ticket.id %}?template=a4" target="_blank" class="btn btn-outline-primary" title="چاپ A4 تکی">
+                                    A4
+                                </a>
+                                <a href="{% url 'weighbridge:emergency_ticket_print' ticket.id %}?template=a5" target="_blank" class="btn btn-outline-success" title="چاپ A5 تکی">
+                                    A5
+                                </a>
+                                <a href="{% url 'weighbridge:emergency_ticket_print' ticket.id %}?template=pos" target="_blank" class="btn btn-outline-secondary" title="فیش پرینتر POS">
+                                    POS
+                                </a>
+                                <a href="{% url 'weighbridge:emergency_ticket_detail' ticket.id %}" class="btn btn-outline-dark" title="مشاهده جزئیات">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="15" class="text-center py-5">
+                            <div class="text-muted">
+                                <i class="bi bi-printer text-secondary fs-1 d-block mb-2"></i>
+                                <h5>هیچ قبض باسکولی با فیلترهای مشخص‌شده یافت نشد.</h5>
+                                <p class="small">برای مشاهده قبوض می‌توانید فیلترها را پاکسازی کنید یا بازه زمانی را تغییر دهید.</p>
+                                <a href="{% url 'weighbridge:print_center' %}?tab={{ tab }}" class="btn btn-sm btn-outline-primary">
+                                    مشاهده تمام قبوض
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="p-3 border-top d-flex justify-content-between align-items-center">
+            <div class="small text-muted">
+                نمایش صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }} (مجموع {{ page_obj.paginator.count }} رکورد)
+            </div>
+            <ul class="pagination pagination-sm m-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1&tab={{ tab }}&date_preset={{ date_preset }}&start_date={{ start_date_j }}&end_date={{ end_date_j }}&status={{ status_filter }}&product={{ product_filter }}&party={{ party_filter }}&operation_type={{ op_filter }}&q={{ q }}">ابتدا</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&tab={{ tab }}&date_preset={{ date_preset }}&start_date={{ start_date_j }}&end_date={{ end_date_j }}&status={{ status_filter }}&product={{ product_filter }}&party={{ party_filter }}&operation_type={{ op_filter }}&q={{ q }}">قبلی</a>
+                </li>
+                {% endif %}
+
+                <li class="page-item active">
+                    <span class="page-link">{{ page_obj.number }}</span>
+                </li>
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&tab={{ tab }}&date_preset={{ date_preset }}&start_date={{ start_date_j }}&end_date={{ end_date_j }}&status={{ status_filter }}&product={{ product_filter }}&party={{ party_filter }}&operation_type={{ op_filter }}&q={{ q }}">بعدی</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&tab={{ tab }}&date_preset={{ date_preset }}&start_date={{ start_date_j }}&end_date={{ end_date_j }}&status={{ status_filter }}&product={{ product_filter }}&party={{ party_filter }}&operation_type={{ op_filter }}&q={{ q }}">انتها</a>
+                </li>
+                {% endif %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<!-- JavaScript for Selection & Batch Print -->
+<script>
+    // Select / Deselect All Checkboxes
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const ticketCheckboxes = document.querySelectorAll('.ticket-checkbox');
+    const selectedCountBadge = document.getElementById('selectedCountBadge');
+    const btnBatchPrintSelected = document.getElementById('btnBatchPrintSelected');
+    const ticketIdsStrInput = document.getElementById('ticketIdsStrInput');
+    const batchLayoutSelect = document.getElementById('batchLayoutSelect');
+    const btnBatchPrintAllLink = document.getElementById('btnBatchPrintAllLink');
+
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            ticketCheckboxes.forEach(cb => {
+                cb.checked = selectAllCheckbox.checked;
+            });
+            updateSelectedCount();
+        });
+    }
+
+    function deselectAll() {
+        if (selectAllCheckbox) selectAllCheckbox.checked = false;
+        ticketCheckboxes.forEach(cb => { cb.checked = false; });
+        updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+        const checkedList = Array.from(ticketCheckboxes).filter(cb => cb.checked);
+        const count = checkedList.length;
+        if (selectedCountBadge) selectedCountBadge.textContent = count;
+
+        const ids = checkedList.map(cb => cb.value).join(',');
+        if (ticketIdsStrInput) ticketIdsStrInput.value = ids;
+
+        if (btnBatchPrintSelected) {
+            btnBatchPrintSelected.disabled = (count === 0);
+            if (count > 0) {
+                btnBatchPrintSelected.innerHTML = `<i class="bi bi-printer-fill me-1"></i> چاپ (${count} مورد انتخاب شده)`;
+            } else {
+                btnBatchPrintSelected.innerHTML = `<i class="bi bi-printer-fill me-1"></i> چاپ موارد انتخاب شده`;
+            }
+        }
+    }
+
+    // Update Print All Link when layout dropdown changes
+    if (batchLayoutSelect && btnBatchPrintAllLink) {
+        batchLayoutSelect.addEventListener('change', function() {
+            const currentHref = new URL(btnBatchPrintAllLink.href, window.location.origin);
+            currentHref.searchParams.set('layout', batchLayoutSelect.value);
+            btnBatchPrintAllLink.href = currentHref.toString();
+        });
+    }
+</script>
+{% endblock %}

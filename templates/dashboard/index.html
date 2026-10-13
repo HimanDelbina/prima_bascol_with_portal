@@ -19,6 +19,9 @@
         <a href="{% url 'weighbridge:trucks_in_yard' %}" class="btn btn-outline-primary fw-bold shadow-sm">
             <i class="bi bi-hourglass-split me-1"></i> خودروهای داخل محوطه ({{ waiting_trucks_count }})
         </a>
+        <a href="{% url 'weighbridge:print_center' %}" class="btn btn-outline-info fw-bold shadow-sm">
+            <i class="bi bi-printer-fill me-1"></i> مرکز چاپ قبض‌ها
+        </a>
         {% endif %}
         <a href="{% url 'reports:report_builder' %}" class="btn btn-outline-secondary">
             <i class="bi bi-sliders me-1"></i> گزارش‌ساز

@@ -422,95 +422,162 @@
               window.setPlateBlockedState(false);
             }
 
-            if (data.found || data.is_duplicate) {
-              // 1. History & Recognition Banner
-              if (historyBox) {
-                historyBox.classList.remove("d-none");
-                historyBox.innerHTML = `
-                  <div class="alert alert-success border-success bg-success-subtle shadow-sm d-flex flex-wrap align-items-center justify-content-between p-2 px-3 rounded-3 mb-3">
-                    <div class="d-flex align-items-center gap-2">
-                      <i class="bi bi-patch-check-fill text-success fs-5"></i>
-                      <div>
-                        <strong class="text-success-emphasis">پلاک شناسایی شد (خودرو دارای سابقه):</strong>
-                        <span class="small text-dark ms-1">مشخصات خودرو و راننده به‌طور خودکار درج شد.</span>
-                        ${data.trip_count ? `<span class="badge bg-success text-white ms-2 font-monospace">${data.trip_count} بار ورود قبلی</span>` : ""}
-                        ${data.last_visit ? `<span class="small text-muted ms-2">(آخرین تردد: ${escapeHtml(data.last_visit)})</span>` : ""}
-                      </div>
-                    </div>
-                    <div class="d-flex align-items-center gap-2 mt-1 mt-md-0">
-                      ${data.driver_name ? `<span class="badge bg-primary px-2 py-1"><i class="bi bi-person-fill me-1"></i>${escapeHtml(data.driver_name)}</span>` : ""}
-                      ${data.driver_mobile ? `<span class="badge bg-secondary px-2 py-1 font-monospace" dir="ltr"><i class="bi bi-telephone-fill me-1"></i>${escapeHtml(data.driver_mobile)}</span>` : ""}
-                      ${data.vehicle_type_name ? `<span class="badge bg-dark px-2 py-1"><i class="bi bi-truck me-1"></i>${escapeHtml(data.vehicle_type_name)}</span>` : ""}
-                    </div>
-                  </div>
-                `;
+            // Indicator badge update
+            const indicator = document.getElementById("plate-autofill-indicator");
+            if (indicator) {
+              if (data.is_autofill_enabled) {
+                indicator.className = "badge bg-primary text-white border border-primary small fw-normal d-none d-sm-inline";
+                indicator.innerHTML = '<i class="bi bi-lightning-charge-fill me-1"></i>پلاک تکمیل خودکار (اطلاعات آخرین ورود)';
+              } else {
+                indicator.className = "badge bg-light text-muted border small fw-normal d-none d-sm-inline";
+                indicator.innerHTML = '<i class="bi bi-magic text-primary me-1"></i>تکمیل خودکار سوابق تکراری فعال است';
               }
+            }
 
-              // 2. Auto-fill Driver Name
-              const driverNameInput = document.getElementById("id_driver_name_custom");
-              if (driverNameInput && data.driver_name) {
-                driverNameInput.value = data.driver_name;
-                driverNameInput.dataset.autofilled = "true";
-                flashAutoFillField(driverNameInput);
-                driverNameInput.dispatchEvent(new Event("input", { bubbles: true }));
-              }
+            if (data.found || data.is_duplicate || data.autofill_data) {
+              const af = data.autofill_data;
 
-              // 3. Auto-fill Driver Mobile
-              const driverMobileInput = document.getElementById("id_driver_mobile_custom");
-              if (driverMobileInput && data.driver_mobile) {
-                driverMobileInput.value = data.driver_mobile;
-                driverMobileInput.dataset.autofilled = "true";
-                flashAutoFillField(driverMobileInput);
-                driverMobileInput.dispatchEvent(new Event("input", { bubbles: true }));
-              }
-
-              // 4. Auto-fill Vehicle Type
-              const vehicleTypeSelect = document.getElementById("id_vehicle_type");
-              if (vehicleTypeSelect) {
-                let vMatched = false;
-                if (data.vehicle_type_id) {
-                  vehicleTypeSelect.value = String(data.vehicle_type_id);
-                  if (vehicleTypeSelect.value === String(data.vehicle_type_id)) {
-                    vMatched = true;
+              // Helper: Robust select matcher by ID and by text/option label
+              const setSelectField = (selector, idVal, nameVal) => {
+                const el = document.querySelector(selector);
+                if (!el) return false;
+                let matched = false;
+                if (idVal !== null && idVal !== undefined && idVal !== "") {
+                  el.value = String(idVal);
+                  if (el.value === String(idVal)) {
+                    matched = true;
                   }
                 }
-                if (!vMatched && data.vehicle_type_name) {
-                  const targetName = data.vehicle_type_name.trim();
-                  for (let opt of vehicleTypeSelect.options) {
-                    if (opt.text.trim() === targetName || (opt.text && opt.text.includes(targetName))) {
-                      vehicleTypeSelect.value = opt.value;
-                      vMatched = true;
+                if (!matched && nameVal) {
+                  const target = String(nameVal).trim().toLowerCase();
+                  for (let opt of el.options) {
+                    const optText = (opt.text || "").trim().toLowerCase();
+                    if (optText === target || (optText && optText.includes(target)) || target.includes(optText)) {
+                      el.value = opt.value;
+                      matched = true;
                       break;
                     }
                   }
                 }
-                if (vMatched) {
-                  vehicleTypeSelect.dataset.autofilled = "true";
-                  flashAutoFillField(vehicleTypeSelect);
-                  vehicleTypeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+                if (matched) {
+                  el.dataset.autofilled = "true";
+                  flashAutoFillField(el);
+                  el.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+                return matched;
+              };
+
+              // Helper: Robust text/number input setter
+              const setInputField = (selector, val) => {
+                const el = document.querySelector(selector);
+                if (!el) return false;
+                if (val !== null && val !== undefined && val !== "") {
+                  el.value = String(val);
+                  el.dataset.autofilled = "true";
+                  flashAutoFillField(el);
+                  el.dispatchEvent(new Event("input", { bubbles: true }));
+                  return true;
+                }
+                return false;
+              };
+
+              // 1. History & Recognition Banner
+              if (historyBox) {
+                historyBox.classList.remove("d-none");
+                if (af) {
+                  historyBox.innerHTML = `
+                    <div class="alert alert-primary border-primary bg-primary-subtle shadow-sm d-flex flex-wrap align-items-center justify-content-between p-2 px-3 rounded-3 mb-3">
+                      <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-magic text-primary fs-3"></i>
+                        <div>
+                          <strong class="text-primary-emphasis">تکمیل خودکار اطلاعات از آخرین ورود فعال شد:</strong>
+                          <span class="small text-dark ms-1">نوع عملیات، طرف حساب، کالا، مسیر (مبدأ/مقصد)، جایگاه تخلیه و راننده از آخرین قبض (<strong>#${escapeHtml(af.last_ticket_serial)}</strong> مورخ ${escapeHtml(af.last_ticket_date)}) پر شدند.</span>
+                          <div class="small text-danger fw-bold mt-1"><i class="bi bi-shield-lock me-1"></i>فیلدهای وزن جهت ثبت دقیق توزین توسط اپراتور خالی نگه داشته شده‌اند.</div>
+                        </div>
+                      </div>
+                      <div class="d-flex align-items-center gap-1 mt-1 mt-md-0">
+                        <span class="badge bg-primary text-white px-2 py-1"><i class="bi bi-lightning-charge-fill me-1"></i>تکمیل خودکار از آخرین قبض</span>
+                      </div>
+                    </div>
+                  `;
+                } else {
+                  historyBox.innerHTML = `
+                    <div class="alert alert-success border-success bg-success-subtle shadow-sm d-flex flex-wrap align-items-center justify-content-between p-2 px-3 rounded-3 mb-3">
+                      <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-patch-check-fill text-success fs-5"></i>
+                        <div>
+                          <strong class="text-success-emphasis">پلاک شناسایی شد (خودرو دارای سابقه):</strong>
+                          <span class="small text-dark ms-1">مشخصات خودرو و راننده به‌طور خودکار درج شد.</span>
+                          ${data.trip_count ? `<span class="badge bg-success text-white ms-2 font-monospace">${data.trip_count} بار ورود قبلی</span>` : ""}
+                          ${data.last_visit ? `<span class="small text-muted ms-2">(آخرین تردد: ${escapeHtml(data.last_visit)})</span>` : ""}
+                        </div>
+                      </div>
+                      <div class="d-flex align-items-center gap-2 mt-1 mt-md-0">
+                        ${data.driver_name ? `<span class="badge bg-primary px-2 py-1"><i class="bi bi-person-fill me-1"></i>${escapeHtml(data.driver_name)}</span>` : ""}
+                        ${data.driver_mobile ? `<span class="badge bg-secondary px-2 py-1 font-monospace" dir="ltr"><i class="bi bi-telephone-fill me-1"></i>${escapeHtml(data.driver_mobile)}</span>` : ""}
+                        ${data.vehicle_type_name ? `<span class="badge bg-dark px-2 py-1"><i class="bi bi-truck me-1"></i>${escapeHtml(data.vehicle_type_name)}</span>` : ""}
+                      </div>
+                    </div>
+                  `;
                 }
               }
 
-              // 5. Auto-fill Vehicle Type Custom (if present)
-              const vTypeCustomInput = document.getElementById("id_vehicle_type_custom");
-              if (vTypeCustomInput && data.vehicle_type_custom) {
-                vTypeCustomInput.value = data.vehicle_type_custom;
-                flashAutoFillField(vTypeCustomInput);
-              }
+              // 2. Driver Name & Mobile
+              setInputField("#id_driver_name_custom, [name='driver_name_custom']", (af ? af.driver_name : null) || data.driver_name);
+              setInputField("#id_driver_mobile_custom, [name='driver_mobile_custom']", (af ? af.driver_mobile : null) || data.driver_mobile);
 
-              // 6. Auto-fill hidden Driver FK and Vehicle FK if present
-              const driverFk = document.getElementById("id_driver");
-              if (driverFk && data.driver_id) {
-                driverFk.value = data.driver_id;
-              }
-              const vehicleFk = document.getElementById("id_vehicle");
-              if (vehicleFk && data.vehicle_id) {
-                vehicleFk.value = data.vehicle_id;
-              }
+              // 3. Vehicle Type
+              setSelectField("#id_vehicle_type, [name='vehicle_type']", (af ? af.vehicle_type_id : null) || data.vehicle_type_id, (af ? af.vehicle_type_name : null) || data.vehicle_type_name);
+              setInputField("#id_vehicle_type_custom, [name='vehicle_type_custom']", (af ? af.vehicle_type_custom : null) || data.vehicle_type_custom);
 
-              // 7. Toast feedback
-              if (typeof window.showToast === "function") {
-                window.showToast("مشخصات خودرو و راننده از سوابق پلاک بارگذاری شد.", "success");
+              // 4. Driver & Vehicle FK
+              const driverFk = document.querySelector("#id_driver, [name='driver']");
+              if (driverFk) driverFk.value = (af && af.driver_id) || data.driver_id || "";
+              const vehicleFk = document.querySelector("#id_vehicle, [name='vehicle']");
+              if (vehicleFk) vehicleFk.value = data.vehicle_id || "";
+
+              // 5. Cargo, Operation & Logistics Fields (Only when autofill_data exists)
+              if (af) {
+                // Operation Type
+                setSelectField("#id_operation_type, [name='operation_type']", af.operation_type_id, af.operation_type_name);
+
+                // Party
+                setSelectField("#id_party, [name='party']", af.party_id, af.party_name);
+
+                // Product
+                setSelectField("#id_product, [name='product']", af.product_id, af.product_name);
+
+                // Origin
+                setSelectField("#id_origin, [name='origin']", af.origin_id, af.origin_name);
+
+                // Destination
+                setSelectField("#id_destination, [name='destination']", af.destination_id, af.destination_name);
+
+                // Unload Location
+                setSelectField("#id_unload_location, [name='unload_location']", af.unload_location_id, af.unload_location_name);
+
+                // Freight Amount
+                setInputField("#id_freight_amount, [name='freight_amount']", af.freight_amount);
+
+                // Load Count & Ingot Count
+                setInputField("#id_load_count, [name='load_count']", af.load_count);
+                setInputField("#id_ingot_count, [name='ingot_count']", af.ingot_count);
+
+                // Loss Type & Percent
+                setSelectField("#id_loss_type, [name='loss_type']", af.loss_type_id, af.loss_type_name);
+                setInputField("#id_loss_percent, [name='loss_percent']", af.loss_percent);
+
+                // Weight Mode
+                setSelectField("#id_weight_mode, [name='weight_mode']", af.weight_mode);
+
+                // Notification Toast
+                if (typeof window.showToast === "function") {
+                  window.showToast(`تمام اطلاعات از آخرین قبض (#${escapeHtml(af.last_ticket_serial)}) بارگذاری شد (فیلدهای وزن خالی ماندند).`, "primary");
+                }
+              } else {
+                if (typeof window.showToast === "function") {
+                  window.showToast("مشخصات خودرو و راننده از سوابق پلاک بارگذاری شد.", "success");
+                }
               }
             } else {
               // Plate is NOT duplicate (New Vehicle / Driver)
@@ -531,22 +598,28 @@
               }
 
               // Clear fields that were previously auto-filled from an old plate
-              const driverNameInput = document.getElementById("id_driver_name_custom");
-              if (driverNameInput && driverNameInput.dataset.autofilled === "true") {
-                driverNameInput.value = "";
-                delete driverNameInput.dataset.autofilled;
-              }
-              const driverMobileInput = document.getElementById("id_driver_mobile_custom");
-              if (driverMobileInput && driverMobileInput.dataset.autofilled === "true") {
-                driverMobileInput.value = "";
-                delete driverMobileInput.dataset.autofilled;
-              }
-              const vehicleTypeSelect = document.getElementById("id_vehicle_type");
-              if (vehicleTypeSelect && vehicleTypeSelect.dataset.autofilled === "true") {
-                vehicleTypeSelect.value = "";
-                delete vehicleTypeSelect.dataset.autofilled;
-                vehicleTypeSelect.dispatchEvent(new Event("change", { bubbles: true }));
-              }
+              const clearAutoFilled = (id, defaultValue = "") => {
+                const el = document.getElementById(id);
+                if (el && el.dataset.autofilled === "true") {
+                  el.value = defaultValue;
+                  delete el.dataset.autofilled;
+                  el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input", { bubbles: true }));
+                }
+              };
+              clearAutoFilled("id_driver_name_custom");
+              clearAutoFilled("id_driver_mobile_custom");
+              clearAutoFilled("id_vehicle_type");
+              clearAutoFilled("id_operation_type");
+              clearAutoFilled("id_party");
+              clearAutoFilled("id_product");
+              clearAutoFilled("id_origin");
+              clearAutoFilled("id_destination");
+              clearAutoFilled("id_unload_location");
+              clearAutoFilled("id_freight_amount");
+              clearAutoFilled("id_ingot_count");
+              clearAutoFilled("id_loss_type");
+              clearAutoFilled("id_loss_percent");
+
               const driverFk = document.getElementById("id_driver");
               if (driverFk) driverFk.value = "";
               const vehicleFk = document.getElementById("id_vehicle");
@@ -775,6 +848,21 @@
     if (vTypeEl) {
       vTypeEl.addEventListener("change", function (e) {
         if (e.isTrusted) delete this.dataset.autofilled;
+      });
+    }
+
+    if (pDisplay) {
+      pDisplay.addEventListener("input", function () {
+        const val = this.value.trim();
+        if (isTicketPage && val.length >= 4) {
+          triggerPlateLookup(val);
+        }
+      });
+      pDisplay.addEventListener("change", function () {
+        const val = this.value.trim();
+        if (isTicketPage && val.length >= 4) {
+          triggerPlateLookup(val);
+        }
       });
     }
 
