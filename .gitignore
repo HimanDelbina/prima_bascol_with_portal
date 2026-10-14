@@ -54,6 +54,8 @@ backups/*.dump
 backups/*.sql
 backups/*.json
 *.tar.gz
+*.zip
 *.dump
 *.sql
+weighbridge-review-export/
 

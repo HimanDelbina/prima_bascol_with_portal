@@ -108,6 +108,31 @@ def ticket_create(request):
             # Auto-register or link Vehicle and Driver into system MasterData
             VehicleDriverRegistrationService.resolve_or_create(ticket, form.cleaned_data)
 
+            # Prevent duplicate first-weighing transaction if vehicle already has an open ticket in yard
+            if not has_w2:
+                norm_p = normalize_plate(ticket.license_plate_display)
+                if norm_p:
+                    from django.db.models.functions import Coalesce, TruncDate
+                    from weighbridge.models import PlateRegistrationException
+                    has_supervisor_exception = PlateRegistrationException.objects.filter(normalized_plate=norm_p, is_active=True).exists()
+                    if not has_supervisor_exception:
+                        reg_day_target = ticket.first_weight_date or timezone.localdate()
+                        open_conflict = WeighTicket.objects.filter(
+                            normalized_plate=norm_p,
+                            status__in=[TicketStatus.WAITING_SECOND, TicketStatus.WAITING_FIRST, TicketStatus.FIRST_REGISTERED]
+                        ).annotate(
+                            reg_day=Coalesce("first_weight_date", TruncDate("created_at"))
+                        ).filter(reg_day=reg_day_target).exclude(pk=ticket.pk if ticket.pk else None).first()
+                        if open_conflict:
+                            form.add_error("license_plate_display", f"خودرو با پلاک «{ticket.license_plate_display}» در حال حاضر دارای قبض باز شماره {open_conflict.serial_number} (در انتظار وزن دوم) در محوطه است. ثبت مجدد وزن اول مجاز نیست.")
+                            sales_op_ids = list(OperationType.objects.filter(Q(direction='outbound') | Q(name__icontains='فروش')).values_list('id', flat=True))
+                            return render(request, "weighbridge/ticket_create.html", {
+                                "form": form, "title": "ثبت باسکول و توزین جدید", "settings": SystemSetting.get_settings(),
+                                "can_manage_plate_exceptions": can_manage_plate_exceptions(request.user),
+                                "can_manage_plate_autofill": can_manage_plate_autofill(request.user),
+                                "sales_op_ids": sales_op_ids,
+                            })
+
             try:
                 DailyPlatePolicy.save(ticket, user=request.user, assign_serial=True)
             except ValidationError as exc:
@@ -141,15 +166,25 @@ def ticket_create(request):
             if alerts:
                 messages.warning(request, f"پایش هوشمند: {len(alerts)} هشدار برای این قبض شناسایی شد.")
 
+            action_btn = request.POST.get("submit_action", "save_and_new")
             if ticket.status == TicketStatus.COMPLETED:
                 messages.success(request, f"قبض شماره {ticket.serial_number} با موفقیت تکمیل و ثبت نهایی شد.")
-                action_btn = request.POST.get("submit_action")
                 if action_btn == "save_and_print":
                     return redirect(f"/weighbridge/tickets/{ticket.id}/print/")
+                elif action_btn == "save_and_new":
+                    return redirect("weighbridge:ticket_create")
+                elif action_btn in ("save_and_yard", "save_yard"):
+                    return redirect("weighbridge:trucks_in_yard")
                 return redirect("weighbridge:ticket_detail", pk=ticket.id)
             else:
-                messages.success(request, f"وزن اول برای قبض {ticket.serial_number} ثبت گردید (خودرو در انتظار وزن دوم).")
-                return redirect("weighbridge:trucks_in_yard")
+                messages.success(request, f"قبض شماره {ticket.serial_number} با موفقیت ثبت شد (خودرو در انتظار وزن دوم).")
+                if action_btn == "save_and_print":
+                    return redirect(f"/weighbridge/tickets/{ticket.id}/print/")
+                elif action_btn in ("save_and_yard", "save_yard"):
+                    return redirect("weighbridge:trucks_in_yard")
+                else:
+                    # Default action: Save & New (immediately open clean form for next vehicle)
+                    return redirect("weighbridge:ticket_create")
     else:
         # Prepopulate with duplicate params if any
         initial_data = {}
@@ -697,7 +732,7 @@ def ajax_plate_lookup(request):
 
     # 3. Check for open / in-progress tickets (waiting for second weight or first weight)
     open_ticket = tickets_qs.filter(
-        status__in=[TicketStatus.WAITING_SECOND, TicketStatus.WAITING_FIRST]
+        status__in=[TicketStatus.WAITING_SECOND, TicketStatus.WAITING_FIRST, TicketStatus.FIRST_REGISTERED]
     ).first()
 
     # 4. Determine driver info (avoid placeholder text like 'نامشخص' or '-')

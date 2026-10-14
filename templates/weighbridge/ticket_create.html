@@ -391,20 +391,44 @@
         </div>
     </div>
 
-    <!-- Sticky Bottom Action Bar -->
+    <!-- Sticky Bottom Action Bar (UX-01 Optimized Workflow) -->
     <div class="sticky-bottom-action-bar">
-        <div class="d-flex align-items-center gap-2">
-            <button type="submit" name="submit_action" value="save_and_print" id="btn-save-and-print" class="btn btn-outline-dark fw-bold">
-                <i class="bi bi-printer me-1"></i> ثبت و چاپ قبض <span class="key-hint-badge">F8</span>
+        <input type="hidden" name="submit_action" id="id_submit_action" value="save_and_new">
+
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <!-- 1. Save & New (Default Action) -->
+            <button type="submit" name="submit_action" value="save_and_new" id="btn-save-and-new" data-action="save_and_new" class="btn btn-primary btn-lg px-4 fw-bold shadow-sm d-flex align-items-center gap-2" title="ذخیره قبض و باز کردن فرم پاک برای خودروی بعدی">
+                <i class="bi bi-plus-circle-fill fs-5"></i>
+                <span>ذخیره و وزن‌کشی جدید</span>
+                <span class="key-hint-badge bg-white text-dark">Ctrl + Enter</span>
             </button>
-            <button type="submit" name="submit_action" value="save" id="btn-save-draft" class="btn btn-outline-primary fw-bold">
-                <i class="bi bi-save me-1"></i> ذخیره قبض <span class="key-hint-badge">Ctrl + S</span>
+
+            <!-- 2. Save & View Yard -->
+            <button type="submit" name="submit_action" value="save_and_yard" id="btn-save-and-yard" data-action="save_and_yard" class="btn btn-outline-secondary fw-bold d-flex align-items-center gap-1" title="ذخیره قبض و مشاهده برد خودروهای داخل محوطه">
+                <i class="bi bi-hourglass-split"></i>
+                <span>ذخیره و مشاهده محوطه</span>
+                <span class="key-hint-badge">Ctrl + Y</span>
+            </button>
+
+            <!-- 3. Save & Print -->
+            <button type="submit" name="submit_action" value="save_and_print" id="btn-save-and-print" data-action="save_and_print" class="btn btn-outline-dark fw-bold d-flex align-items-center gap-1" title="ذخیره قبض و باز کردن برگه چاپ نوبت/ورود">
+                <i class="bi bi-printer"></i>
+                <span>ذخیره و چاپ قبض</span>
+                <span class="key-hint-badge">F8</span>
             </button>
         </div>
 
         <div class="d-flex align-items-center gap-2">
-            <button type="button" id="btn-open-confirm-modal" class="btn btn-success btn-lg px-4 fw-bold shadow" data-bs-toggle="modal" data-bs-target="#confirmCompleteModal">
-                <i class="bi bi-check2-circle me-1"></i> ثبت و تکمیل نهایی باسکول <span class="key-hint-badge bg-white text-dark">Ctrl + Enter</span>
+            <!-- 4. Save Draft -->
+            <button type="submit" name="submit_action" value="save_and_new" id="btn-save-draft" data-action="save_and_new" class="btn btn-outline-primary fw-bold d-flex align-items-center gap-1" title="ذخیره فوری قبض">
+                <i class="bi bi-floppy"></i>
+                <span>ذخیره سریع</span>
+                <span class="key-hint-badge">Ctrl + S</span>
+            </button>
+
+            <!-- 5. Direct Two-Weight Complete (Optional modal when second weight is entered) -->
+            <button type="button" id="btn-open-confirm-modal" class="btn btn-success fw-bold shadow-sm d-none" data-bs-toggle="modal" data-bs-target="#confirmCompleteModal">
+                <i class="bi bi-check2-circle me-1"></i> تکمیل یک‌مرحله‌ای
             </button>
         </div>
     </div>
@@ -611,11 +635,56 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // Intercept form submit (for Save Draft, Save & Print, Complete Ticket)
+    // Auto-focus on first plate input on clean form load
+    const p1Input = document.getElementById('plate_part1');
+    if (p1Input && !p1Input.value) {
+        setTimeout(function() {
+            try {
+                p1Input.focus();
+                if (p1Input.select) p1Input.select();
+            } catch (err) {}
+        }, 100);
+    }
+
+    // Capture submit action from clicked button
+    const hiddenActionInput = document.getElementById('id_submit_action');
+    document.querySelectorAll('#weighbridge-form button[type="submit"]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (hiddenActionInput) {
+                hiddenActionInput.value = this.dataset.action || this.value || 'save_and_new';
+            }
+        });
+    });
+
+    // Intercept form submit (for Save & New, Save & Yard, Save & Print, Complete Ticket)
     if (form) {
         form.addEventListener('submit', function(e) {
             if (document.body.dataset.plateBlocked === "true") {
                 e.preventDefault();
+                return false;
+            }
+
+            // Guard against accidental duplicate first-weighing transaction if vehicle has open ticket
+            const w2El = document.getElementById('id_second_weight');
+            const hasW2 = w2El && w2El.value && parseFloat(w2El.value) > 0;
+            if (window.currentOpenTicket && !hasW2) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                if (typeof window.showToast === 'function') {
+                    window.showToast(`خطا: خودرو دارای قبض باز فعال #${window.currentOpenTicket.serial_number} در محوطه است. ثبت مجدد وزن اول مجاز نمی‌باشد.`, "danger");
+                }
+                if (alertBox) {
+                    alertBox.innerHTML = `
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-exclamation-octagon-fill fs-5 text-danger"></i>
+                            <div>
+                                <strong>خطای ثبت تکراری:</strong> خودرو با این پلاک در حال حاضر دارای قبض باز شماره <strong>#${window.currentOpenTicket.serial_number}</strong> در کارخانه است.
+                                لطفاً با زدن کلید <strong class="text-primary font-monospace">Alt + 2</strong> یا دکمه زرد بالا، وزن دوم را ثبت نمایید.
+                            </div>
+                        </div>`;
+                    alertBox.classList.remove('d-none');
+                    alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
                 return false;
             }
 
@@ -624,7 +693,31 @@ document.addEventListener("DOMContentLoaded", function() {
                 e.stopImmediatePropagation();
                 return false;
             }
+
+            // Sync submitter action if available
+            if (e.submitter) {
+                const action = e.submitter.dataset.action || e.submitter.value;
+                if (action && hiddenActionInput) {
+                    hiddenActionInput.value = action;
+                }
+            }
         });
+    }
+
+    // Show/hide direct complete button when second weight is entered
+    const w2Input = document.getElementById('id_second_weight');
+    const directCompleteBtn = document.getElementById('btn-open-confirm-modal');
+    if (w2Input && directCompleteBtn) {
+        const toggleDirectComplete = function() {
+            if (w2Input.value && parseFloat(w2Input.value) > 0) {
+                directCompleteBtn.classList.remove('d-none');
+            } else {
+                directCompleteBtn.classList.add('d-none');
+            }
+        };
+        w2Input.addEventListener('input', toggleDirectComplete);
+        w2Input.addEventListener('change', toggleDirectComplete);
+        toggleDirectComplete();
     }
 
     // Dynamic Ingot Count visibility (Only for sales operations)

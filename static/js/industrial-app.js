@@ -205,15 +205,36 @@
         }
       }
 
-      // Ctrl + Enter -> Submit / Complete Ticket
+      // Alt + 2 -> Navigate to Second Weighing for Open Ticket
+      if (e.altKey && (e.key === "2" || e.code === "Digit2" || e.code === "Numpad2")) {
+        const gotoSecondBtn = document.getElementById("btn-goto-second-weight");
+        if (gotoSecondBtn && gotoSecondBtn.href) {
+          e.preventDefault();
+          window.location.href = gotoSecondBtn.href;
+          return;
+        }
+      }
+
+      // Ctrl + Enter -> Submit / Save & New (Default Action)
       if (e.ctrlKey && e.key === "Enter") {
         e.preventDefault();
         if (document.body.dataset.plateBlocked === "true") {
           window.showToast("خطا: این پلاک در لیست سیاه مسدود شده و امکان بارگیری یا صدور قبض ندارد.", "danger");
           return;
         }
-        const completeBtn = document.getElementById("btn-complete-ticket") || document.querySelector("button[type=submit]");
-        if (completeBtn && !completeBtn.disabled) completeBtn.click();
+        const newBtn = document.getElementById("btn-save-and-new") || document.getElementById("btn-complete-ticket") || document.querySelector("button[type=submit]");
+        if (newBtn && !newBtn.disabled) newBtn.click();
+      }
+
+      // Ctrl + Y -> Save & View Yard
+      if (e.ctrlKey && (e.key === "y" || e.key === "Y")) {
+        e.preventDefault();
+        if (document.body.dataset.plateBlocked === "true") {
+          window.showToast("خطا: این پلاک در لیست سیاه مسدود شده است.", "danger");
+          return;
+        }
+        const yardBtn = document.getElementById("btn-save-and-yard");
+        if (yardBtn && !yardBtn.disabled) yardBtn.click();
       }
 
       // Ctrl + S -> Save Draft
@@ -223,7 +244,7 @@
           window.showToast("خطا: این پلاک در لیست سیاه مسدود شده است.", "danger");
           return;
         }
-        const draftBtn = document.getElementById("btn-save-draft") || document.querySelector("button[name=submit_action][value=save]");
+        const draftBtn = document.getElementById("btn-save-draft") || document.getElementById("btn-save-and-new") || document.querySelector("button[name=submit_action][value=save]");
         if (draftBtn && !draftBtn.disabled) draftBtn.click();
       }
 
@@ -288,14 +309,21 @@
           return;
         }
         form.dataset.submitting = "true";
-        const submitBtn = form.querySelector("button[type=submit]");
-        if (submitBtn) {
-          submitBtn.classList.add("disabled");
-          const originalText = submitBtn.innerHTML;
-          submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span> در حال ثبت...`;
+        const submitBtns = form.querySelectorAll("button[type=submit]");
+        submitBtns.forEach((btn) => {
+          btn.classList.add("disabled");
+          btn.style.pointerEvents = "none";
+        });
+        const clickedBtn = e.submitter || form.querySelector("button[type=submit]");
+        if (clickedBtn) {
+          const originalText = clickedBtn.innerHTML;
+          clickedBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span> در حال ثبت...`;
           setTimeout(() => {
-            submitBtn.classList.remove("disabled");
-            submitBtn.innerHTML = originalText;
+            submitBtns.forEach((btn) => {
+              btn.classList.remove("disabled");
+              btn.style.pointerEvents = "";
+            });
+            clickedBtn.innerHTML = originalText;
             form.dataset.submitting = "false";
           }, 6000);
         }
@@ -376,7 +404,11 @@
             window.setPlateBlockedState(false);
           }
           if (historyBox) historyBox.classList.add("d-none");
-          if (openTicketWarning) openTicketWarning.classList.add("d-none");
+          if (openTicketWarning) {
+            openTicketWarning.classList.add("d-none");
+            openTicketWarning.innerHTML = "";
+          }
+          window.currentOpenTicket = null;
         }
       }
     }
@@ -647,24 +679,51 @@
               if (vehicleFk) vehicleFk.value = "";
             }
 
-            // Open Ticket Alert
+            // Open Ticket Alert (UX-02 Improved Second Weighing Navigation)
             if (data.has_open_ticket && data.open_ticket) {
+              const ot = data.open_ticket;
+              window.currentOpenTicket = ot;
               if (openTicketWarning) {
+                const fwVal = typeof ot.first_weight === "number" ? ot.first_weight.toLocaleString("fa-IR") : ot.first_weight;
                 openTicketWarning.classList.remove("d-none");
                 openTicketWarning.innerHTML = `
-                  <div class="alert alert-warning border-warning shadow-sm d-flex align-items-center justify-content-between mb-0">
-                    <div>
-                      <i class="bi bi-exclamation-triangle-fill fs-4 text-warning me-2"></i>
-                      <strong>هشدار قبض باز:</strong> این خودرو در حال حاضر یک قبض باز با شماره <strong>#${escapeHtml(data.open_ticket.serial_number)}</strong> در کارخانه دارد (ورود ساعت ${escapeHtml(data.open_ticket.time)} - کالا: ${escapeHtml(data.open_ticket.product)}).
+                  <div class="alert alert-warning border-warning shadow-sm p-3 rounded-3 mb-3">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                      <div class="d-flex align-items-center gap-3">
+                        <div class="bg-warning text-dark rounded-circle p-2 d-flex align-items-center justify-content-center shadow-sm flex-shrink-0" style="width: 44px; height: 44px;">
+                          <i class="bi bi-hourglass-split fs-4"></i>
+                        </div>
+                        <div>
+                          <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <strong class="fs-6 text-dark"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>خودرو در محوطه کارخانه حضور دارد (دارای قبض فعال باز):</strong>
+                            <span class="badge bg-dark font-monospace fs-6">قبض #${escapeHtml(ot.serial_number)}</span>
+                            <span class="badge bg-warning text-dark border border-warning fw-bold">${escapeHtml(ot.status_display || 'در انتظار وزن دوم')}</span>
+                          </div>
+                          <div class="text-secondary small mt-1 d-flex flex-wrap align-items-center gap-3">
+                            <span><i class="bi bi-speedometer2 text-primary me-1"></i>وزن اول ثبت‌شده: <strong class="text-dark font-monospace fs-6">${fwVal}</strong> کیلوگرم</span>
+                            <span><i class="bi bi-clock-history text-secondary me-1"></i>زمان ثبت ورود: ساعت <strong class="text-dark font-monospace">${escapeHtml(ot.time)}</strong> (${escapeHtml(ot.date)})</span>
+                            ${ot.product && ot.product !== '-' ? `<span><i class="bi bi-box-seam me-1"></i>کالا: <strong class="text-dark">${escapeHtml(ot.product)}</strong></span>` : ''}
+                            ${ot.party && ot.party !== '-' ? `<span><i class="bi bi-person-badge me-1"></i>طرف حساب: <strong class="text-dark">${escapeHtml(ot.party)}</strong></span>` : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <a href="/weighbridge/tickets/${ot.id}/second-weight/" id="btn-goto-second-weight" class="btn btn-warning btn-lg fw-bold px-3 shadow-sm text-dark d-flex align-items-center gap-2" title="انتقال فوری به ثبت وزن دوم این خودرو (Alt + 2)">
+                          <i class="bi bi-arrow-left-circle-fill fs-5"></i>
+                          <span>انتقال به ثبت وزن دوم</span>
+                          <span class="key-hint-badge bg-dark text-white font-monospace px-2 py-1">Alt + 2</span>
+                        </a>
+                      </div>
                     </div>
-                    <a href="/weighbridge/tickets/${data.open_ticket.id}/second-weight/" class="btn btn-warning btn-sm fw-bold px-3">
-                      ثبت وزن دوم همین قبض
-                    </a>
                   </div>
                 `;
               }
             } else {
-              if (openTicketWarning) openTicketWarning.classList.add("d-none");
+              window.currentOpenTicket = null;
+              if (openTicketWarning) {
+                openTicketWarning.classList.add("d-none");
+                openTicketWarning.innerHTML = "";
+              }
             }
           })
           .catch((err) => console.log("Plate lookup error:", err));

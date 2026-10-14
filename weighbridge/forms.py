@@ -225,6 +225,23 @@ class TicketCreateForm(forms.ModelForm):
             blocked = BlockedPlate.objects.filter(normalized_plate=norm, is_active=True).first()
             if blocked:
                 self.add_error("license_plate_display", f"⛔ این خودرو در لیست سیاه پلاک‌های مسدود قرار دارد و امکان بارگیری ندارد! علت مسدودی: {blocked.reason}")
+            else:
+                # Check for active open ticket on first weighing (allowed only if supervisor granted PlateRegistrationException)
+                w2_raw = cleaned_data.get("second_weight")
+                has_w2 = w2_raw is not None and str(w2_raw).strip() != "" and Decimal(str(w2_raw)) > 0
+                if not has_w2 and norm:
+                    from django.db.models.functions import Coalesce, TruncDate
+                    from weighbridge.models import WeighTicket, TicketStatus, PlateRegistrationException
+                    has_supervisor_exception = PlateRegistrationException.objects.filter(normalized_plate=norm, is_active=True).exists()
+                    if not has_supervisor_exception:
+                        open_conflict = WeighTicket.objects.filter(
+                            normalized_plate=norm,
+                            status__in=[TicketStatus.WAITING_SECOND, TicketStatus.WAITING_FIRST, TicketStatus.FIRST_REGISTERED]
+                        ).annotate(
+                            reg_day=Coalesce("first_weight_date", TruncDate("created_at"))
+                        ).filter(reg_day=parsed_date).exclude(pk=self.instance.pk if self.instance and self.instance.pk else None).first()
+                        if open_conflict:
+                            self.add_error("license_plate_display", f"خودرو با این پلاک در حال حاضر دارای قبض باز شماره {open_conflict.serial_number} (در انتظار وزن دوم) در محوطه است. ثبت مجدد وزن اول مجاز نمی‌باشد.")
 
         # 5. Vehicle Type
         v_type = cleaned_data.get("vehicle_type")
