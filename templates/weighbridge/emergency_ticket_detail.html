@@ -58,9 +58,19 @@
             </a>
             {% endif %}
 
+            {% if request.GET.from == 'print_center' %}
+            <a href="{% url 'weighbridge:print_center' %}?tab=emergency" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-right-circle me-1"></i> بازگشت به مرکز چاپ
+            </a>
+            {% elif request.GET.next %}
+            <a href="{{ request.GET.next }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-right-circle me-1"></i> بازگشت به لیست
+            </a>
+            {% else %}
             <a href="{% url 'weighbridge:emergency_ticket_list' %}" class="btn btn-outline-secondary">
                 <i class="bi bi-arrow-right-circle me-1"></i> بازگشت به لیست
             </a>
+            {% endif %}
         </div>
     </div>
 

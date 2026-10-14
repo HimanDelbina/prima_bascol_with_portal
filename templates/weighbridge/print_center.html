@@ -468,7 +468,7 @@
                                 <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=pos" target="_blank" class="btn btn-outline-secondary" title="فیش پرینتر POS">
                                     POS
                                 </a>
-                                <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-outline-dark" title="مشاهده جزئیات">
+                                <a href="{% url 'weighbridge:ticket_detail' ticket.id %}?from=print_center" class="btn btn-outline-dark" title="مشاهده جزئیات">
                                     <i class="bi bi-eye"></i>
                                 </a>
                                 {% else %}
@@ -481,7 +481,7 @@
                                 <a href="{% url 'weighbridge:emergency_ticket_print' ticket.id %}?template=pos" target="_blank" class="btn btn-outline-secondary" title="فیش پرینتر POS">
                                     POS
                                 </a>
-                                <a href="{% url 'weighbridge:emergency_ticket_detail' ticket.id %}" class="btn btn-outline-dark" title="مشاهده جزئیات">
+                                <a href="{% url 'weighbridge:emergency_ticket_detail' ticket.id %}?from=print_center&tab=emergency" class="btn btn-outline-dark" title="مشاهده جزئیات">
                                     <i class="bi bi-eye"></i>
                                 </a>
                                 {% endif %}
