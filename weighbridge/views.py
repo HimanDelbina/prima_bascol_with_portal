@@ -708,26 +708,81 @@ def ajax_plate_lookup(request):
             "plate_display": blocked.license_plate_display,
         })
 
-    # 1. Find vehicle record by exact display, partial display, or normalized plate
+    # Incomplete plate check:
+    # Standard Iranian vehicle plates normalize to 8 characters (or minimum 6 for special plates).
+    # If the normalized plate is shorter than 6 characters and has no exact display match:
+    # Treat as incomplete query: never auto-bind vehicle, driver, tare, or open tickets.
+    is_incomplete = len(norm_plate) < 6 and not Vehicle.objects.filter(plate_display__iexact=plate).exists()
+    if is_incomplete:
+        suggestions = []
+        if norm_plate:
+            suggestions = list(
+                Vehicle.objects.filter(normalized_plate__startswith=norm_plate)
+                .values_list("plate_display", flat=True)[:5]
+            )
+        return JsonResponse({
+            "found": False,
+            "is_duplicate": False,
+            "is_incomplete": True,
+            "suggestions": suggestions,
+            "message": "پلاک وارد شده ناقص است.",
+            "plate_display": plate,
+            "normalized_plate": norm_plate,
+            "has_open_ticket": False,
+        })
 
-    vehicle = Vehicle.objects.filter(
-        Q(plate_display__iexact=plate) |
-        Q(plate_display__icontains=plate)
-    ).select_related("vehicle_type", "default_driver").first()
-
-    if not vehicle and norm_plate:
-        for v in Vehicle.objects.select_related("vehicle_type", "default_driver").all():
-            if normalize_plate(v.plate_display) == norm_plate:
-                vehicle = v
-                break
-
-    # 2. Search ticket history using both textual match and normalized plate
-    ticket_q = Q(license_plate_display__iexact=plate) | Q(license_plate_display__icontains=plate)
+    # 1. Fast indexed vehicle lookup by normalized plate (O(1)) with display fallback
+    # HOTFIX 2: Require unambiguous exact match (count == 1). Never guess on multiple matches.
+    vehicle = None
     if norm_plate:
-        ticket_q |= Q(normalized_plate=norm_plate)
-    tickets_qs = WeighTicket.objects.filter(ticket_q).order_by("-id")
-    trip_count = tickets_qs.count()
+        norm_matches = Vehicle.objects.filter(normalized_plate=norm_plate).select_related("vehicle_type", "default_driver")
+        norm_count = norm_matches.count()
+        if norm_count == 1:
+            vehicle = norm_matches.first()
+        elif norm_count > 1:
+            return JsonResponse({
+                "found": False,
+                "is_duplicate": False,
+                "is_ambiguous": True,
+                "ambiguity_count": norm_count,
+                "message": f"چندین رکورد خودرو ({norm_count} مورد) با این پلاک در سامانه یافت شد. جهت ایمنی اطلاعات، انتساب خودکار انجام نشد.",
+                "plate_display": plate,
+                "normalized_plate": norm_plate,
+                "has_open_ticket": False,
+            })
 
+    if not vehicle and plate:
+        legacy_matches = Vehicle.objects.filter(plate_display__iexact=plate).select_related("vehicle_type", "default_driver")
+        legacy_count = legacy_matches.count()
+        if legacy_count == 1:
+            vehicle = legacy_matches.first()
+        elif legacy_count > 1:
+            return JsonResponse({
+                "found": False,
+                "is_duplicate": False,
+                "is_ambiguous": True,
+                "ambiguity_count": legacy_count,
+                "message": f"چندین خودرو با عنوان پلاک یکسان ({legacy_count} مورد) یافت شد. جهت ایمنی، انتساب خودکار انجام نشد.",
+                "plate_display": plate,
+                "normalized_plate": norm_plate,
+                "has_open_ticket": False,
+            })
+
+    # 2. Search ticket history using exact vehicle or exact plate (NO icontains!)
+    if vehicle:
+        ticket_q = Q(vehicle=vehicle)
+        if vehicle.normalized_plate:
+            ticket_q |= Q(normalized_plate=vehicle.normalized_plate)
+        ticket_q |= Q(license_plate_display__iexact=vehicle.plate_display)
+        tickets_qs = WeighTicket.objects.filter(ticket_q).order_by("-id")
+    elif norm_plate:
+        tickets_qs = WeighTicket.objects.filter(
+            Q(normalized_plate=norm_plate) | Q(license_plate_display__iexact=plate)
+        ).order_by("-id")
+    else:
+        tickets_qs = WeighTicket.objects.filter(license_plate_display__iexact=plate).order_by("-id")
+
+    trip_count = tickets_qs.count()
     last_ticket = tickets_qs.select_related("driver", "product", "party", "vehicle_type", "vehicle").first()
 
     # 3. Check for open / in-progress tickets (waiting for second weight or first weight)

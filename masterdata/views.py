@@ -810,12 +810,19 @@ def api_quick_add(request, entity=None):
             pIran = request.POST.get("plate_iran", "").strip()
             vtype_id = request.POST.get("vehicle_type")
             display = f"{p1} {pL} {p2} - ایران {pIran}" if (p1 and pL and p2 and pIran) else request.POST.get("plate_display", "").strip() or name
+            from weighbridge.plate_policy import normalize_plate
+            norm_disp = normalize_plate(display)
 
-            existing = Vehicle.objects.filter(plate_display=display).first()
+            existing = None
+            if norm_disp:
+                existing = Vehicle.objects.filter(normalized_plate=norm_disp).first()
+            if not existing and display:
+                existing = Vehicle.objects.filter(plate_display=display).first()
+
             if existing:
                 if not existing.is_active:
                     existing.is_active = True
-                    existing.save()
+                    existing.save(update_fields=["is_active"])
                 return JsonResponse({
                     "status": "duplicate",
                     "id": existing.id,

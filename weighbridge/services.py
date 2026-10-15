@@ -1,5 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import Max
 from core.models import SystemSetting
 from weighbridge.models import WeighTicket, TicketStatus
@@ -162,57 +162,79 @@ class VehicleDriverRegistrationService:
         vehicle = cleaned_data.get("vehicle") or ticket.vehicle
         norm_p = normalize_plate(plate)
 
+        if not vehicle and norm_p:
+            vehicle = Vehicle.objects.filter(normalized_plate=norm_p).select_related("vehicle_type", "default_driver").first()
         if not vehicle and plate:
             vehicle = Vehicle.objects.filter(plate_display__iexact=plate).select_related("vehicle_type", "default_driver").first()
-            if not vehicle and norm_p:
-                for v in Vehicle.objects.select_related("vehicle_type", "default_driver").all():
-                    if normalize_plate(v.plate_display) == norm_p:
-                        vehicle = v
-                        break
 
-            if not vehicle:
-                p1 = (cleaned_data.get("plate_part1") or "").strip()
-                pL = (cleaned_data.get("plate_letter") or "").strip()
-                p2 = (cleaned_data.get("plate_part2") or "").strip()
-                pIran = (cleaned_data.get("plate_iran") or "").strip()
+        if not vehicle:
+            p1 = (cleaned_data.get("plate_part1") or "").strip()
+            pL = (cleaned_data.get("plate_letter") or "").strip()
+            p2 = (cleaned_data.get("plate_part2") or "").strip()
+            pIran = (cleaned_data.get("plate_iran") or "").strip()
 
-                if not (p1 and pL and p2 and pIran):
-                    match = re.search(
-                        r"(\d{2}|[۰-۹]{2})\s*([^\d\s\-_]+)\s*(\d{3}|[۰-۹]{3})\s*(?:-?\s*(?:ایران|ايران)?\s*(\d{2}|[۰-۹]{2}))?",
-                        plate
-                    )
-                    if match:
-                        p1 = match.group(1) or ""
-                        pL = match.group(2) or ""
-                        p2 = match.group(3) or ""
-                        pIran = match.group(4) or ""
-
-                tare_wt = ticket.tare_weight if (ticket.tare_weight and ticket.tare_weight > 0) else Decimal("0.00")
-
-                vehicle = Vehicle.objects.create(
-                    plate_display=plate,
-                    plate_part1=p1,
-                    plate_letter=pL,
-                    plate_part2=p2,
-                    plate_iran=pIran,
-                    vehicle_type=v_type,
-                    default_driver=driver,
-                    empty_weight=tare_wt,
-                    is_active=True,
+            if not (p1 and pL and p2 and pIran):
+                match = re.search(
+                    r"(\d{2}|[۰-۹]{2})\s*([^\d\s\-_]+)\s*(\d{3}|[۰-۹]{3})\s*(?:-?\s*(?:ایران|ايران)?\s*(\d{2}|[۰-۹]{2}))?",
+                    plate
                 )
-            else:
-                updated_fields = []
-                if not vehicle.vehicle_type and v_type:
-                    vehicle.vehicle_type = v_type
-                    updated_fields.append("vehicle_type")
-                if not vehicle.default_driver and driver:
-                    vehicle.default_driver = driver
-                    updated_fields.append("default_driver")
-                if (not vehicle.empty_weight or vehicle.empty_weight == 0) and (ticket.tare_weight and ticket.tare_weight > 0):
-                    vehicle.empty_weight = ticket.tare_weight
-                    updated_fields.append("empty_weight")
-                if updated_fields:
-                    vehicle.save(update_fields=updated_fields)
+                if match:
+                    p1 = match.group(1) or ""
+                    pL = match.group(2) or ""
+                    p2 = match.group(3) or ""
+                    pIran = match.group(4) or ""
+
+            tare_wt = ticket.tare_weight if (ticket.tare_weight and ticket.tare_weight > 0) else Decimal("0.00")
+
+            # HOTFIX 1: Concurrency-safe vehicle registration
+            # Wrap creation in an isolated savepoint using transaction.atomic().
+            # If two concurrent transactions attempt to register the same vehicle simultaneously,
+            # PostgreSQL's unique constraint will reject the second with an IntegrityError.
+            # The savepoint is rolled back cleanly without corrupting the outer transaction,
+            # and the vehicle created by the competing transaction is retrieved safely.
+            try:
+                with transaction.atomic():
+                    if norm_p:
+                        vehicle = Vehicle.objects.filter(normalized_plate=norm_p).select_for_update().first()
+                    elif plate:
+                        vehicle = Vehicle.objects.filter(plate_display__iexact=plate).select_for_update().first()
+
+                    if not vehicle:
+                        vehicle = Vehicle.objects.create(
+                            plate_display=plate,
+                            plate_part1=p1,
+                            plate_letter=pL,
+                            plate_part2=p2,
+                            plate_iran=pIran,
+                            normalized_plate=norm_p,
+                            vehicle_type=v_type,
+                            default_driver=driver,
+                            empty_weight=tare_wt,
+                            is_active=True,
+                        )
+            except IntegrityError as exc:
+                vehicle = None
+                if norm_p:
+                    vehicle = Vehicle.objects.filter(normalized_plate=norm_p).first()
+                if not vehicle and plate:
+                    vehicle = Vehicle.objects.filter(plate_display__iexact=plate).first()
+                if not vehicle:
+                    # Unrelated IntegrityError; re-raise!
+                    raise exc
+
+        if vehicle:
+            updated_fields = []
+            if not vehicle.vehicle_type and v_type:
+                vehicle.vehicle_type = v_type
+                updated_fields.append("vehicle_type")
+            if not vehicle.default_driver and driver:
+                vehicle.default_driver = driver
+                updated_fields.append("default_driver")
+            if (not vehicle.empty_weight or vehicle.empty_weight == 0) and (ticket.tare_weight and ticket.tare_weight > 0):
+                vehicle.empty_weight = ticket.tare_weight
+                updated_fields.append("empty_weight")
+            if updated_fields:
+                vehicle.save(update_fields=updated_fields)
 
         if vehicle:
             ticket.vehicle = vehicle

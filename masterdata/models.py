@@ -101,7 +101,8 @@ class Vehicle(BaseModel):
     plate_letter = models.CharField(max_length=10, blank=True, verbose_name="حرف پلاک")
     plate_part2 = models.CharField(max_length=5, blank=True, verbose_name="سه رقم بعد پلاک")
     plate_iran = models.CharField(max_length=5, blank=True, verbose_name="کد ایران (دو رقم)")
-    plate_display = models.CharField(max_length=50, db_index=True, verbose_name="شماره کامل پلاک")
+    plate_display = models.CharField(max_length=50, verbose_name="شماره کامل پلاک")
+    normalized_plate = models.CharField(max_length=60, blank=True, default="", verbose_name="پلاک استانداردسازی‌شده")
     
     vehicle_type = models.ForeignKey(
         VehicleType, 
@@ -131,17 +132,49 @@ class Vehicle(BaseModel):
         verbose_name = "خودرو"
         verbose_name_plural = "خودروها"
         ordering = ["plate_display"]
+        indexes = [
+            models.Index(fields=["plate_display"], name="idx_vehicle_plate_disp"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["normalized_plate"],
+                condition=~models.Q(normalized_plate=""),
+                name="unique_vehicle_normalized_plate"
+            )
+        ]
 
     def __str__(self):
         v_type = f" ({self.vehicle_type.name})" if self.vehicle_type else ""
         return f"{self.plate_display}{v_type}"
 
     def save(self, *args, **kwargs):
-        # Auto compute plate_display if structured parts are provided
+        import re
+        from weighbridge.plate_policy import normalize_plate
+
         if self.plate_part1 and self.plate_letter and self.plate_part2 and self.plate_iran:
-            self.plate_display = f"{self.plate_part1} {self.plate_letter} {self.plate_part2} - ایران {self.plate_iran}"
+            computed = f"{self.plate_part1} {self.plate_letter} {self.plate_part2} - ایران {self.plate_iran}"
+            if not self.plate_display:
+                self.plate_display = computed
+            elif self.plate_display != computed:
+                match = re.search(
+                    r"(\d{2}|[۰-۹]{2})\s*([^\d\s\-_]+)\s*(\d{3}|[۰-۹]{3})\s*(?:-?\s*(?:ایران|ايران)?\s*(\d{2}|[۰-۹]{2}))?",
+                    self.plate_display
+                )
+                if match:
+                    self.plate_part1 = match.group(1) or ""
+                    self.plate_letter = match.group(2) or ""
+                    self.plate_part2 = match.group(3) or ""
+                    self.plate_iran = match.group(4) or ""
         elif not self.plate_display:
             self.plate_display = "بدون پلاک"
+
+        if not self.plate_display or self.plate_display in ("بدون پلاک", "-"):
+            self.normalized_plate = ""
+        else:
+            self.normalized_plate = normalize_plate(self.plate_display)
+
+        if "update_fields" in kwargs and kwargs["update_fields"] is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"normalized_plate", "plate_display"}
         super().save(*args, **kwargs)
 
 
