@@ -1,11 +1,17 @@
 from django.contrib import admin
-from weighbridge.models import WeighTicket, EmergencyWeighTicket
+from weighbridge.models import WeighTicket, EmergencyWeighTicket, TicketSequence
 
 @admin.register(WeighTicket)
 class WeighTicketAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         from weighbridge.plate_policy import DailyPlatePolicy
         DailyPlatePolicy.save(obj, user=request.user)
+
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(self.readonly_fields)
+        if obj:
+            ro.append("serial_number")
+        return ro
 
     list_display = [
         "serial_number", "status", "party", "product", "license_plate_display",
@@ -20,6 +26,12 @@ class WeighTicketAdmin(admin.ModelAdmin):
 
 @admin.register(EmergencyWeighTicket)
 class EmergencyWeighTicketAdmin(admin.ModelAdmin):
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(self.readonly_fields)
+        if obj:
+            ro.append("serial_number")
+        return ro
+
     list_display = [
         "serial_number", "company_name", "driver_name", "driver_mobile",
         "license_plate", "gross_weight", "tare_weight", "net_weight",
@@ -29,4 +41,11 @@ class EmergencyWeighTicketAdmin(admin.ModelAdmin):
     search_fields = ["serial_number", "company_name", "driver_name", "driver_mobile", "license_plate"]
     readonly_fields = ["net_weight", "created_at", "updated_at"]
     ordering = ["-id"]
+
+
+@admin.register(TicketSequence)
+class TicketSequenceAdmin(admin.ModelAdmin):
+    list_display = ["scope", "prefix", "last_number", "description", "updated_at"]
+    readonly_fields = ["created_at", "updated_at"]
+    ordering = ["scope"]
 

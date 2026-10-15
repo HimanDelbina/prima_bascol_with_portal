@@ -3,7 +3,7 @@ import unicodedata
 from contextlib import contextmanager
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
 
@@ -105,11 +105,23 @@ class DailyPlatePolicy:
             changed = not old or normalize_plate(old.license_plate_display) != normalize_plate(ticket.license_plate_display) or cls.registration_date(old) != cls.registration_date(ticket) or old.status == TicketStatus.CANCELLED
             if changed:
                 ticket.duplicate_exception = exception
-            if assign_serial:
+            if assign_serial and not ticket.serial_number:
                 ticket.serial_number = SerialNumberService.get_next_serial_number()
             if not ticket.pk and not ticket.first_weight_date:
                 ticket.first_weight_date = cls.registration_date(ticket)
-            ticket.save()
+
+            # Atomic save with collision retry
+            max_save_retries = 3
+            for attempt in range(max_save_retries):
+                try:
+                    with transaction.atomic():
+                        ticket.save()
+                    break
+                except IntegrityError as exc:
+                    if "serial_number" in str(exc) and assign_serial and attempt < max_save_retries - 1:
+                        ticket.serial_number = SerialNumberService.get_next_serial_number()
+                    else:
+                        raise exc
             if exception:
                 log_audit(action="create" if not old else "update", model_name="WeighTicket",
                           record_id=ticket.pk, record_repr=f"قبض {ticket.serial_number}", user=user,

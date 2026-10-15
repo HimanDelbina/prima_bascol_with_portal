@@ -242,9 +242,20 @@ class WeighTicket(BaseModel):
 
     def save(self, *args, **kwargs):
         from weighbridge.plate_policy import normalize_plate
+        from django.core.exceptions import ValidationError
+
         self.normalized_plate = normalize_plate(self.license_plate_display)
         if kwargs.get("update_fields") is not None and "license_plate_display" in kwargs["update_fields"]:
             kwargs["update_fields"] = set(kwargs["update_fields"]) | {"normalized_plate"}
+
+        if self.pk:
+            orig_serial = WeighTicket.objects.filter(pk=self.pk).values_list("serial_number", flat=True).first()
+            if orig_serial and self.serial_number and orig_serial != self.serial_number:
+                raise ValidationError({"serial_number": "شماره سریال قبض پس از صدور قطعی قابل تغییر نیست."})
+        elif not self.serial_number:
+            from weighbridge.services import SerialNumberService
+            self.serial_number = SerialNumberService.allocate_serial_number(SerialNumberService.SCOPE_STANDARD)
+
         return super().save(*args, **kwargs)
 
     @property
@@ -510,7 +521,14 @@ class EmergencyWeighTicket(BaseModel):
 
     def save(self, *args, **kwargs):
         if not self.serial_number:
-            self.serial_number = self.generate_serial()
+            from weighbridge.services import SerialNumberService
+            self.serial_number = SerialNumberService.allocate_serial_number(SerialNumberService.SCOPE_EMERGENCY)
+        elif self.pk:
+            orig_serial = EmergencyWeighTicket.objects.filter(pk=self.pk).values_list("serial_number", flat=True).first()
+            if orig_serial and orig_serial != self.serial_number:
+                from django.core.exceptions import ValidationError
+                raise ValidationError({"serial_number": "شماره سریال قبض متفرقه پس از صدور قطعی قابل تغییر نیست."})
+
         # محاسبه وزن خالص
         if self.gross_weight and self.tare_weight:
             if self.gross_weight >= self.tare_weight:
@@ -521,17 +539,8 @@ class EmergencyWeighTicket(BaseModel):
 
     @classmethod
     def generate_serial(cls) -> str:
-        last = cls.objects.order_by("-id").first()
-        if not last:
-            return "EXT-1001"
-        try:
-            num_part = "".join(filter(str.isdigit, last.serial_number))
-            if num_part:
-                next_num = int(num_part) + 1
-                return f"EXT-{next_num}"
-        except Exception:
-            pass
-        return f"EXT-{last.id + 1001}"
+        from weighbridge.services import SerialNumberService
+        return SerialNumberService.allocate_serial_number(SerialNumberService.SCOPE_EMERGENCY)
 
     @property
     def jalali_weight_date(self):
@@ -574,6 +583,44 @@ class EmergencyWeighTicket(BaseModel):
         if self.operator:
             return self.operator.get_full_name() or self.operator.username
         return "سیستم باسکول"
+
+
+class TicketSequence(BaseModel):
+    """
+    Dedicated atomic sequence counter for weighbridge tickets.
+    Provides row-level locked, concurrency-safe, gap-managed,
+    and audit-traceable monotonic numbering.
+    """
+    scope = models.CharField(
+        max_length=50, 
+        unique=True, 
+        db_index=True, 
+        verbose_name="دامنه شماره‌گذاری"
+    )
+    prefix = models.CharField(
+        max_length=20, 
+        blank=True, 
+        default="", 
+        verbose_name="پیشوند شماره سریال"
+    )
+    last_number = models.BigIntegerField(
+        default=0, 
+        verbose_name="آخرین شماره تخصیص‌یافته"
+    )
+    description = models.CharField(
+        max_length=150, 
+        blank=True, 
+        verbose_name="شرح دامنه"
+    )
+
+    class Meta:
+        verbose_name = "توالی شماره قبض"
+        verbose_name_plural = "توالی‌های شماره قبض"
+        ordering = ["scope"]
+
+    def __str__(self):
+        return f"توالی {self.scope}: آخرین شماره {self.last_number} (پیشوند: '{self.prefix}')"
+
 
 
 

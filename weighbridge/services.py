@@ -80,40 +80,81 @@ class TicketCalculationService:
 
 class SerialNumberService:
     """
-    Atomic serial number generator for weighbridge tickets.
+    Concurrency-safe atomic serial number allocation service for weighbridge tickets.
+    Guarantees uniqueness through row-level locking (SELECT FOR UPDATE) on TicketSequence,
+    preventing race conditions and eliminating full-table / 100-row limit scans.
     """
+    SCOPE_STANDARD = "standard"
+    SCOPE_EMERGENCY = "emergency"
+
     @classmethod
-    def get_next_serial_number(cls) -> str:
+    def allocate_serial_number(cls, scope: str = SCOPE_STANDARD) -> str:
+        """
+        Atomically allocates the next sequential serial number for the given scope.
+        Acquires an exclusive row-level lock on the TicketSequence record to guarantee
+        that concurrent requests receive strictly unique, monotonically increasing numbers.
+        Also scans forward past any historical or pre-existing number collisions.
+        """
+        from core.models import SystemSetting
+        from weighbridge.models import TicketSequence, WeighTicket, EmergencyWeighTicket
+
         with transaction.atomic():
             settings_obj = SystemSetting.get_settings()
-            settings_obj = SystemSetting.objects.select_for_update().get(pk=settings_obj.pk)
-            prefix = settings_obj.serial_prefix.strip() if settings_obj.serial_prefix else ""
-            start_num = settings_obj.serial_start_number
 
-            # Query highest existing ticket ID or serial
-            tickets = WeighTicket.objects.all()
-            
-            # Find max numeric serial
-            highest_num = 0
-            for ticket in tickets.order_by("-id")[:100]:
-                sn = ticket.serial_number
-                if prefix and sn.startswith(prefix):
-                    sn = sn[len(prefix):]
-                # extract digits
-                digits = "".join(ch for ch in sn if ch.isdigit())
-                if digits:
-                    val = int(digits)
-                    if val > highest_num:
-                        highest_num = val
-
-            if highest_num < start_num:
-                next_num = start_num
+            if scope == cls.SCOPE_STANDARD:
+                prefix = settings_obj.serial_prefix.strip() if settings_obj.serial_prefix else ""
+                start_num = settings_obj.serial_start_number or 1001
+            elif scope == cls.SCOPE_EMERGENCY:
+                prefix = "EXT-"
+                start_num = 1001
             else:
-                next_num = highest_num + 1
+                prefix = ""
+                start_num = 1
 
-            if prefix:
-                return f"{prefix}{next_num}"
-            return str(next_num)
+            # Select or create the sequence counter with exclusive row lock
+            try:
+                with transaction.atomic():
+                    seq = TicketSequence.objects.select_for_update().filter(scope=scope).first()
+                    if not seq:
+                        seq = TicketSequence.objects.create(
+                            scope=scope,
+                            prefix=prefix,
+                            last_number=max(0, start_num - 1),
+                            description=f"شمارنده خودکار قبوض دامنه {scope}",
+                        )
+            except IntegrityError:
+                seq = TicketSequence.objects.select_for_update().get(scope=scope)
+
+            # Keep prefix synchronized with system settings if configured
+            if scope == cls.SCOPE_STANDARD and seq.prefix != prefix:
+                seq.prefix = prefix
+
+            # Monotonically allocate next number, skipping any historical collisions
+            while True:
+                if seq.last_number < start_num - 1:
+                    seq.last_number = start_num - 1
+                seq.last_number += 1
+                candidate = f"{seq.prefix}{seq.last_number}"
+
+                # Verify candidate is not already consumed by historical/custom records
+                if scope == cls.SCOPE_STANDARD:
+                    if not WeighTicket.objects.filter(serial_number=candidate).exists():
+                        break
+                elif scope == cls.SCOPE_EMERGENCY:
+                    if not EmergencyWeighTicket.objects.filter(serial_number=candidate).exists():
+                        break
+                else:
+                    break
+
+            seq.save(update_fields=["last_number", "prefix", "updated_at"])
+            return candidate
+
+    @classmethod
+    def get_next_serial_number(cls) -> str:
+        """
+        Backward-compatible entry point for standard weighbridge ticket serial allocation.
+        """
+        return cls.allocate_serial_number(cls.SCOPE_STANDARD)
 
 
 class VehicleDriverRegistrationService:
