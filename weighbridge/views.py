@@ -833,8 +833,18 @@ def ticket_cancel(request, pk):
 @login_required
 def ticket_print(request, pk):
     """
-    High quality print preview supporting A4, A5, and POS thermal receipts.
+    High quality, offline-ready print preview supporting A4, A5, and POS thermal receipts.
+    Guarantees that reprinting never modifies ticket numbers or weighing calculations.
+    Tracks reprints via AuditLog and embeds an offline verification QR code.
     """
+    profile = getattr(request.user, "profile", None)
+    can_print = request.user.is_superuser or (
+        profile and profile.is_active and (profile.can_access_weighbridge or profile.can_access_reports)
+    )
+    if not can_print:
+        messages.error(request, "شما دسترسی لازم برای چاپ و مشاهده قبوض باسکول را ندارید.")
+        return redirect("dashboard:index")
+
     ticket = get_object_or_404(
         WeighTicket.objects.select_related(
             "operation_type", "party", "product", "driver", "vehicle", "vehicle_type",
@@ -845,16 +855,44 @@ def ticket_print(request, pk):
     )
 
     settings_obj = SystemSetting.get_settings()
-    template_type = request.GET.get("template", settings_obj.default_print_template or "a4")
+    template_type = request.GET.get("template", settings_obj.default_print_template or "a4").lower()
+    if template_type not in ["a4", "a5", "pos"]:
+        template_type = "a4"
 
-    # Audit log print action
+    # Audit log print & reprint tracking
+    prior_prints = AuditLog.objects.filter(
+        model_name="WeighTicket",
+        record_id=str(ticket.id),
+        action=AuditAction.PRINT
+    ).count()
+    is_reprint = prior_prints > 0
+    print_number = prior_prints + 1
+
     log_audit(
         action=AuditAction.PRINT,
         model_name="WeighTicket",
         record_id=ticket.id,
         record_repr=f"قبض شماره {ticket.serial_number}",
-        reason=f"چاپ قبض در قالب {template_type.upper()}"
+        user=request.user,
+        reason=f"چاپ {'مجدد (نسخه ' + str(print_number) + ')' if is_reprint else 'اولیه'} در قالب {template_type.upper()}"
     )
+
+    # Generate offline QR verification code (pure local computation)
+    qr_b64 = ""
+    try:
+        import qrcode
+        import base64
+        import io
+        qr = qrcode.QRCode(version=1, box_size=3, border=1)
+        qr_data = f"WB:{ticket.serial_number}|PL:{ticket.license_plate_display}|W:{ticket.final_weight}KG|D:{get_today_jalali()}"
+        qr.add_data(qr_data)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        buf = io.BytesIO()
+        qr_img.save(buf, format="PNG")
+        qr_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception:
+        qr_b64 = ""
 
     template_name = f"weighbridge/ticket_print_{template_type}.html"
     return render(request, template_name, {
@@ -862,7 +900,10 @@ def ticket_print(request, pk):
         "settings": settings_obj,
         "print_date": get_today_jalali(),
         "print_time": timezone.localtime().strftime("%H:%M"),
-        "title": f"چاپ قبض {ticket.serial_number}",
+        "is_reprint": is_reprint,
+        "print_number": print_number,
+        "qr_b64": qr_b64,
+        "title": f"چاپ قبض {ticket.serial_number}" + (f" (چاپ مجدد - نسخه {print_number})" if is_reprint else ""),
     })
 
 

@@ -11,7 +11,7 @@ from masterdata.models import (
 )
 from reports.services import ReportService
 from reports.preset_reports import PRESET_REPORTS, get_preset_report_by_code, get_preset_report_by_id
-from reports.exports import export_excel, export_csv, export_financial_excel
+from reports.exports import export_excel, export_csv, export_financial_excel, export_pdf
 from core.jalali import get_today_jalali, get_jalali_range_gregorian, format_jalali_date
 from accounts.decorators import role_required
 from django.contrib.auth.models import User
@@ -77,6 +77,8 @@ def report_builder(request):
         return export_financial_excel(qs, summaries, title="گزارش مالی جامع باسکول (ویژه واحد مالی)")
     elif export_format == "csv":
         return export_csv(qs, title="گزارش جامع باسکول")
+    elif export_format == "pdf":
+        return export_pdf(qs, summaries, title="گزارش جامع باسکول")
     elif export_format == "print":
         return render(request, "reports/print_report.html", {
             "tickets": qs,
@@ -213,6 +215,8 @@ def preset_report_view(request, code):
         return export_financial_excel(qs, summaries, title=f"{report_meta['title']} (ویژه واحد مالی)")
     elif export_format == "csv":
         return export_csv(qs, title=report_meta["title"])
+    elif export_format == "pdf":
+        return export_pdf(qs, summaries, title=report_meta["title"])
     elif export_format == "print":
         return render(request, "reports/print_report.html", {
             "tickets": qs,

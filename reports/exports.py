@@ -518,69 +518,232 @@ def export_csv(queryset, title="گزارش باسکول"):
     return response
 
 
+def get_or_register_persian_font():
+    """
+    Locates and registers a local TrueType font supporting Persian characters in ReportLab.
+    Searches project static assets first, then fallback system font locations.
+    """
+    import os
+    from django.conf import settings
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    font_name = "PersianTahoma"
+    bold_font_name = "PersianTahoma-Bold"
+
+    registered = pdfmetrics.getRegisteredFontNames()
+    if font_name in registered and bold_font_name in registered:
+        return font_name, bold_font_name
+
+    candidates = [
+        # 1. Project local static font directory
+        (
+            os.path.join(settings.BASE_DIR, "static", "fonts", "tahoma.ttf"),
+            os.path.join(settings.BASE_DIR, "static", "fonts", "tahomabd.ttf")
+        ),
+        # 2. Windows system fonts
+        ("C:/Windows/Fonts/tahoma.ttf", "C:/Windows/Fonts/tahomabd.ttf"),
+        ("C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/arialbd.ttf"),
+        # 3. Linux system fonts
+        (
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        ),
+    ]
+
+    for reg_path, bold_path in candidates:
+        if os.path.exists(reg_path):
+            try:
+                b_path = bold_path if os.path.exists(bold_path) else reg_path
+                if font_name not in registered:
+                    pdfmetrics.registerFont(TTFont(font_name, reg_path))
+                if bold_font_name not in registered:
+                    pdfmetrics.registerFont(TTFont(bold_font_name, b_path))
+                return font_name, bold_font_name
+            except Exception:
+                continue
+
+    return "Helvetica", "Helvetica-Bold"
+
+
+def shape_persian(text) -> str:
+    """
+    Reshapes and applies the bidirectional (bidi) algorithm for Persian/Arabic strings,
+    ensuring glyphs are connected properly and rendered Right-to-Left in ReportLab.
+    """
+    if text is None or text == "":
+        return ""
+    text_str = str(text)
+    try:
+        import arabic_reshaper
+        from bidi.algorithm import get_display
+        reshaped = arabic_reshaper.reshape(text_str)
+        return get_display(reshaped)
+    except Exception:
+        return text_str
+
+
 def export_pdf(queryset, summaries=None, title="گزارش باسکول"):
     """
-    Generate a clean PDF report for tickets.
+    Generate an offline-capable, beautifully shaped Persian RTL PDF report.
+    Uses local Persian TrueType fonts, correct bidirectional layout, and summary aggregates.
     """
-    from reportlab.lib.pagesizes import letter, landscape, A4
+    from reportlab.lib.pagesizes import landscape, A4
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
+
+    font_regular, font_bold = get_or_register_persian_font()
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
         pagesize=landscape(A4),
-        rightMargin=20,
-        leftMargin=20,
+        rightMargin=15,
+        leftMargin=15,
         topMargin=20,
         bottomMargin=20
     )
     elements = []
+
     styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'PersianReportTitle',
+        fontName=font_bold,
+        fontSize=13,
+        leading=17,
+        alignment=1,  # Center
+        textColor=colors.HexColor('#0F172A')
+    )
+    sub_style = ParagraphStyle(
+        'PersianReportSub',
+        fontName=font_regular,
+        fontSize=8.5,
+        leading=12,
+        alignment=1,  # Center
+        textColor=colors.HexColor('#475569')
+    )
 
     settings_obj = SystemSetting.get_settings()
-    title_text = f"{settings_obj.company_name} - {title}"
-    elements.append(Paragraph(title_text, styles['Title']))
-    elements.append(Paragraph(f"Date: {get_today_jalali()} | Records: {queryset.count()}", styles['Normal']))
-    elements.append(Spacer(1, 15))
+    full_title = f"{settings_obj.company_name} - {title}"
+    elements.append(Paragraph(shape_persian(full_title), title_style))
+    elements.append(Spacer(1, 4))
 
-    table_data = [
-        ["#", "Serial", "Waybill", "Date", "In", "Out", "Operation", "Party", "Product", "Plate", "Waybill Wt", "Gross", "Tare", "Net", "Final", "Status"]
+    record_count = queryset.count() if hasattr(queryset, 'count') else len(queryset)
+    date_info = f"تاریخ تهیه گزارش: {get_today_jalali()} | تعداد رکوردهای گزارش: {record_count}"
+    elements.append(Paragraph(shape_persian(date_info), sub_style))
+    elements.append(Spacer(1, 10))
+
+    # RTL Table Headers (ordered Right-to-Left so column 0 appears on the far right)
+    raw_headers = [
+        "ردیف", "شماره قبض", "شماره بارنامه", "تاریخ", "ورود", "خروج",
+        "نوع عملیات", "طرف حساب", "محصول", "پلاک خودرو", "نام راننده",
+        "وزن بارنامه", "وزن پر", "وزن خالی", "وزن خالص", "افت", "وزن نهایی", "وضعیت"
     ]
+    # Reverse order for RTL display in ReportLab
+    rtl_headers = [shape_persian(h) for h in reversed(raw_headers)]
+    table_data = [rtl_headers]
 
     for idx, t in enumerate(queryset[:500], 1):
-        d_str = format_jalali_date(t.first_weight_date or t.created_at.date())
-        table_data.append([
+        d_str = format_jalali_date(t.first_weight_date or (t.created_at.date() if t.created_at else None))
+        status_display = t.get_status_display() if hasattr(t, 'get_status_display') else str(t.status)
+        op_name = t.operation_type.name if t.operation_type else "-"
+        party_name = t.party.name if t.party else "-"
+        prod_name = t.product.name if t.product else "-"
+        driver_name = t.driver_display if hasattr(t, 'driver_display') else "-"
+
+        raw_row = [
             str(idx),
             str(t.serial_number),
             str(t.waybill_number or "-"),
-            str(d_str),
+            str(d_str or "-"),
             str(t.first_time_str or "-"),
             str(t.second_time_str or "-"),
-            str(t.operation_type.name if t.operation_type else "-"),
-            str(t.party.name if t.party else "-"),
-            str(t.product.name if t.product else "-"),
-            str(t.license_plate_display),
+            shape_persian(op_name),
+            shape_persian(party_name),
+            shape_persian(prod_name),
+            shape_persian(t.license_plate_display or "-"),
+            shape_persian(driver_name),
             f"{int(t.sent_weight or 0):,}",
             f"{int(t.gross_weight or 0):,}",
             f"{int(t.tare_weight or 0):,}",
             f"{int(t.net_weight or 0):,}",
+            f"{int(t.loss_weight or 0):,}",
             f"{int(t.final_weight or 0):,}",
-            str(t.status)
-        ])
+            shape_persian(status_display)
+        ]
+        # Reverse row for RTL
+        table_data.append(list(reversed(raw_row)))
 
-    table = Table(table_data)
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
+    # Summary Row if available
+    if summaries:
+        sum_row = [
+            shape_persian("مجموع"),
+            f"{summaries.get('total_tickets', record_count)}",
+            "-", "-", "-", "-", "-", "-", "-", "-", "-",
+            f"{int(summaries.get('sum_sent', 0) or 0):,}",
+            f"{int(summaries.get('sum_gross', 0) or 0):,}",
+            f"{int(summaries.get('sum_tare', 0) or 0):,}",
+            f"{int(summaries.get('sum_net', 0) or 0):,}",
+            f"{int(summaries.get('sum_loss', 0) or 0):,}",
+            f"{int(summaries.get('sum_final', 0) or 0):,}",
+            "-"
+        ]
+        table_data.append(list(reversed(sum_row)))
+
+    # Define Column Widths across Landscape A4 (usable width approx 810 pt)
+    col_widths = [
+        40,  # وضعیت (leftmost)
+        45,  # وزن نهایی
+        35,  # افت
+        45,  # وزن خالص
+        45,  # وزن خالی
+        45,  # وزن پر
+        45,  # وزن بارنامه
+        50,  # نام راننده
+        55,  # پلاک خودرو
+        55,  # محصول
+        55,  # طرف حساب
+        50,  # نوع عملیات
+        30,  # خروج
+        30,  # ورود
+        45,  # تاریخ
+        45,  # شماره بارنامه
+        55,  # شماره قبض
+        25,  # ردیف (rightmost)
+    ]
+
+    t_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    table_styles = [
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A8A')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-    ]))
-    elements.append(table)
+        ('FONTNAME', (0, 0), (-1, -1), font_regular),
+        ('FONTNAME', (0, 0), (-1, 0), font_bold),
+        ('FONTSIZE', (0, 0), (-1, -1), 6.8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 1),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 1),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+    ]
+
+    # Alternating row colors
+    for r in range(1, len(table_data)):
+        if r % 2 == 0:
+            table_styles.append(('BACKGROUND', (0, r), (-1, r), colors.HexColor('#F8FAFC')))
+
+    # Style summary row if present
+    if summaries:
+        last_idx = len(table_data) - 1
+        table_styles.extend([
+            ('BACKGROUND', (0, last_idx), (-1, last_idx), colors.HexColor('#E2E8F0')),
+            ('FONTNAME', (0, last_idx), (-1, last_idx), font_bold),
+            ('FONTSIZE', (0, last_idx), (-1, last_idx), 7.2),
+        ])
+
+    t_table.setStyle(TableStyle(table_styles))
+    elements.append(t_table)
 
     doc.build(elements)
     buffer.seek(0)

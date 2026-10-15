@@ -4,152 +4,274 @@
 <head>
     <meta charset="UTF-8">
     <title>فیش باسکول {{ ticket.serial_number }}</title>
+    <!-- Standalone Offline Print Stylesheet -->
+    <link rel="stylesheet" href="/static/css/ticket-print.css">
+    <style id="pos-page-style">
+        @page {
+            size: 80mm auto;
+            margin: 0;
+        }
+    </style>
     <style>
-        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
         body {
-            font-family: 'Vazirmatn', Tahoma, sans-serif;
-            background: #fff;
+            background-color: #fff;
             color: #000;
             margin: 0;
-            padding: 5px;
+            padding: 4px;
             font-size: 11px;
-            width: 78mm;
+            line-height: 1.35;
         }
         .pos-container {
-            width: 76mm;
+            width: 72mm;
+            max-width: 72mm;
             margin: 0 auto;
-            border-bottom: 1px dashed #000;
-            padding-bottom: 10px;
+            padding: 4px;
+            box-sizing: border-box;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
-        .text-center { text-align: center; }
+        .pos-container.width-58mm {
+            width: 48mm;
+            max-width: 48mm;
+            font-size: 9.5px;
+            padding: 2px;
+        }
         .row-item {
             display: flex;
             justify-content: space-between;
-            margin: 3px 0;
+            align-items: center;
+            margin: 2.5px 0;
             border-bottom: 1px dotted #ccc;
             padding-bottom: 2px;
         }
-        .fw-bold { font-weight: bold; }
-        .big-val { font-size: 15px; font-weight: 900; }
-        @page {
-            size: 80mm auto;
-            margin: 2mm;
+        .row-item span:first-child {
+            color: #334155;
+            font-size: 0.95em;
+        }
+        .row-item span:last-child {
+            text-align: left;
+        }
+        .big-val {
+            font-size: 14.5px;
+            font-weight: 900;
+            font-family: monospace, Tahoma;
+        }
+        .divider-solid {
+            border: 0;
+            border-top: 1.5px solid #000;
+            margin: 6px 0;
+        }
+        .divider-dashed {
+            border: 0;
+            border-top: 1px dashed #000;
+            margin: 6px 0;
         }
         @media print {
-            body { width: 80mm; margin: 0; padding: 2mm; }
-            .pos-container { width: 76mm; }
-            .no-print { display: none !important; }
+            body {
+                background: #fff !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                width: auto !important;
+            }
+            .pos-container {
+                border-bottom: none !important;
+            }
         }
     </style>
 </head>
 <body>
 
-<div class="text-center no-print" style="margin-bottom: 10px;">
-    <button onclick="window.print()" style="padding: 5px 15px; font-weight: bold;">چاپ فیش حرارتی</button>
+<!-- No-print Action Bar -->
+<div class="text-center no-print p-2 mb-2 bg-light border-bottom">
+    <div class="d-flex justify-content-center align-items-center gap-2 flex-wrap">
+        <button onclick="window.print()" class="btn btn-primary btn-sm fw-bold shadow-sm">
+            چاپ فیش حرارتی (Ctrl + P)
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="togglePosWidth()">
+            <span id="btn-width-label">تغییر به عرض ۵۸ میلی‌متر</span>
+        </button>
+        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a5" class="btn btn-outline-secondary btn-sm">قالب A5</a>
+        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a4" class="btn btn-outline-secondary btn-sm">قالب A4</a>
+        <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-outline-dark btn-sm">بازگشت</a>
+    </div>
 </div>
 
-<div class="pos-container">
+<div class="pos-container" id="pos-card">
     <div class="text-center">
-        <h3 style="margin: 2px 0;">{{ settings.company_name }}</h3>
-        <h4 style="margin: 2px 0;">{{ settings.receipt_header_title }}</h4>
-        <div style="font-size: 13px; font-weight: bold; margin: 4px 0;">قبض: {{ ticket.serial_number }}</div>
+        <div class="fw-bold" style="font-size: 13px;">{{ settings.company_name }}</div>
+        <div class="text-muted small" style="font-size: 9.5px;">{{ settings.receipt_header_title }}</div>
+        
+        <div class="d-flex justify-content-center align-items-center gap-2 mt-1">
+            <span class="fw-bold font-monospace" style="font-size: 13px;">قبض: {{ ticket.serial_number }}</span>
+            {% if is_reprint %}
+            <span class="reprint-badge">چاپ مجدد (نسخه {{ print_number }})</span>
+            {% endif %}
+        </div>
+        <div class="text-muted font-monospace" style="font-size: 8.5px; margin-top: 2px;">
+            تاریخ چاپ: {{ print_date }} - ساعت {{ print_time }}
+        </div>
     </div>
-    <hr style="border: 1px solid #000;">
+
+    <hr class="divider-solid">
 
     <div class="row-item">
+        <span>نوع عملیات:</span>
+        <span class="fw-bold">{{ ticket.operation_type.name|default:"-" }}</span>
+    </div>
+    <div class="row-item">
         <span>طرف حساب:</span>
-        <span class="fw-bold">{{ ticket.party.name|default:"-" }}</span>
+        <span class="fw-bold text-dark">{{ ticket.party.name|default:"-" }}</span>
     </div>
     <div class="row-item">
-        <span>محصول:</span>
-        <span class="fw-bold">{{ ticket.product.name|default:"-" }}</span>
+        <span>نام کالا / محصول:</span>
+        <span class="fw-bold text-dark">{{ ticket.product.name|default:"-" }}</span>
     </div>
     <div class="row-item">
-        <span>کد محصول:</span>
-        <span class="fw-bold font-monospace">{{ ticket.product.code|default:"-" }}</span>
+        <span>شماره پلاک:</span>
+        <span class="plate-badge">{{ ticket.license_plate_display }}</span>
     </div>
     <div class="row-item">
-        <span>پلاک خودرو:</span>
-        <span class="fw-bold" style="direction: rtl; unicode-bidi: isolate;">{{ ticket.license_plate_display }}</span>
+        <span>نوع خودرو:</span>
+        <span>{{ ticket.vehicle_type_display }}</span>
     </div>
     <div class="row-item">
-        <span>راننده:</span>
-        <span>{{ ticket.driver_display }}</span>
+        <span>نام راننده:</span>
+        <span class="fw-bold">{{ ticket.driver_display }}</span>
     </div>
+    {% if ticket.driver_mobile_display and ticket.driver_mobile_display != "-" %}
     <div class="row-item">
-        <span>شماره موبایل:</span>
-        <span class="font-monospace fw-bold" style="direction: ltr;">{{ ticket.driver_mobile_display|default:"-" }}</span>
-    </div>
-    <div class="row-item">
-        <span>شماره بارنامه:</span>
-        <span class="font-monospace fw-bold">{{ ticket.waybill_number|default:"-" }}</span>
-    </div>
-    <div class="row-item">
-        <span>وزن ارسالی در بارنامه:</span>
-        <span class="fw-bold font-monospace">{{ ticket.sent_weight|weight_fmt }} Kg</span>
-    </div>
-    {% if ticket.sent_weight > 0 and ticket.weight_difference and ticket.status == 'completed' %}
-    <div class="row-item">
-        <span>اختلاف با بارنامه:</span>
-        <span class="font-monospace {% if ticket.is_tolerance_exceeded %}fw-bold text-danger{% endif %}">{{ ticket.weight_difference|weight_fmt }} Kg</span>
+        <span>تلفن راننده:</span>
+        <span class="font-monospace fw-bold" style="direction: ltr;">{{ ticket.driver_mobile_display }}</span>
     </div>
     {% endif %}
+    {% if ticket.waybill_number %}
+    <div class="row-item">
+        <span>شماره بارنامه:</span>
+        <span class="font-monospace fw-bold">{{ ticket.waybill_number }}</span>
+    </div>
+    {% endif %}
+    {% if ticket.sent_weight and ticket.sent_weight > 0 %}
+    <div class="row-item">
+        <span>وزن ارسالی در بارنامه:</span>
+        <span class="font-monospace fw-bold">{{ ticket.sent_weight|weight_fmt }} Kg</span>
+    </div>
+    {% endif %}
+    {% if ticket.load_count or ticket.ingot_count %}
     <div class="row-item">
         <span>تعداد بار و شمش:</span>
         <span class="font-monospace fw-bold">{{ ticket.load_and_ingot_display }}</span>
     </div>
+    {% endif %}
     {% if ticket.ingot_count %}
     <div class="row-item">
         <span>تعداد شمش (فروش):</span>
         <span class="font-monospace fw-bold">{{ ticket.ingot_count }} عدد</span>
     </div>
     {% endif %}
+
     <div class="row-item">
-        <span>تاریخ و ساعت پر:</span>
-        <span>{{ ticket.jalali_gross_date|default:"-" }} {{ ticket.gross_time|default:"-" }}</span>
+        <span>توزین اول (ورود):</span>
+        <span class="font-monospace small">
+            {{ ticket.jalali_first_date|default:"-" }}
+            {% if ticket.first_time_str %}{{ ticket.first_time_str }}{% endif %}
+        </span>
     </div>
+    {% if ticket.status == 'completed' %}
     <div class="row-item">
-        <span>تاریخ و ساعت خالی:</span>
-        <span>{{ ticket.jalali_tare_date|default:"-" }} {{ ticket.tare_time|default:"-" }}</span>
+        <span>توزین دوم (خروج):</span>
+        <span class="font-monospace small">
+            {{ ticket.jalali_second_date|default:"-" }}
+            {% if ticket.second_time_str %}{{ ticket.second_time_str }}{% endif %}
+        </span>
     </div>
+    {% endif %}
+
+    {% if ticket.notes %}
     <div class="row-item">
         <span>توضیحات:</span>
-        <span>{{ ticket.notes|default:"-" }}</span>
+        <span class="small">{{ ticket.notes }}</span>
     </div>
+    {% endif %}
 
-    <hr style="border: 1px dashed #000;">
+    <hr class="divider-dashed">
 
     <div class="row-item">
         <span>وزن پر (ناخالص):</span>
-        <span class="fw-bold">{{ ticket.gross_weight|weight_fmt }} Kg</span>
+        <span class="fw-bold font-monospace">{{ ticket.gross_weight|weight_fmt }} Kg</span>
     </div>
     <div class="row-item">
         <span>وزن خالی (تارا):</span>
-        <span class="fw-bold">{{ ticket.tare_weight|weight_fmt }} Kg</span>
+        <span class="fw-bold font-monospace">{{ ticket.tare_weight|weight_fmt }} Kg</span>
     </div>
     <div class="row-item">
         <span>وزن خالص:</span>
-        <span class="fw-bold">{{ ticket.net_weight|weight_fmt }} Kg</span>
+        <span class="fw-bold font-monospace">{{ ticket.net_weight|weight_fmt }} Kg</span>
     </div>
-    {% if ticket.loss_weight > 0 %}
-    <div class="row-item">
-        <span>افت کسر شده:</span>
-        <span class="fw-bold">{{ ticket.loss_weight|weight_fmt }} Kg</span>
+    {% if ticket.loss_weight and ticket.loss_weight > 0 %}
+    <div class="row-item text-danger">
+        <span>افت بار ({{ ticket.loss_percent }}%):</span>
+        <span class="fw-bold font-monospace">-{{ ticket.loss_weight|weight_fmt }} Kg</span>
     </div>
     {% endif %}
-    <div class="row-item" style="border: 2px solid #000; padding: 4px; margin-top: 5px;">
-        <span class="fw-bold">وزن نهایی:</span>
-        <span class="big-val">{{ ticket.final_weight|weight_fmt }} Kg</span>
+
+    <div class="row-item" style="border: 1.5px solid #000; padding: 4px 6px; margin-top: 6px; background-color: #f8fafc;">
+        <span class="fw-bold" style="font-size: 11px;">وزن نهایی تحویل:</span>
+        <span class="big-val text-dark">{{ ticket.final_weight|weight_fmt }} Kg</span>
     </div>
 
-    <div class="text-center" style="margin-top: 15px; font-size: 9px;">
+    <!-- QR Code & Verification -->
+    {% if qr_b64 %}
+    <div class="text-center mt-2 mb-1">
+        <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR Verification" style="width: 72px; height: 72px; display: inline-block;">
+        <div class="text-muted" style="font-size: 7.5px;">کد اعتبارسنجی دیجیتال باسکول</div>
+    </div>
+    {% endif %}
+
+    <div class="text-center mt-2" style="font-size: 8px; color: #475569; line-height: 1.2;">
         {{ settings.receipt_footer_note }}
     </div>
 
-    <div class="text-center" style="margin-top: 20px;">
-        <div>امضای راننده / امضای اپراتور</div>
+    <div class="d-flex justify-content-between text-center mt-3 small" style="font-size: 9px; border-top: 1px dotted #94a3b8; padding-top: 5px;">
+        <div>امضای راننده</div>
+        <div>امضای مسئول باسکول</div>
     </div>
+
 </div>
+
+<!-- Print scripts with safe auto-print prevention -->
+<script>
+let is58mm = false;
+function togglePosWidth() {
+    const card = document.getElementById('pos-card');
+    const styleEl = document.getElementById('pos-page-style');
+    const label = document.getElementById('btn-width-label');
+    is58mm = !is58mm;
+    if (is58mm) {
+        card.classList.add('width-58mm');
+        styleEl.innerHTML = '@page { size: 58mm auto; margin: 0; }';
+        label.textContent = 'تغییر به عرض ۸۰ میلی‌متر';
+    } else {
+        card.classList.remove('width-58mm');
+        styleEl.innerHTML = '@page { size: 80mm auto; margin: 0; }';
+        label.textContent = 'تغییر به عرض ۵۸ میلی‌متر';
+    }
+}
+
+// Safe auto-print preventing infinite print loops on page refresh
+document.addEventListener("DOMContentLoaded", function() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("auto") === "1") {
+        const ticketId = "{{ ticket.id }}";
+        const sessionKey = "printed_pos_" + ticketId;
+        if (!sessionStorage.getItem(sessionKey)) {
+            sessionStorage.setItem(sessionKey, "1");
+            window.print();
+        }
+    }
+});
+</script>
 
 </body>
 </html>
