@@ -15,6 +15,7 @@ from core.jalali import (
     get_jalali_month_name, get_jalali_days_in_month
 )
 from core.models import SystemSetting
+from management.kpi_service import OperationalKPIService
 
 class ManagementDashboardService:
     @staticmethod
@@ -38,9 +39,9 @@ class ManagementDashboardService:
             prev_start, prev_end = get_comparison_period_gregorian(start_date, end_date, quick_period)
             period_label = quick_period
 
-        qs = WeighTicket.objects.filter(
-            Q(first_weight_date__range=[start_date, end_date]) |
-            Q(created_at__date__range=[start_date, end_date])
+        qs = OperationalKPIService.get_annotated_queryset().filter(
+            Q(arrival_date__range=[start_date, end_date]) |
+            (Q(status=TicketStatus.COMPLETED) & Q(completion_date__range=[start_date, end_date]))
         )
 
         op_type_id = params.get('operation_type')
@@ -82,9 +83,9 @@ class ManagementDashboardService:
             qs = qs.filter(loss_weight__gt=0)
 
         # Previous period query
-        prev_qs = WeighTicket.objects.filter(
-            Q(first_weight_date__range=[prev_start, prev_end]) |
-            Q(created_at__date__range=[prev_start, prev_end])
+        prev_qs = OperationalKPIService.get_annotated_queryset().filter(
+            Q(arrival_date__range=[prev_start, prev_end]) |
+            (Q(status=TicketStatus.COMPLETED) & Q(completion_date__range=[prev_start, prev_end]))
         )
         if op_type_id:
             prev_qs = prev_qs.filter(operation_type_id=op_type_id)
@@ -95,84 +96,28 @@ class ManagementDashboardService:
         if party_id:
             prev_qs = prev_qs.filter(party_id=party_id)
 
+        # Attach date ranges to queryset objects for downstream service access
+        qs.start_date = start_date
+        qs.end_date = end_date
+        prev_qs.start_date = prev_start
+        prev_qs.end_date = prev_end
+
         return qs, prev_qs, start_date, end_date, prev_start, prev_end, period_label
 
     @staticmethod
     def calculate_kpis_with_comparison(curr_qs, prev_qs):
-        def _calc_metrics(qs):
-            completed = qs.filter(status=TicketStatus.COMPLETED)
-            aggr = completed.aggregate(
-                net=Sum('net_weight'),
-                final=Sum('final_weight'),
-                gross=Sum('gross_weight'),
-                tare=Sum('tare_weight'),
-                loss=Sum('loss_weight'),
-                loss_pct_avg=Avg('loss_percent'),
-            )
-            net_kg = aggr['net'] or Decimal('0')
-            final_kg = aggr['final'] or Decimal('0')
-            gross_kg = aggr['gross'] or Decimal('0')
-            tare_kg = aggr['tare'] or Decimal('0')
-            loss_kg = aggr['loss'] or Decimal('0')
-            loss_pct_avg = aggr['loss_pct_avg'] or Decimal('0')
+        curr_start = getattr(curr_qs, 'start_date', None)
+        curr_end = getattr(curr_qs, 'end_date', None)
+        prev_start = getattr(prev_qs, 'start_date', None)
+        prev_end = getattr(prev_qs, 'end_date', None)
 
-            inbound_net = completed.filter(operation_type__direction='inbound').aggregate(s=Sum('net_weight'))['s'] or Decimal('0')
-            outbound_net = completed.filter(operation_type__direction='outbound').aggregate(s=Sum('net_weight'))['s'] or Decimal('0')
-
-            purchase_net = completed.filter(
-                Q(operation_type__name__icontains='خرید') | Q(operation_type__direction='inbound')
-            ).aggregate(s=Sum('net_weight'))['s'] or Decimal('0')
-
-            sales_net = completed.filter(
-                Q(operation_type__name__icontains='فروش') | Q(operation_type__direction='outbound')
-            ).aggregate(s=Sum('net_weight'))['s'] or Decimal('0')
-
-            return {
-                'trips': qs.count(),
-                'completed_trips': completed.count(),
-                'net_kg': float(net_kg),
-                'net_ton': round(float(net_kg) / 1000.0, 2),
-                'final_kg': float(final_kg),
-                'final_ton': round(float(final_kg) / 1000.0, 2),
-                'gross_kg': float(gross_kg),
-                'gross_ton': round(float(gross_kg) / 1000.0, 2),
-                'tare_kg': float(tare_kg),
-                'tare_ton': round(float(tare_kg) / 1000.0, 2),
-                'inbound_net_kg': float(inbound_net),
-                'inbound_net_ton': round(float(inbound_net) / 1000.0, 2),
-                'outbound_net_kg': float(outbound_net),
-                'outbound_net_ton': round(float(outbound_net) / 1000.0, 2),
-                'purchase_net_ton': round(float(purchase_net) / 1000.0, 2),
-                'sales_net_ton': round(float(sales_net) / 1000.0, 2),
-                'loss_kg': float(loss_kg),
-                'loss_ton': round(float(loss_kg) / 1000.0, 2),
-                'avg_loss_pct': round(float(loss_pct_avg), 2),
-                'trucks_count': qs.values('license_plate_display').distinct().count(),
-                'drivers_count': qs.values('driver').distinct().count(),
-                'parties_count': qs.values('party').distinct().count(),
-                'products_count': qs.values('product').distinct().count(),
-                'discrepancies_count': qs.filter(is_tolerance_exceeded=True).count(),
-                'cancelled_count': qs.filter(status=TicketStatus.CANCELLED).count(),
-                'edited_count': qs.filter(last_edited_by__isnull=False).count(),
-            }
-
-        curr = _calc_metrics(curr_qs)
-        prev = _calc_metrics(prev_qs)
-
-        comparison = {}
-        for k in curr.keys():
-            c_val = curr[k]
-            p_val = prev[k]
-            diff = round(c_val - p_val, 2)
-            pct = round(((c_val - p_val) / p_val * 100), 2) if p_val else (100.0 if c_val > 0 else 0.0)
-            comparison[k] = {
-                'current': c_val,
-                'previous': p_val,
-                'diff': diff,
-                'pct_change': pct,
-                'is_positive': diff > 0,
-                'is_neutral': diff == 0,
-            }
+        curr = OperationalKPIService.calculate_period_kpis(
+            start_date=curr_start, end_date=curr_end, base_qs=curr_qs
+        )
+        prev = OperationalKPIService.calculate_period_kpis(
+            start_date=prev_start, end_date=prev_end, base_qs=prev_qs
+        )
+        comparison = OperationalKPIService.calculate_comparison(curr, prev)
 
         return curr, prev, comparison
 
@@ -247,92 +192,7 @@ class ManagementDashboardService:
 
     @staticmethod
     def get_tonnage_trend(start_date, end_date, granularity='daily'):
-        labels = []
-        inbound_series = []
-        outbound_series = []
-        net_series = []
-        final_series = []
-        trips_series = []
-
-        total_days = (end_date - start_date).days + 1
-
-        if granularity == 'monthly' or total_days > 120:
-            curr = start_date
-            while curr <= end_date:
-                j_dt = gregorian_to_jalali(curr)
-                days_in_m = get_jalali_days_in_month(j_dt.year, j_dt.month)
-                m_end_j = jdatetime.date(j_dt.year, j_dt.month, days_in_m)
-                m_end_g = m_end_j.togregorian()
-                actual_end = min(m_end_g, end_date)
-
-                month_qs = WeighTicket.objects.filter(
-                    first_weight_date__range=[curr, actual_end],
-                    status=TicketStatus.COMPLETED
-                )
-                aggr = month_qs.aggregate(
-                    net=Sum('net_weight'),
-                    final=Sum('final_weight'),
-                    inbound=Sum('net_weight', filter=Q(operation_type__direction='inbound')),
-                    outbound=Sum('net_weight', filter=Q(operation_type__direction='outbound')),
-                )
-                labels.append(f'{get_jalali_month_name(j_dt.month)} {j_dt.year}')
-                inbound_series.append(round(float(aggr['inbound'] or 0) / 1000.0, 2))
-                outbound_series.append(round(float(aggr['outbound'] or 0) / 1000.0, 2))
-                net_series.append(round(float(aggr['net'] or 0) / 1000.0, 2))
-                final_series.append(round(float(aggr['final'] or 0) / 1000.0, 2))
-                trips_series.append(month_qs.count())
-
-                curr = actual_end + timedelta(days=1)
-        elif granularity == 'weekly' or total_days > 45:
-            curr = start_date
-            while curr <= end_date:
-                w_end = min(curr + timedelta(days=6), end_date)
-                week_qs = WeighTicket.objects.filter(
-                    first_weight_date__range=[curr, w_end],
-                    status=TicketStatus.COMPLETED
-                )
-                aggr = week_qs.aggregate(
-                    net=Sum('net_weight'),
-                    final=Sum('final_weight'),
-                    inbound=Sum('net_weight', filter=Q(operation_type__direction='inbound')),
-                    outbound=Sum('net_weight', filter=Q(operation_type__direction='outbound')),
-                )
-                labels.append(format_jalali_date(curr, fmt='%m/%d') + ' تا ' + format_jalali_date(w_end, fmt='%m/%d'))
-                inbound_series.append(round(float(aggr['inbound'] or 0) / 1000.0, 2))
-                outbound_series.append(round(float(aggr['outbound'] or 0) / 1000.0, 2))
-                net_series.append(round(float(aggr['net'] or 0) / 1000.0, 2))
-                final_series.append(round(float(aggr['final'] or 0) / 1000.0, 2))
-                trips_series.append(week_qs.count())
-                curr = w_end + timedelta(days=1)
-        else:
-            curr = start_date
-            while curr <= end_date:
-                day_qs = WeighTicket.objects.filter(
-                    Q(first_weight_date=curr) | Q(created_at__date=curr)
-                )
-                day_completed = day_qs.filter(status=TicketStatus.COMPLETED)
-                aggr = day_completed.aggregate(
-                    net=Sum('net_weight'),
-                    final=Sum('final_weight'),
-                    inbound=Sum('net_weight', filter=Q(operation_type__direction='inbound')),
-                    outbound=Sum('net_weight', filter=Q(operation_type__direction='outbound')),
-                )
-                labels.append(format_jalali_date(curr, fmt='%m/%d'))
-                inbound_series.append(round(float(aggr['inbound'] or 0) / 1000.0, 2))
-                outbound_series.append(round(float(aggr['outbound'] or 0) / 1000.0, 2))
-                net_series.append(round(float(aggr['net'] or 0) / 1000.0, 2))
-                final_series.append(round(float(aggr['final'] or 0) / 1000.0, 2))
-                trips_series.append(day_qs.count())
-                curr += timedelta(days=1)
-
-        return {
-            'labels': labels,
-            'inbound': inbound_series,
-            'outbound': outbound_series,
-            'net': net_series,
-            'final': final_series,
-            'trips': trips_series,
-        }
+        return OperationalKPIService.get_tonnage_trend(start_date, end_date, granularity=granularity)
 
     @staticmethod
     def get_top10_metrics(curr_qs):
@@ -379,7 +239,7 @@ class ManagementDashboardService:
         # 3. Top 10 Drivers
         top_drivers = curr_qs.values('driver__full_name', 'driver_name_custom', 'driver__id').annotate(
             trips=Count('id'),
-            total_net=Sum('net_weight')
+            total_net=Sum('net_weight', filter=Q(status=TicketStatus.COMPLETED))
         ).order_by('-trips')[:10]
         top_drivers_list = [{
             'id': d['driver__id'],
@@ -391,7 +251,7 @@ class ManagementDashboardService:
         # 4. Top 10 Vehicles
         top_vehicles = curr_qs.values('license_plate_display').annotate(
             trips=Count('id'),
-            total_net=Sum('net_weight')
+            total_net=Sum('net_weight', filter=Q(status=TicketStatus.COMPLETED))
         ).order_by('-trips')[:10]
         top_vehicles_list = [{
             'plate': v['license_plate_display'] or 'نامشخص',
@@ -402,12 +262,12 @@ class ManagementDashboardService:
         # 5. Top 10 Origins & Destinations
         top_origins = curr_qs.filter(origin__isnull=False).values('origin__name').annotate(
             trips=Count('id'),
-            total_net=Sum('net_weight')
+            total_net=Sum('net_weight', filter=Q(status=TicketStatus.COMPLETED))
         ).order_by('-trips')[:10]
 
         top_destinations = curr_qs.filter(destination__isnull=False).values('destination__name').annotate(
             trips=Count('id'),
-            total_net=Sum('net_weight')
+            total_net=Sum('net_weight', filter=Q(status=TicketStatus.COMPLETED))
         ).order_by('-trips')[:10]
 
         # 6. Top 10 Weight Discrepancies

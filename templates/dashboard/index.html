@@ -311,6 +311,9 @@ document.addEventListener("DOMContentLoaded", function() {
     fetch("{% url 'dashboard:charts_data' %}")
         .then(res => res.json())
         .then(data => {
+            const isTon = data.unit === 'ton';
+            const toTon = (v) => isTon ? Number(v || 0) : (Number(v || 0) / 1000);
+
             // 1. 30-Day Tonnage Chart
             new Chart(document.getElementById('chartTonnage30'), {
                 type: 'line',
@@ -318,7 +321,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     labels: data.dates_30,
                     datasets: [{
                         label: 'تناژ خالص (Ton)',
-                        data: data.tonnage_30.map(v => (v / 1000).toFixed(2)),
+                        data: data.tonnage_30.map(v => toTon(v).toFixed(2)),
                         borderColor: '#2563eb',
                         backgroundColor: 'rgba(37, 99, 235, 0.08)',
                         fill: true,
@@ -366,7 +369,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     labels: ['ورودی (خرید)', 'خروجی (فروش)'],
                     datasets: [{
                         label: 'تناژ (Ton)',
-                        data: [(data.inbound_tonnage || 0) / 1000, (data.outbound_tonnage || 0) / 1000],
+                        data: [toTon(data.inbound_tonnage), toTon(data.outbound_tonnage)],
                         backgroundColor: ['#0284c7', '#059669'],
                         borderRadius: 6
                     }]
@@ -402,7 +405,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     labels: data.party_labels || [],
                     datasets: [{
                         label: 'تناژ (Ton)',
-                        data: (data.party_values || []).map(v => (v / 1000).toFixed(1)),
+                        data: (data.party_values || []).map(v => toTon(v).toFixed(1)),
                         backgroundColor: '#475569',
                         borderRadius: 4
                     }]

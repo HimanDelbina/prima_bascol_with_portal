@@ -1,14 +1,12 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Count, Q
 from decimal import Decimal
 from datetime import timedelta
 from drf_spectacular.utils import extend_schema
 
-from weighbridge.models import WeighTicket, TicketStatus
-from monitoring.models import MonitoringAlert, AlertStatus, AlertSeverity
-from core.jalali import get_today_gregorian, format_jalali_date
+from core.jalali import get_today_gregorian
+from management.kpi_service import OperationalKPIService
 from api.v1.serializers.dashboard_serializers import (
     DashboardSummarySerializer, DashboardTrendSerializer
 )
@@ -17,6 +15,7 @@ from api.v1.serializers.dashboard_serializers import (
 class DashboardSummaryView(APIView):
     """
     دریافت شاخص‌های کلیدی عملکرد امروز (تناژ، تعداد قبوض، وارده، صادره، مغایرت‌ها و هشدارهای باز).
+    مبتنی بر سرویس یکپارچه OperationalKPIService.
     """
     permission_classes = [IsAuthenticated]
 
@@ -28,47 +27,19 @@ class DashboardSummaryView(APIView):
     )
     def get(self, request):
         today_g = get_today_gregorian()
-        today_tickets = WeighTicket.objects.filter(
-            Q(first_weight_date=today_g) | Q(created_at__date=today_g)
-        )
-
-        today_count = today_tickets.count()
-        today_completed_count = today_tickets.filter(status=TicketStatus.COMPLETED).count()
-
-        aggr = today_tickets.aggregate(
-            sum_net=Sum("net_weight"),
-            inbound_net=Sum("net_weight", filter=Q(operation_type__direction="inbound")),
-            outbound_net=Sum("net_weight", filter=Q(operation_type__direction="outbound")),
-        )
-
-        today_net = aggr["sum_net"] or Decimal("0.00")
-        today_inbound = aggr["inbound_net"] or Decimal("0.00")
-        today_outbound = aggr["outbound_net"] or Decimal("0.00")
-
-        waiting_count = WeighTicket.objects.filter(
-            status__in=[TicketStatus.WAITING_SECOND, TicketStatus.FIRST_REGISTERED]
-        ).count()
-
-        discrepancies_count = today_tickets.filter(is_tolerance_exceeded=True).count()
-
-        open_alerts = MonitoringAlert.objects.filter(status__in=[AlertStatus.OPEN, AlertStatus.REVIEWED]).count()
-        today_critical = MonitoringAlert.objects.filter(
-            created_at__date=today_g,
-            severity__in=[AlertSeverity.CRITICAL, AlertSeverity.HIGH],
-            status__in=[AlertStatus.OPEN, AlertStatus.REVIEWED]
-        ).count()
+        summary = OperationalKPIService.get_daily_operational_summary(today_g)
 
         data = {
-            "today_ticket_count": today_count,
-            "today_completed_count": today_completed_count,
-            "today_net_weight": today_net,
-            "today_tonnage": round(float(today_net) / 1000.0, 2),
-            "today_inbound_weight": today_inbound,
-            "today_outbound_weight": today_outbound,
-            "waiting_second_weight": waiting_count,
-            "today_discrepancies": discrepancies_count,
-            "open_alerts_count": open_alerts,
-            "today_critical_alerts": today_critical,
+            "today_ticket_count": summary["today_count"],
+            "today_completed_count": summary["today_completed_count"],
+            "today_net_weight": summary["today_net_kg"],
+            "today_tonnage": float(summary["today_tonnage"]),
+            "today_inbound_weight": summary["today_inbound_net"],
+            "today_outbound_weight": summary["today_outbound_net"],
+            "waiting_second_weight": summary["waiting_trucks_count"],
+            "today_discrepancies": summary["today_discrepancies_count"],
+            "open_alerts_count": summary["open_alerts_count"],
+            "today_critical_alerts": summary["today_critical_alerts"],
         }
         return Response(data)
 
@@ -76,6 +47,7 @@ class DashboardSummaryView(APIView):
 class DashboardTrendsView(APIView):
     """
     دریافت روندهای آماری ۳۰ روزه تناژ، سهم محصولات، مبادلات وارده/صادره و طرف‌های حساب جهت نمایش در نمودارها.
+    مبتنی بر سرویس یکپارچه OperationalKPIService.
     """
     permission_classes = [IsAuthenticated]
 
@@ -87,66 +59,22 @@ class DashboardTrendsView(APIView):
     )
     def get(self, request):
         today_g = get_today_gregorian()
+        start_date_30 = today_g - timedelta(days=29)
 
-        # 30-day timeline
-        dates_30 = []
-        tonnage_30 = []
-        trips_30 = []
-
-        for i in range(29, -1, -1):
-            target_day = today_g - timedelta(days=i)
-            day_qs = WeighTicket.objects.filter(
-                Q(first_weight_date=target_day) | Q(created_at__date=target_day)
-            )
-            day_net = day_qs.aggregate(s=Sum("net_weight"))["s"] or Decimal("0")
-            day_trips = day_qs.count()
-
-            dates_30.append(format_jalali_date(target_day, fmt="%m/%d"))
-            tonnage_30.append(round(float(day_net) / 1000.0, 2))
-            trips_30.append(day_trips)
-
-        # Product share (top 6)
-        top_prods_qs = WeighTicket.objects.filter(
-            status=TicketStatus.COMPLETED,
-            product__isnull=False
-        ).values("product__name").annotate(
-            total_net=Sum("net_weight")
-        ).order_by("-total_net")[:6]
-
-        product_labels = [p["product__name"] or "نامشخص" for p in top_prods_qs]
-        product_values = [round(float(p["total_net"] or 0) / 1000.0, 2) for p in top_prods_qs]
-
-        # Inbound vs Outbound
-        inbound_net = WeighTicket.objects.filter(
-            status=TicketStatus.COMPLETED,
-            operation_type__direction="inbound"
-        ).aggregate(s=Sum("net_weight"))["s"] or Decimal("0")
-
-        outbound_net = WeighTicket.objects.filter(
-            status=TicketStatus.COMPLETED,
-            operation_type__direction="outbound"
-        ).aggregate(s=Sum("net_weight"))["s"] or Decimal("0")
-
-        # Top Parties
-        top_parties_qs = WeighTicket.objects.filter(
-            status=TicketStatus.COMPLETED,
-            party__isnull=False
-        ).values("party__name").annotate(
-            total_net=Sum("net_weight")
-        ).order_by("-total_net")[:6]
-
-        party_labels = [p["party__name"] or "نامشخص" for p in top_parties_qs]
-        party_values = [round(float(p["total_net"] or 0) / 1000.0, 2) for p in top_parties_qs]
+        trends_30 = OperationalKPIService.get_tonnage_trend(start_date_30, today_g, granularity="daily")
+        prod_share = OperationalKPIService.get_product_share(limit=6)
+        kpis_30 = OperationalKPIService.calculate_period_kpis(start_date=start_date_30, end_date=today_g)
+        party_share = OperationalKPIService.get_party_share(limit=6)
 
         data = {
-            "dates_30": dates_30,
-            "tonnage_30": tonnage_30,
-            "trips_30": trips_30,
-            "product_labels": product_labels,
-            "product_values": product_values,
-            "inbound_tonnage": round(float(inbound_net) / 1000.0, 2),
-            "outbound_tonnage": round(float(outbound_net) / 1000.0, 2),
-            "party_labels": party_labels,
-            "party_values": party_values,
+            "dates_30": trends_30["labels"],
+            "tonnage_30": trends_30["net"],
+            "trips_30": trends_30["trips"],
+            "product_labels": prod_share["labels"],
+            "product_values": prod_share["values"],
+            "inbound_tonnage": kpis_30["inbound_net_ton"],
+            "outbound_tonnage": kpis_30["outbound_net_ton"],
+            "party_labels": party_share["labels"],
+            "party_values": party_share["values"],
         }
         return Response(data)
