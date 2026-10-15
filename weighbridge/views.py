@@ -25,7 +25,7 @@ from audit.services import log_audit
 from audit.models import AuditAction, AuditLog
 from monitoring.services.anomaly_engine import AnomalyDetectionEngine
 from monitoring.services.discrepancy_service import DiscrepancyApprovalService
-from monitoring.models import AlertType, ApprovalStatus
+from monitoring.models import AlertType, ApprovalStatus, DiscrepancyApproval
 from django.core.exceptions import ValidationError
 from weighbridge.plate_policy import DailyPlatePolicy, can_manage_plate_exceptions, can_manage_plate_autofill, normalize_plate
 
@@ -308,6 +308,8 @@ def ticket_second_weight(request, pk):
                         gross=calc_results["gross_weight"],
                         tare=calc_results["tare_weight"],
                         net=calc_results["net_weight"],
+                        product=ticket.product,
+                        sent_weight=ticket.sent_weight,
                     )
                     AnomalyDetectionEngine.run_for_ticket(ticket)
                     messages.success(request, f"درخواست تأیید مغایرت برای قبض {ticket.serial_number} با موفقیت ثبت شد و به کارتابل سرپرست ارسال گردید.")
@@ -357,12 +359,14 @@ def ticket_second_weight(request, pk):
             ticket.weight_difference_percent = calc_results["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc_results["is_tolerance_exceeded"]
 
-            # Phase 3.1: Invalidate any stale approval if weights changed from approved snapshot
+            # Phase 3.1: Invalidate any stale approval if weights or parameters changed from approved snapshot
             DiscrepancyApprovalService.check_and_invalidate_stale_approvals(
                 ticket,
                 calc_results["gross_weight"],
                 calc_results["tare_weight"],
-                calc_results["net_weight"]
+                calc_results["net_weight"],
+                current_product=ticket.product,
+                current_sent_weight=ticket.sent_weight,
             )
 
             # Evaluate discrepancies and blocking rules
@@ -492,10 +496,10 @@ def trucks_in_yard(request):
     yard_warning_count = yard_stats["warning"] or 0
     yard_normal_count = yard_stats["normal"] or 0
 
-    # Build filtered query
+    # Build filtered query (prefetch discrepancy_approvals to prevent N+1 queries)
     qs = base_yard_qs.select_related(
         "product", "party", "driver", "vehicle", "first_weight_operator", "operation_type", "unload_location"
-    )
+    ).prefetch_related("discrepancy_approvals")
 
     # 1. Search Query: Normalized Plate, Driver, Serial, Waybill, Party, Product
     q = request.GET.get("q", "").strip()
@@ -859,6 +863,26 @@ def ticket_edit(request, pk):
             ticket.weight_difference_percent = calc_results["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc_results["is_tolerance_exceeded"]
 
+            # Phase 3.1 Hotfix: Invalidate stale approval if weights, product, or sent_weight were modified
+            DiscrepancyApprovalService.check_and_invalidate_stale_approvals(
+                ticket,
+                calc_results["gross_weight"],
+                calc_results["tare_weight"],
+                calc_results["net_weight"],
+                current_product=ticket.product,
+                current_sent_weight=ticket.sent_weight,
+            )
+
+            # Re-evaluate discrepancies after material edit
+            eval_res = DiscrepancyApprovalService.evaluate_ticket_discrepancies(ticket, trial_weights=calc_results)
+            if ticket.status == TicketStatus.COMPLETED and not eval_res["can_finalize"]:
+                ticket.status = TicketStatus.WAITING_SECOND
+                messages.warning(
+                    request,
+                    f"توجه: تغییرات اعمال‌شده در قبض موجب بروز مغایرت مسدودکننده گردید ({eval_res['blocking_reason']}). "
+                    "وضعیت قبض از «تکمیل شده» به «در انتظار وزن دوم / مجوز سرپرست» تغییر یافت."
+                )
+
             try:
                 DailyPlatePolicy.save(ticket, user=request.user)
             except ValidationError as exc:
@@ -1005,6 +1029,21 @@ def ticket_print(request, pk):
     except Exception:
         qr_b64 = ""
 
+    # Phase 3.1 Hotfix: Verify finalization and supervisor approval status for official release safety
+    eval_res = DiscrepancyApprovalService.evaluate_ticket_discrepancies(ticket)
+    latest_approval = DiscrepancyApproval.objects.filter(
+        ticket=ticket, status=ApprovalStatus.APPROVED
+    ).order_by("-id").first()
+
+    # Official release document is only valid when completed and fully approved
+    is_draft = (ticket.status != TicketStatus.COMPLETED) or (not eval_res["can_finalize"])
+    draft_reason = ""
+    if is_draft:
+        if ticket.status != TicketStatus.COMPLETED:
+            draft_reason = f"سند در وضعیت «{ticket.get_status_display()}» بوده و هنوز تکمیل نهایی نشده است."
+        elif not eval_res["can_finalize"]:
+            draft_reason = f"سند دارای مغایرت مسدودکننده فاقد تأییدیه معتبر سرپرست است ({eval_res['blocking_reason']})."
+
     template_name = f"weighbridge/ticket_print_{template_type}.html"
     return render(request, template_name, {
         "ticket": ticket,
@@ -1015,6 +1054,9 @@ def ticket_print(request, pk):
         "is_reprint": is_reprint,
         "print_number": print_number,
         "qr_b64": qr_b64,
+        "is_draft": is_draft,
+        "draft_reason": draft_reason,
+        "latest_approval": latest_approval,
         "title": f"چاپ قبض {ticket.serial_number}" + (f" (چاپ مجدد - نسخه {print_number})" if is_reprint else ""),
     })
 

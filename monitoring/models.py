@@ -504,6 +504,26 @@ class DiscrepancyApproval(models.Model):
         blank=True,
         verbose_name="وزن خالص در زمان درخواست (Kg)"
     )
+    product_snapshot = models.ForeignKey(
+        "masterdata.Product",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_discrepancies",
+        verbose_name="کالای اسنپ‌شات"
+    )
+    sent_weight_snapshot = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="وزن بارنامه در زمان درخواست (Kg)"
+    )
+    rule_fingerprint = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name="اثرانگشت قاعده پایش"
+    )
 
     requested_by = models.ForeignKey(
         User,
@@ -574,14 +594,66 @@ class DiscrepancyApproval(models.Model):
     def is_cancelled(self):
         return self.status == ApprovalStatus.CANCELLED
 
-    def are_weights_matching(self, gross, tare, net) -> bool:
-        """Verify whether current ticket weights match the approved snapshot weights."""
-        if self.gross_weight_snapshot is None or self.tare_weight_snapshot is None or self.net_weight_snapshot is None:
-            return True
+    def are_parameters_matching(
+        self,
+        gross,
+        tare,
+        net,
+        product=None,
+        sent_weight=None,
+        rule_fingerprint=None,
+    ) -> bool:
+        """
+        Verify whether current ticket parameters strictly match the approved snapshot.
+        Fails closed: if any required snapshot is missing or mismatched, returns False.
+        """
         from decimal import Decimal
-        return (
-            abs(Decimal(str(gross or 0)) - self.gross_weight_snapshot) < Decimal("0.01") and
-            abs(Decimal(str(tare or 0)) - self.tare_weight_snapshot) < Decimal("0.01") and
-            abs(Decimal(str(net or 0)) - self.net_weight_snapshot) < Decimal("0.01")
-        )
+
+        # Fail closed on missing weight snapshots
+        if (
+            self.gross_weight_snapshot is None
+            or self.tare_weight_snapshot is None
+            or self.net_weight_snapshot is None
+        ):
+            return False
+
+        g = Decimal(str(gross or 0))
+        t = Decimal(str(tare or 0))
+        n = Decimal(str(net or 0))
+
+        if abs(g - self.gross_weight_snapshot) >= Decimal("0.01"):
+            return False
+        if abs(t - self.tare_weight_snapshot) >= Decimal("0.01"):
+            return False
+        if abs(n - self.net_weight_snapshot) >= Decimal("0.01"):
+            return False
+
+        # Fail closed if product_snapshot is missing but product is provided, or if product changed
+        current_prod_id = getattr(product, "id", product) if product is not None else None
+        if self.product_snapshot_id is not None:
+            if current_prod_id != self.product_snapshot_id:
+                return False
+        elif current_prod_id is not None:
+            # Legacy record without product snapshot -> fail closed
+            return False
+
+        # Fail closed if sent_weight_snapshot is missing but sent_weight is present, or if sent_weight changed
+        current_sent = Decimal(str(sent_weight or 0)) if sent_weight is not None else Decimal("0")
+        if self.sent_weight_snapshot is not None:
+            if abs(current_sent - self.sent_weight_snapshot) >= Decimal("0.01"):
+                return False
+        elif current_sent > 0:
+            # Legacy record without sent_weight snapshot -> fail closed
+            return False
+
+        # Check rule fingerprint if both present
+        if self.rule_fingerprint and rule_fingerprint:
+            if self.rule_fingerprint != rule_fingerprint:
+                return False
+
+        return True
+
+    def are_weights_matching(self, gross, tare, net) -> bool:
+        """Compatibility wrapper forwarding to are_parameters_matching."""
+        return self.are_parameters_matching(gross, tare, net)
 

@@ -281,9 +281,15 @@
             <a href="{{ request.GET.next|default:'/weighbridge/trucks-in-yard/' }}" class="btn btn-outline-secondary">
                 انصراف و بازگشت
             </a>
-            <button type="submit" name="submit_action" value="save_and_print" id="btn-save-and-print" class="btn btn-outline-dark fw-bold">
-                <i class="bi bi-printer me-1"></i> تکمیل و چاپ فوری <span class="key-hint-badge">F8</span>
-            </button>
+            {% if active_approval and active_approval.is_pending or active_approval and active_approval.is_rejected or discrepancy_eval.requires_approval and not active_approval.is_approved %}
+                <button type="button" class="btn btn-outline-secondary fw-bold" disabled title="تکمیل و چاپ به دلیل وجود مغایرت مسدودکننده منوط به صدور مجوز سرپرست می‌باشد.">
+                    <i class="bi bi-lock-fill me-1"></i> تکمیل و چاپ غیرفعال
+                </button>
+            {% else %}
+                <button type="submit" name="submit_action" value="save_and_print" id="btn-save-and-print" class="btn btn-outline-dark fw-bold">
+                    <i class="bi bi-printer me-1"></i> تکمیل و چاپ فوری <span class="key-hint-badge">F8</span>
+                </button>
+            {% endif %}
         </div>
 
         <div class="d-flex align-items-center gap-2">

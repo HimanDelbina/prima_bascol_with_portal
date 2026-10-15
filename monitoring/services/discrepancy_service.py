@@ -25,6 +25,17 @@ class DiscrepancyApprovalService:
     """
 
     @classmethod
+    def compute_rule_fingerprint(cls, rule_type: str) -> str:
+        """Computes a deterministic fingerprint of a rule's active thresholds and settings."""
+        rule_config = MonitoringRuleConfig.get_rule_config(rule_type)
+        if not rule_config:
+            return ""
+        return (
+            f"{rule_type}:w={rule_config.warning_threshold}:c={rule_config.critical_threshold}:"
+            f"pw={rule_config.percentage_warning}:pc={rule_config.percentage_critical}:req={rule_config.requires_approval}"
+        )
+
+    @classmethod
     def evaluate_ticket_discrepancies(
         cls,
         ticket: WeighTicket,
@@ -35,7 +46,7 @@ class DiscrepancyApprovalService:
         Accepts optional trial_weights dictionary (from TicketCalculationService.calculate_ticket)
         when evaluating during second weighing before ticket persistence.
         """
-        # Determine effective weights
+        # Determine effective weights and parameters
         if trial_weights:
             gross = Decimal(str(trial_weights.get("gross_weight") or 0))
             tare = Decimal(str(trial_weights.get("tare_weight") or 0))
@@ -46,6 +57,7 @@ class DiscrepancyApprovalService:
             is_tol_exceeded = bool(trial_weights.get("is_tolerance_exceeded"))
             loss_pct = Decimal(str(trial_weights.get("loss_percent") or ticket.loss_percent or 0))
             is_loss_overridden = bool(trial_weights.get("is_loss_overridden", ticket.is_loss_overridden))
+            current_prod = trial_weights.get("product") if "product" in trial_weights else ticket.product
         else:
             gross = ticket.gross_weight
             tare = ticket.tare_weight
@@ -56,11 +68,14 @@ class DiscrepancyApprovalService:
             is_tol_exceeded = ticket.is_tolerance_exceeded
             loss_pct = ticket.loss_percent
             is_loss_overridden = ticket.is_loss_overridden
+            current_prod = ticket.product
 
         # Check existing approvals for this ticket
-        active_approval = DiscrepancyApproval.objects.filter(
-            ticket=ticket
-        ).exclude(status=ApprovalStatus.CANCELLED).order_by("-id").first()
+        active_approval = None
+        if getattr(ticket, "pk", None):
+            active_approval = DiscrepancyApproval.objects.filter(
+                ticket=ticket
+            ).exclude(status=ApprovalStatus.CANCELLED).order_by("-id").first()
 
         is_approved = False
         is_pending = False
@@ -68,18 +83,27 @@ class DiscrepancyApprovalService:
         is_weights_changed = False
 
         if active_approval:
+            rfp = cls.compute_rule_fingerprint(active_approval.discrepancy_type)
+            is_matching = active_approval.are_parameters_matching(
+                gross=gross,
+                tare=tare,
+                net=net,
+                product=current_prod,
+                sent_weight=sent,
+                rule_fingerprint=rfp,
+            )
             if active_approval.status == ApprovalStatus.APPROVED:
-                if active_approval.are_weights_matching(gross, tare, net):
+                if is_matching:
                     is_approved = True
                 else:
                     is_weights_changed = True
             elif active_approval.status == ApprovalStatus.PENDING:
-                if active_approval.are_weights_matching(gross, tare, net):
+                if is_matching:
                     is_pending = True
                 else:
                     is_weights_changed = True
             elif active_approval.status == ApprovalStatus.REJECTED:
-                if active_approval.are_weights_matching(gross, tare, net):
+                if is_matching:
                     is_rejected = True
                 else:
                     is_weights_changed = True
@@ -203,6 +227,33 @@ class DiscrepancyApprovalService:
         }
 
     @classmethod
+    def validate_ticket_finalization(
+        cls,
+        ticket: WeighTicket,
+        trial_weights: dict | None = None,
+    ) -> dict:
+        """
+        Shared domain-level validation that all write paths (Web views, REST API, Django Admin)
+        must enforce prior to completing or finalizing any weigh ticket.
+        """
+        eval_res = cls.evaluate_ticket_discrepancies(ticket, trial_weights=trial_weights)
+        if not eval_res["can_finalize"]:
+            return {
+                "valid": False,
+                "error_code": "DISCREPANCY_APPROVAL_REQUIRED",
+                "message": eval_res["blocking_reason"] or "تکمیل قبض نیازمند تأیید سرپرست است.",
+                "blocking_alerts": eval_res["blocking_alerts"],
+                "eval_res": eval_res,
+            }
+        return {
+            "valid": True,
+            "error_code": None,
+            "message": "",
+            "blocking_alerts": [],
+            "eval_res": eval_res,
+        }
+
+    @classmethod
     def request_approval(
         cls,
         ticket: WeighTicket,
@@ -212,13 +263,21 @@ class DiscrepancyApprovalService:
         gross: Decimal | None = None,
         tare: Decimal | None = None,
         net: Decimal | None = None,
+        product=None,
+        sent_weight: Decimal | None = None,
         alert: MonitoringAlert | None = None,
         metadata: dict | None = None,
     ) -> DiscrepancyApproval:
         """
         Submits a new supervisor approval request atomically.
-        Guarantees that duplicate PENDING requests cannot be created concurrently.
+        Guarantees that duplicate PENDING requests cannot be created concurrently
+        and prevents creating approval requests for closed (COMPLETED/CANCELLED) tickets.
         """
+        if ticket.status in [TicketStatus.COMPLETED, TicketStatus.CANCELLED]:
+            raise ValidationError(
+                f"امکان ثبت درخواست تأیید مغایرت برای قبض در وضعیت «{ticket.get_status_display()}» وجود ندارد."
+            )
+
         clean_reason = (reason or "").strip()
         if not clean_reason or len(clean_reason) < 5:
             raise ValidationError("وارد کردن دلیل موجه برای درخواست تأیید سرپرست (حداقل ۵ کاراکتر) الزامی است.")
@@ -236,9 +295,12 @@ class DiscrepancyApprovalService:
             g = Decimal(str(gross if gross is not None else ticket.gross_weight or 0))
             t = Decimal(str(tare if tare is not None else ticket.tare_weight or 0))
             n = Decimal(str(net if net is not None else ticket.net_weight or 0))
+            prod = product or ticket.product
+            sent = Decimal(str(sent_weight if sent_weight is not None else ticket.sent_weight or 0))
 
             rule_config = MonitoringRuleConfig.get_rule_config(discrepancy_type)
             rule_name = rule_config.name_fa if rule_config else "مغایرت توزین"
+            rfp = cls.compute_rule_fingerprint(discrepancy_type)
 
             approval = DiscrepancyApproval.objects.create(
                 ticket=ticket,
@@ -248,13 +310,16 @@ class DiscrepancyApprovalService:
                 status=ApprovalStatus.PENDING,
                 rule_name=rule_name,
                 current_value=n,
-                baseline_value=ticket.sent_weight,
+                baseline_value=sent,
                 deviation_value=ticket.weight_difference,
                 deviation_percent=ticket.weight_difference_percent,
                 threshold_applied=rule_config.critical_threshold if rule_config else Decimal("0"),
                 gross_weight_snapshot=g,
                 tare_weight_snapshot=t,
                 net_weight_snapshot=n,
+                product_snapshot=prod,
+                sent_weight_snapshot=sent,
+                rule_fingerprint=rfp,
                 requested_by=user,
                 request_reason=clean_reason,
                 metadata=metadata or {},
@@ -275,6 +340,8 @@ class DiscrepancyApprovalService:
                     "gross": float(g),
                     "tare": float(t),
                     "net": float(n),
+                    "product": str(prod) if prod else "-",
+                    "sent_weight": float(sent),
                 },
                 reason="ثبت درخواست تأیید مغایرت توسط اپراتور"
             )
@@ -310,8 +377,8 @@ class DiscrepancyApprovalService:
                     "امکان تغییر مجدد تصمیم وجود ندارد."
                 )
 
-            # Separation of Duties Check: Requester cannot approve their own request
-            if approval.requested_by_id == supervisor_user.id and not supervisor_user.is_superuser:
+            # Strict Separation of Duties Check: Requester cannot approve their own request under any circumstance
+            if approval.requested_by_id == supervisor_user.id:
                 raise ValidationError("بر اساس اصل تفکیک وظایف، اپراتور ثبت‌کننده درخواست نمی‌تواند آن را تأیید کند.")
 
             # Permission Check
@@ -374,35 +441,53 @@ class DiscrepancyApprovalService:
         current_gross: Decimal,
         current_tare: Decimal,
         current_net: Decimal,
+        current_product=None,
+        current_sent_weight: Decimal | None = None,
+        current_rule_fingerprint: str | None = None,
     ) -> bool:
         """
-        If ticket weights were modified after approval was granted, invalidates (cancels)
-        the approval to prevent unauthorized weight tampering.
+        If ticket parameters (weights, product, waybill weight, rule config) were modified
+        after approval was granted, invalidates (cancels) the approval atomically.
         """
+        if not getattr(ticket, "pk", None):
+            return False
+
         with transaction.atomic():
             approved = DiscrepancyApproval.objects.select_for_update().filter(
                 ticket=ticket,
                 status=ApprovalStatus.APPROVED
             ).first()
 
-            if approved and not approved.are_weights_matching(current_gross, current_tare, current_net):
-                approved.status = ApprovalStatus.CANCELLED
-                approved.decision_reason = (
-                    (approved.decision_reason or "") +
-                    f" | [ابطال خودکار به دلیل تغییر اوزان پس از تأیید: ناخالص={current_gross}, خالی={current_tare}, خالص={current_net}]"
-                ).strip()
-                approved.save(update_fields=["status", "decision_reason"])
+            if approved:
+                prod = current_product if current_product is not None else ticket.product
+                sent = Decimal(str(current_sent_weight if current_sent_weight is not None else ticket.sent_weight or 0))
+                rfp = current_rule_fingerprint or cls.compute_rule_fingerprint(approved.discrepancy_type)
 
-                log_audit(
-                    action=AuditAction.STATUS_CHANGE,
-                    model_name="DiscrepancyApproval",
-                    record_id=approved.id,
-                    record_repr=f"ابطال مجوز قبض {ticket.serial_number}",
-                    old_values={"status": ApprovalStatus.APPROVED},
-                    new_values={"status": ApprovalStatus.CANCELLED},
-                    reason="ابطال خودکار مجوز به علت تغییر اوزان پس از تأیید"
-                )
-                return True
+                if not approved.are_parameters_matching(
+                    gross=current_gross,
+                    tare=current_tare,
+                    net=current_net,
+                    product=prod,
+                    sent_weight=sent,
+                    rule_fingerprint=rfp,
+                ):
+                    approved.status = ApprovalStatus.CANCELLED
+                    approved.decision_reason = (
+                        (approved.decision_reason or "") +
+                        f" | [ابطال خودکار به دلیل تغییر مقادیر مصوب پس از تأیید: ناخالص={current_gross}, تارا={current_tare}, خالص={current_net}, کالا={prod}, بارنامه={sent}]"
+                    ).strip()
+                    approved.save(update_fields=["status", "decision_reason"])
+
+                    log_audit(
+                        action=AuditAction.STATUS_CHANGE,
+                        model_name="DiscrepancyApproval",
+                        record_id=approved.id,
+                        record_repr=f"ابطال مجوز قبض {ticket.serial_number}",
+                        old_values={"status": ApprovalStatus.APPROVED},
+                        new_values={"status": ApprovalStatus.CANCELLED},
+                        reason="ابطال خودکار مجوز به علت تغییر مقادیر مصوب پس از تأیید"
+                    )
+                    return True
 
         return False
 

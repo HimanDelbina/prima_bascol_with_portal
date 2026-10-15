@@ -14,6 +14,7 @@ from weighbridge.services import TicketCalculationService
 from audit.services import log_audit
 from audit.models import AuditAction
 from monitoring.services.anomaly_engine import AnomalyDetectionEngine
+from monitoring.services.discrepancy_service import DiscrepancyApprovalService
 
 from api.v1.serializers.ticket_serializers import (
     WeighTicketListSerializer, WeighTicketDetailSerializer,
@@ -104,15 +105,6 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             if not ticket.first_weight_time:
                 ticket.first_weight_time = timezone.localtime().time()
 
-            # Second weight logic if provided during creation
-            if ticket.second_weight and ticket.second_weight > 0:
-                ticket.second_weight_date = get_today_gregorian()
-                ticket.second_weight_time = timezone.localtime().time()
-                ticket.second_weight_operator = request.user
-                ticket.status = TicketStatus.COMPLETED
-            else:
-                ticket.status = TicketStatus.WAITING_SECOND
-
             # Pure backend calculation
             calc = TicketCalculationService.calculate_ticket(
                 first_weight=ticket.first_weight,
@@ -133,6 +125,31 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             ticket.weight_difference = calc["weight_difference"]
             ticket.weight_difference_percent = calc["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc["is_tolerance_exceeded"]
+
+            # Second weight logic if provided during creation
+            if ticket.second_weight and ticket.second_weight > 0:
+                val_res = DiscrepancyApprovalService.validate_ticket_finalization(ticket, trial_weights=calc)
+                if not val_res["valid"]:
+                    return Response(
+                        {
+                            "success": False,
+                            "error": {
+                                "code": "DISCREPANCY_APPROVAL_REQUIRED",
+                                "message": f"تکمیل مستقیم قبض امکان‌پذیر نیست: {val_res['message']}",
+                                "details": {
+                                    "blocking_alerts": val_res["blocking_alerts"]
+                                }
+                            }
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                ticket.second_weight_date = get_today_gregorian()
+                ticket.second_weight_time = timezone.localtime().time()
+                ticket.second_weight_operator = request.user
+                ticket.status = TicketStatus.COMPLETED
+            else:
+                ticket.status = TicketStatus.WAITING_SECOND
+
             DailyPlatePolicy.save(ticket, user=request.user, assign_serial=True)
 
             # Audit log
@@ -218,6 +235,17 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             ticket.weight_difference = calc["weight_difference"]
             ticket.weight_difference_percent = calc["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc["is_tolerance_exceeded"]
+
+            # Invalidate any stale approval if weights changed
+            DiscrepancyApprovalService.check_and_invalidate_stale_approvals(
+                ticket,
+                calc["gross_weight"],
+                calc["tare_weight"],
+                calc["net_weight"],
+                current_product=ticket.product,
+                current_sent_weight=ticket.sent_weight,
+            )
+
             DailyPlatePolicy.save(ticket, user=request.user)
 
             log_audit(
@@ -299,7 +327,6 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             ticket.second_weight_date = w_date
             ticket.second_weight_time = w_time
             ticket.second_weight_operator = request.user
-            ticket.status = TicketStatus.COMPLETED
 
             if loss_pct is not None:
                 ticket.loss_percent = loss_pct
@@ -326,6 +353,35 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             ticket.weight_difference = calc["weight_difference"]
             ticket.weight_difference_percent = calc["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc["is_tolerance_exceeded"]
+
+            # Phase 3.1 Hotfix: Invalidate any stale approval if parameters changed
+            DiscrepancyApprovalService.check_and_invalidate_stale_approvals(
+                ticket,
+                calc["gross_weight"],
+                calc["tare_weight"],
+                calc["net_weight"],
+                current_product=ticket.product,
+                current_sent_weight=ticket.sent_weight,
+            )
+
+            # Central domain validation prior to setting COMPLETED
+            val_res = DiscrepancyApprovalService.validate_ticket_finalization(ticket, trial_weights=calc)
+            if not val_res["valid"]:
+                return Response(
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "DISCREPANCY_APPROVAL_REQUIRED",
+                            "message": f"ثبت وزن دوم و تکمیل قبض نیازمند تأیید سرپرست است: {val_res['message']}",
+                            "details": {
+                                "blocking_alerts": val_res["blocking_alerts"]
+                            }
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            ticket.status = TicketStatus.COMPLETED
             DailyPlatePolicy.save(ticket, user=request.user)
 
             log_audit(
@@ -381,6 +437,53 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                         "error": {
                             "code": "VALIDATION_ERROR",
                             "message": "برای تکمیل قبض باید هر دو وزن اول و دوم ثبت شده باشند."
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Recalculate and update weights prior to finalization
+            calc = TicketCalculationService.calculate_ticket(
+                first_weight=ticket.first_weight,
+                second_weight=ticket.second_weight,
+                sent_weight=ticket.sent_weight,
+                loss_percent=ticket.loss_percent,
+                manual_loss_weight=ticket.loss_weight if ticket.is_loss_overridden else None,
+                product=ticket.product,
+                is_loss_overridden=ticket.is_loss_overridden
+            )
+            ticket.gross_weight = calc["gross_weight"]
+            ticket.tare_weight = calc["tare_weight"]
+            ticket.net_weight = calc["net_weight"]
+            ticket.loss_percent = calc["loss_percent"]
+            ticket.loss_weight = calc["loss_weight"]
+            ticket.final_weight = calc["final_weight"]
+            ticket.weight_difference = calc["weight_difference"]
+            ticket.weight_difference_percent = calc["weight_difference_percent"]
+            ticket.is_tolerance_exceeded = calc["is_tolerance_exceeded"]
+
+            # Phase 3.1 Hotfix: Invalidate stale approval if any parameters are mismatched
+            DiscrepancyApprovalService.check_and_invalidate_stale_approvals(
+                ticket,
+                calc["gross_weight"],
+                calc["tare_weight"],
+                calc["net_weight"],
+                current_product=ticket.product,
+                current_sent_weight=ticket.sent_weight,
+            )
+
+            # Central domain validation prior to setting COMPLETED
+            val_res = DiscrepancyApprovalService.validate_ticket_finalization(ticket, trial_weights=calc)
+            if not val_res["valid"]:
+                return Response(
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "DISCREPANCY_APPROVAL_REQUIRED",
+                            "message": f"تکمیل نهایی قبض نیازمند تأیید سرپرست است: {val_res['message']}",
+                            "details": {
+                                "blocking_alerts": val_res["blocking_alerts"]
+                            }
                         }
                     },
                     status=status.HTTP_400_BAD_REQUEST
@@ -527,6 +630,22 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             ticket.weight_difference = calc["weight_difference"]
             ticket.weight_difference_percent = calc["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc["is_tolerance_exceeded"]
+
+            # Phase 3.1 Hotfix: Invalidate stale approval if weights, product, or sent_weight were modified
+            DiscrepancyApprovalService.check_and_invalidate_stale_approvals(
+                ticket,
+                calc["gross_weight"],
+                calc["tare_weight"],
+                calc["net_weight"],
+                current_product=ticket.product,
+                current_sent_weight=ticket.sent_weight,
+            )
+
+            # Re-evaluate discrepancies after material edit
+            eval_res = DiscrepancyApprovalService.evaluate_ticket_discrepancies(ticket, trial_weights=calc)
+            if ticket.status == TicketStatus.COMPLETED and not eval_res["can_finalize"]:
+                ticket.status = TicketStatus.WAITING_SECOND
+
             DailyPlatePolicy.save(ticket, user=request.user)
 
             new_values = {

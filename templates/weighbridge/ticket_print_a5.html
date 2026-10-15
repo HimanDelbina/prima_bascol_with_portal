@@ -158,6 +158,43 @@
                 max-width: 100% !important;
             }
         }
+        .draft-watermark {
+            position: absolute;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-30deg);
+            font-size: 26px;
+            font-weight: 900;
+            color: rgba(220, 38, 38, 0.22);
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 999;
+            user-select: none;
+            border: 4px dashed rgba(220, 38, 38, 0.32);
+            padding: 10px 20px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .draft-banner {
+            background-color: #fef2f2;
+            color: #991b1b;
+            border: 1px dashed #ef4444;
+            padding: 4px 8px;
+            font-size: 9px;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 6px;
+            border-radius: 4px;
+        }
+        .approval-badge-box {
+            background-color: #f0fdf4;
+            color: #166534;
+            border: 1px solid #86efac;
+            padding: 4px 8px;
+            font-size: 9px;
+            border-radius: 4px;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -184,6 +221,16 @@
 </div>
 
 <div class="receipt-card">
+    {% if is_draft %}
+    <div class="draft-watermark">
+        پیشنویس — فاقد اعتبار جهت ترخیص کالا
+    </div>
+    <div class="draft-banner">
+        ⚠️ هشدار: این برگه پیشنویس بوده و فاقد تأییدیه رسمی است. هرگونه خروج یا ترخیص کالا با این سند فاقد اعتبار می‌باشد.
+        {% if draft_reason %}<br><span style="font-weight: normal; font-size: 8.5px;">علت: {{ draft_reason }}</span>{% endif %}
+    </div>
+    {% endif %}
+
     <!-- Header -->
     <div class="header-box">
         <div class="d-flex justify-content-between align-items-center">
@@ -333,6 +380,15 @@
             </tr>
         </tbody>
     </table>
+
+    {% if latest_approval and latest_approval.is_approved %}
+    <div class="approval-badge-box">
+        <strong><i class="bi bi-shield-check"></i> مجوز استثنای سرپرست:</strong>
+        مغایرت توسط <strong>{{ latest_approval.reviewed_by.get_full_name|default:latest_approval.reviewed_by.username }}</strong>
+        در تاریخ {{ latest_approval.jalali_reviewed_at }} تأیید شده است. | 
+        <strong>شرح مجوز:</strong> {{ latest_approval.decision_reason }}
+    </div>
+    {% endif %}
 
     <!-- Verification QR & Footer Note -->
     <div class="d-flex justify-content-between align-items-center mt-1">

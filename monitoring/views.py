@@ -565,9 +565,14 @@ def ticket_request_approval(request, pk):
     POST endpoint for operators to request supervisor approval for a ticket with discrepancies.
     """
     ticket = get_object_or_404(WeighTicket, pk=pk)
+    redirect_url = request.POST.get("next") or "weighbridge:ticket_second_weight"
+
+    if ticket.status in [TicketStatus.COMPLETED, TicketStatus.CANCELLED]:
+        messages.error(request, f"امکان ثبت درخواست تأیید برای قبض در وضعیت «{ticket.get_status_display()}» وجود ندارد.")
+        return redirect(redirect_url, pk=ticket.pk)
+
     reason = request.POST.get("request_reason", "").strip()
     discrepancy_type = request.POST.get("discrepancy_type", AlertType.WEIGHT_DISCREPANCY)
-    redirect_url = request.POST.get("next") or "weighbridge:ticket_second_weight"
 
     try:
         approval = DiscrepancyApprovalService.request_approval(
@@ -578,6 +583,8 @@ def ticket_request_approval(request, pk):
             gross=ticket.gross_weight,
             tare=ticket.tare_weight,
             net=ticket.net_weight,
+            product=ticket.product,
+            sent_weight=ticket.sent_weight,
         )
         messages.success(request, f"درخواست تأیید مغایرت برای قبض {ticket.serial_number} با موفقیت ثبت شد و در کارتابل سرپرست قرار گرفت.")
     except ValidationError as e:

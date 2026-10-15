@@ -1,18 +1,11 @@
 from django.contrib import admin
-from weighbridge.models import WeighTicket, EmergencyWeighTicket, TicketSequence
+from django.core.exceptions import ValidationError
+from weighbridge.models import WeighTicket, EmergencyWeighTicket, TicketSequence, TicketStatus
+from weighbridge.services import TicketCalculationService
+from monitoring.services.discrepancy_service import DiscrepancyApprovalService
 
 @admin.register(WeighTicket)
 class WeighTicketAdmin(admin.ModelAdmin):
-    def save_model(self, request, obj, form, change):
-        from weighbridge.plate_policy import DailyPlatePolicy
-        DailyPlatePolicy.save(obj, user=request.user)
-
-    def get_readonly_fields(self, request, obj=None):
-        ro = list(self.readonly_fields)
-        if obj:
-            ro.append("serial_number")
-        return ro
-
     list_display = [
         "serial_number", "status", "party", "product", "license_plate_display",
         "driver_display", "gross_weight", "tare_weight", "net_weight", "final_weight",
@@ -22,6 +15,58 @@ class WeighTicketAdmin(admin.ModelAdmin):
     search_fields = ["serial_number", "license_plate_display", "waybill_number", "party__name", "product__name", "driver__full_name"]
     readonly_fields = ["gross_weight", "tare_weight", "net_weight", "final_weight", "weight_difference", "weight_difference_percent", "created_at", "updated_at"]
     ordering = ["-id"]
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(self.readonly_fields)
+        if obj:
+            ro.append("serial_number")
+            if not request.user.is_superuser:
+                if obj.status in [TicketStatus.COMPLETED, TicketStatus.CANCELLED]:
+                    return [f.name for f in self.model._meta.fields]
+        return ro
+
+    def save_model(self, request, obj, form, change):
+        if obj.first_weight and obj.second_weight:
+            calc = TicketCalculationService.calculate_ticket(
+                first_weight=obj.first_weight,
+                second_weight=obj.second_weight,
+                sent_weight=obj.sent_weight,
+                loss_percent=obj.loss_percent,
+                manual_loss_weight=obj.loss_weight if obj.is_loss_overridden else None,
+                product=obj.product,
+                is_loss_overridden=obj.is_loss_overridden
+            )
+            obj.gross_weight = calc["gross_weight"]
+            obj.tare_weight = calc["tare_weight"]
+            obj.net_weight = calc["net_weight"]
+            obj.loss_percent = calc["loss_percent"]
+            obj.loss_weight = calc["loss_weight"]
+            obj.final_weight = calc["final_weight"]
+            obj.weight_difference = calc["weight_difference"]
+            obj.weight_difference_percent = calc["weight_difference_percent"]
+            obj.is_tolerance_exceeded = calc["is_tolerance_exceeded"]
+
+            DiscrepancyApprovalService.check_and_invalidate_stale_approvals(
+                obj,
+                calc["gross_weight"],
+                calc["tare_weight"],
+                calc["net_weight"],
+                current_product=obj.product,
+                current_sent_weight=obj.sent_weight,
+            )
+
+        if obj.status == TicketStatus.COMPLETED:
+            val_res = DiscrepancyApprovalService.validate_ticket_finalization(obj)
+            if not val_res["valid"]:
+                raise ValidationError(
+                    f"امکان تکمیل یا ذخیره قبض در وضعیت تکمیل‌شده به دلیل مغایرت تاییدنشده وجود ندارد: {val_res['message']}"
+                )
+
+        from weighbridge.plate_policy import DailyPlatePolicy
+        DailyPlatePolicy.save(obj, user=request.user)
 
 
 @admin.register(EmergencyWeighTicket)
