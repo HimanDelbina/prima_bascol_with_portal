@@ -329,29 +329,244 @@ def ticket_second_weight(request, pk):
 @weighbridge_role_required
 def trucks_in_yard(request):
     """
-    Dedicated view for vehicles currently inside the company waiting for 2nd weight.
+    Dedicated operational queue board for vehicles waiting for 2nd weight inside the yard.
+    Supports fast multi-field search (normalized plate, driver, serial, waybill),
+    dwell-time thresholds (normal, warning, overdue), configurable auto-refresh polling (AJAX),
+    accessible keyboard shortcuts, and responsive pagination.
     """
-    waiting_tickets = WeighTicket.objects.filter(
-        status__in=[TicketStatus.WAITING_SECOND, TicketStatus.FIRST_REGISTERED]
-    ).select_related("product", "party", "driver", "vehicle", "first_weight_operator").order_by("-created_at")
+    from datetime import timedelta
+    from django.db.models import Count
+    from django.template.loader import render_to_string
+    from django.http import JsonResponse
+    from django.urls import reverse
+    from core.jalali import to_english_digits
+
+    # Authoritative dwell time thresholds from monitoring configuration
+    try:
+        from monitoring.models import MonitoringRuleConfig, AlertType
+        rule_config = MonitoringRuleConfig.get_rule_config(AlertType.LONG_WAITING_TIME)
+        warning_threshold = float(rule_config.warning_threshold)  # Default: 60.0 mins
+        critical_threshold = float(rule_config.critical_threshold)  # Default: 180.0 mins
+    except Exception:
+        warning_threshold = 60.0
+        critical_threshold = 180.0
 
     now = timezone.now()
+    cutoff_warning = now - timedelta(minutes=warning_threshold)
+    cutoff_critical = now - timedelta(minutes=critical_threshold)
+
+    # Base QuerySet: All active vehicles currently in yard waiting for 2nd weight
+    base_yard_qs = WeighTicket.objects.filter(
+        status__in=[TicketStatus.WAITING_SECOND, TicketStatus.FIRST_REGISTERED]
+    )
+
+    # Compute overall yard KPI statistics in a single fast SQL aggregate
+    yard_stats = base_yard_qs.aggregate(
+        total=Count("id"),
+        overdue=Count("id", filter=Q(created_at__lte=cutoff_critical)),
+        warning=Count("id", filter=Q(created_at__gt=cutoff_critical, created_at__lte=cutoff_warning)),
+        normal=Count("id", filter=Q(created_at__gt=cutoff_warning)),
+    )
+    total_yard_count = yard_stats["total"] or 0
+    yard_overdue_count = yard_stats["overdue"] or 0
+    yard_warning_count = yard_stats["warning"] or 0
+    yard_normal_count = yard_stats["normal"] or 0
+
+    # Build filtered query
+    qs = base_yard_qs.select_related(
+        "product", "party", "driver", "vehicle", "first_weight_operator", "operation_type", "unload_location"
+    )
+
+    # 1. Search Query: Normalized Plate, Driver, Serial, Waybill, Party, Product
+    q = request.GET.get("q", "").strip()
+    if q:
+        en_q = to_english_digits(q).strip()
+        norm_q = normalize_plate(q)
+
+        q_filter = Q()
+        if norm_q:
+            q_filter |= Q(normalized_plate__icontains=norm_q)
+        q_filter |= Q(license_plate_display__icontains=q)
+        if en_q and en_q != q:
+            q_filter |= Q(license_plate_display__icontains=en_q)
+
+        # Serial number and waybill search (both English and Persian digits)
+        target_digits = en_q if en_q else q
+        q_filter |= Q(serial_number__icontains=target_digits)
+        q_filter |= Q(waybill_number__icontains=target_digits)
+
+        # Driver search
+        q_filter |= Q(driver__full_name__icontains=q)
+        q_filter |= Q(driver_name_custom__icontains=q)
+        if en_q:
+            q_filter |= Q(driver_mobile_custom__icontains=en_q)
+            q_filter |= Q(driver__mobile__icontains=en_q)
+
+        # Cargo & Logistics
+        q_filter |= Q(party__name__icontains=q)
+        q_filter |= Q(product__name__icontains=q)
+
+        qs = qs.filter(q_filter)
+
+    # 2. Dwell Status Filter
+    dwell_filter = request.GET.get("dwell_status", "all").strip().lower()
+    if dwell_filter == "overdue":
+        qs = qs.filter(created_at__lte=cutoff_critical)
+    elif dwell_filter == "warning":
+        qs = qs.filter(created_at__gt=cutoff_critical, created_at__lte=cutoff_warning)
+    elif dwell_filter == "normal":
+        qs = qs.filter(created_at__gt=cutoff_warning)
+    else:
+        dwell_filter = "all"
+
+    # 3. Product Filter
+    product_id = request.GET.get("product", "").strip()
+    if product_id and product_id.isdigit():
+        qs = qs.filter(product_id=int(product_id))
+
+    # 4. Operation Type Filter
+    op_id = request.GET.get("operation_type", "").strip()
+    if op_id and op_id.isdigit():
+        qs = qs.filter(operation_type_id=int(op_id))
+
+    # 5. Ordering (Default: longest_wait FIFO priority)
+    order_by = request.GET.get("order_by", "longest_wait").strip()
+    if order_by == "newest":
+        qs = qs.order_by("-created_at")
+    elif order_by == "serial":
+        qs = qs.order_by("-serial_number")
+    elif order_by == "plate":
+        qs = qs.order_by("license_plate_display")
+    else:
+        order_by = "longest_wait"
+        qs = qs.order_by("created_at")
+
+    # 6. Pagination
+    try:
+        per_page = int(request.GET.get("per_page", 50))
+    except (ValueError, TypeError):
+        per_page = 50
+    if per_page not in [25, 50, 100, 200]:
+        per_page = 50
+
+    paginator = Paginator(qs, per_page)
+    page_number = request.GET.get("page", 1)
+    page_obj = paginator.get_page(page_number)
+
+    # Format items for template/JSON serialization
     tickets_with_duration = []
-    for t in waiting_tickets:
-        diff_mins = int((now - t.created_at).total_seconds() / 60)
+    start_index = page_obj.start_index() if paginator.count > 0 else 1
+    for idx, t in enumerate(page_obj, start=start_index):
+        start_dt = t.created_at or now
+        diff_seconds = max(0.0, (now - start_dt).total_seconds())
+        diff_mins = int(diff_seconds / 60)
         hours = diff_mins // 60
         mins = diff_mins % 60
-        duration_str = f"{hours} ساعت و {mins} دقیقه" if hours > 0 else f"{mins} دقیقه"
+
+        if hours > 0 and mins > 0:
+            duration_str = f"{hours} ساعت و {mins} دقیقه"
+        elif hours > 0:
+            duration_str = f"{hours} ساعت"
+        elif mins > 0:
+            duration_str = f"{mins} دقیقه"
+        else:
+            duration_str = "کمتر از ۱ دقیقه"
+
+        if diff_mins >= critical_threshold:
+            item_dwell_status = "overdue"
+            dwell_label = "معطلی بیش از حد"
+            dwell_badge_class = "danger"
+        elif diff_mins >= warning_threshold:
+            item_dwell_status = "warning"
+            dwell_label = "هشدار معطلی"
+            dwell_badge_class = "warning"
+        else:
+            item_dwell_status = "normal"
+            dwell_label = "عادی"
+            dwell_badge_class = "success"
+
         tickets_with_duration.append({
+            "row_number": idx,
             "ticket": t,
             "duration_str": duration_str,
-            "is_long_wait": diff_mins > 180,
+            "duration_minutes": diff_mins,
+            "dwell_status": item_dwell_status,
+            "dwell_label": dwell_label,
+            "dwell_badge_class": dwell_badge_class,
+            "is_long_wait": diff_mins >= critical_threshold,
         })
+
+    # Handle AJAX / JSON auto-refresh requests
+    is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest" or request.GET.get("format") == "json"
+    if is_ajax:
+        html_table = render_to_string("weighbridge/partials/trucks_in_yard_rows.html", {
+            "items": tickets_with_duration,
+            "page_obj": page_obj,
+            "q": q,
+            "dwell_status": dwell_filter,
+            "selected_product": product_id,
+            "selected_op": op_id,
+            "request": request,
+        }, request=request)
+
+        json_items = [
+            {
+                "id": item["ticket"].id,
+                "serial_number": item["ticket"].serial_number,
+                "license_plate_display": item["ticket"].license_plate_display,
+                "driver_display": item["ticket"].driver_display,
+                "driver_mobile": item["ticket"].driver_mobile_display,
+                "party_name": str(item["ticket"].party) if item["ticket"].party else "-",
+                "product_name": str(item["ticket"].product) if item["ticket"].product else "-",
+                "first_weight": float(item["ticket"].first_weight),
+                "duration_str": item["duration_str"],
+                "duration_minutes": item["duration_minutes"],
+                "dwell_status": item["dwell_status"],
+                "dwell_label": item["dwell_label"],
+                "dwell_badge_class": item["dwell_badge_class"],
+                "second_weight_url": reverse("weighbridge:ticket_second_weight", args=[item["ticket"].id]),
+                "detail_url": reverse("weighbridge:ticket_detail", args=[item["ticket"].id]),
+            }
+            for item in tickets_with_duration
+        ]
+
+        return JsonResponse({
+            "success": True,
+            "total_yard_count": total_yard_count,
+            "yard_normal_count": yard_normal_count,
+            "yard_warning_count": yard_warning_count,
+            "yard_overdue_count": yard_overdue_count,
+            "filtered_count": paginator.count,
+            "page": page_obj.number,
+            "total_pages": paginator.num_pages,
+            "timestamp": timezone.localtime().strftime("%H:%M:%S"),
+            "items": json_items,
+            "html": html_table,
+        })
+
+    # Standard full-page render
+    products = Product.objects.filter(is_active=True).order_by("name")
+    operation_types = OperationType.objects.filter(is_active=True).order_by("name")
 
     return render(request, "weighbridge/trucks_in_yard.html", {
         "items": tickets_with_duration,
-        "count": len(tickets_with_duration),
-        "title": "خودروهای در انتظار تکمیل باسکول (داخل محوطه)",
+        "page_obj": page_obj,
+        "count": paginator.count,
+        "total_yard_count": total_yard_count,
+        "yard_normal_count": yard_normal_count,
+        "yard_warning_count": yard_warning_count,
+        "yard_overdue_count": yard_overdue_count,
+        "warning_threshold": int(warning_threshold),
+        "critical_threshold": int(critical_threshold),
+        "q": q,
+        "dwell_status": dwell_filter,
+        "selected_product": product_id,
+        "selected_op": op_id,
+        "order_by": order_by,
+        "per_page": per_page,
+        "products": products,
+        "operation_types": operation_types,
+        "title": "برد عملیاتی خودروهای داخل مجموعه (در انتظار وزن دوم)",
     })
 
 

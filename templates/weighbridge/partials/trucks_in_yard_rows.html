@@ -1,0 +1,96 @@
+{% load bascol_tags %}
+
+{% for item in items %}
+{% with t=item.ticket %}
+<tr id="ticket-row-{{ t.id }}" class="yard-row {% if item.dwell_status == 'overdue' %}table-danger-subtle{% elif item.dwell_status == 'warning' %}table-warning-subtle{% endif %}" data-ticket-id="{{ t.id }}" data-serial="{{ t.serial_number }}" data-plate="{{ t.license_plate_display }}">
+    <td class="text-center text-muted small font-monospace">{{ item.row_number }}</td>
+    <td class="fw-bold font-monospace fs-6">
+        <a href="{% url 'weighbridge:ticket_detail' t.id %}?next={{ request.get_full_path|urlencode }}" class="text-decoration-none text-primary d-inline-flex align-items-center gap-1" title="مشاهده پرونده کامل قبض">
+            <i class="bi bi-file-earmark-text text-secondary"></i>
+            <span>{{ t.serial_number }}</span>
+        </a>
+    </td>
+    <td>
+        <div class="iranian-plate-badge d-inline-flex align-items-center bg-white border border-dark rounded shadow-xs px-2 py-1" style="direction: rtl; unicode-bidi: isolate; font-family: monospace; font-size: 0.95rem;">
+            <span class="fw-bold text-dark">{{ t.license_plate_display }}</span>
+        </div>
+    </td>
+    <td>
+        <div class="fw-bold text-slate-800">{{ t.driver_display }}</div>
+        {% if t.driver_mobile_display and t.driver_mobile_display != "-" %}
+        <div class="text-muted small font-monospace d-flex align-items-center gap-1">
+            <i class="bi bi-telephone text-muted" style="font-size: 0.75rem;"></i>
+            <span>{{ t.driver_mobile_display }}</span>
+        </div>
+        {% endif %}
+    </td>
+    <td>
+        <div class="fw-bold text-dark">{{ t.product.name|default:"-" }}</div>
+        <div class="text-muted small">
+            <span>{{ t.party.name|default:"-" }}</span>
+            {% if t.unload_location %}
+            <span class="text-secondary"> • {{ t.unload_location.name }}</span>
+            {% endif %}
+        </div>
+    </td>
+    <td class="small">
+        <div class="fw-bold text-dark font-monospace">{{ t.first_time_str }}</div>
+        <div class="text-muted" style="font-size: 0.75rem;">{{ t.jalali_first_date }}</div>
+    </td>
+    <td class="fw-bold text-primary font-monospace fs-6 text-end pe-3">
+        {{ t.first_weight|weight_fmt }}
+        <span class="text-muted small fw-normal">kg</span>
+    </td>
+    <td>
+        {% if item.dwell_status == 'overdue' %}
+        <span class="badge bg-danger text-white p-2 d-inline-flex align-items-center gap-1 shadow-xs" title="توقف طولانی بیش از حد مجاز (نیازمند پیگیری سرپرست)">
+            <i class="bi bi-exclamation-octagon-fill"></i>
+            <span>{{ item.duration_str }} (معطلی بیش از حد)</span>
+        </span>
+        {% elif item.dwell_status == 'warning' %}
+        <span class="badge bg-warning text-dark p-2 d-inline-flex align-items-center gap-1 shadow-xs" title="زمان توقف در محدوده هشدار">
+            <i class="bi bi-clock-history"></i>
+            <span>{{ item.duration_str }} (هشدار معطلی)</span>
+        </span>
+        {% else %}
+        <span class="badge bg-success-subtle text-success border border-success p-2 d-inline-flex align-items-center gap-1 shadow-xs" title="توقف عادی و مجاز">
+            <i class="bi bi-check2-circle"></i>
+            <span>{{ item.duration_str }} (عادی)</span>
+        </span>
+        {% endif %}
+    </td>
+    <td class="text-center">
+        <div class="d-inline-flex align-items-center gap-1">
+            <a href="{% url 'weighbridge:ticket_second_weight' t.id %}?next={{ request.get_full_path|urlencode }}" class="btn btn-success btn-sm fw-bold px-3 py-1 shadow-sm d-inline-flex align-items-center gap-1 btn-second-weight" title="ثبت وزن دوم و صدور قبض نهایی [Enter]">
+                <i class="bi bi-speedometer2"></i>
+                <span>ثبت وزن دوم</span>
+            </a>
+            <a href="{% url 'weighbridge:ticket_detail' t.id %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline-secondary btn-sm p-1" title="مشاهده جزئیات قبض">
+                <i class="bi bi-eye"></i>
+            </a>
+        </div>
+    </td>
+</tr>
+{% endwith %}
+{% empty %}
+<tr>
+    <td colspan="9" class="text-center py-5 text-muted">
+        {% if q or dwell_status != 'all' or selected_product or selected_op %}
+        <div class="empty-search-state">
+            <i class="bi bi-search text-secondary fs-1 d-block mb-2"></i>
+            <h6 class="fw-bold text-dark mb-1">هیچ خودرویی با فیلترها و مشخصات درخواستی یافت نشد</h6>
+            <p class="text-muted small mb-3">می‌توانید عبارت جستجو را تغییر داده یا فیلترها را بازنشانی کنید.</p>
+            <a href="{% url 'weighbridge:trucks_in_yard' %}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-x-circle me-1"></i> پاکسازی فیلترها و مشاهده همه
+            </a>
+        </div>
+        {% else %}
+        <div class="empty-yard-state">
+            <i class="bi bi-check-circle-fill text-success fs-1 d-block mb-2"></i>
+            <h6 class="fw-bold text-dark mb-1">محوطه مجتمع خالی است</h6>
+            <p class="text-muted small mb-0">در حال حاضر هیچ خودرویی در انتظار ثبت وزن دوم در محوطه حضور ندارد.</p>
+        </div>
+        {% endif %}
+    </td>
+</tr>
+{% endfor %}
