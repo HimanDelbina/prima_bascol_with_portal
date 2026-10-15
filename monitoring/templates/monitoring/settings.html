@@ -44,9 +44,16 @@
                     {% csrf_token %}
                     <input type="hidden" name="rule_type" value="{{ cfg.rule_type }}">
                     
-                    <div class="form-check form-switch mb-3">
+                    <div class="form-check form-switch mb-2">
                         <input class="form-check-input" type="checkbox" name="enabled" id="enabled_{{ cfg.rule_type }}" {% if cfg.enabled %}checked{% endif %}>
                         <label class="form-check-label fw-bold small" for="enabled_{{ cfg.rule_type }}">فعال بودن این قانون در سیستم</label>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" name="requires_approval" id="approval_{{ cfg.rule_type }}" {% if cfg.requires_approval %}checked{% endif %}>
+                        <label class="form-check-label fw-bold small text-danger" for="approval_{{ cfg.rule_type }}">
+                            الزام تأیید سرپرست (مسدودسازی تکمیل خودکار قبض در صورت بروز این مغایرت)
+                        </label>
                     </div>
 
                     <div class="row g-2 mb-3">

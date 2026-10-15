@@ -55,6 +55,16 @@ def monitoring_role_required(view_func):
         "commercial_manager", "financial_manager", "report_manager"
     )(view_func)
 
+def discrepancy_approver_required(view_func):
+    """
+    Decorator requiring supervisor/manager role authorized to approve weighbridge discrepancies:
+    Super Admin, System Admin, CEO, Factory Manager, Commercial Manager, Financial Manager, Weighbridge Manager.
+    """
+    return role_required(
+        "super_admin", "system_admin", "ceo", "factory_manager",
+        "commercial_manager", "financial_manager", "weighbridge_manager"
+    )(view_func)
+
 def audit_role_required(view_func):
     """
     Decorator requiring audit access:

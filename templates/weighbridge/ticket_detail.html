@@ -79,6 +79,49 @@
 </div>
 {% endif %}
 
+<!-- Supervisor Discrepancy Approval Banner -->
+{% with latest_approval=ticket.discrepancy_approvals.first %}
+{% if latest_approval %}
+    {% if latest_approval.is_approved %}
+        <div class="alert alert-success border-success shadow-sm d-flex align-items-center mb-4">
+            <i class="bi bi-shield-check fs-3 text-success me-3"></i>
+            <div>
+                <div class="fw-bold">مجوز سرپرست برای مغایرت این قبض صادر شده است:</div>
+                <div class="small">
+                    تأییدشده توسط: <strong>{{ latest_approval.reviewed_by.get_full_name|default:latest_approval.reviewed_by.username }}</strong>
+                    در تاریخ {{ latest_approval.jalali_reviewed_at }} |
+                    <strong>شرح مجوز:</strong> {{ latest_approval.decision_reason }}
+                </div>
+            </div>
+        </div>
+    {% elif latest_approval.is_pending %}
+        <div class="alert alert-warning border-warning shadow-sm d-flex align-items-center mb-4">
+            <i class="bi bi-hourglass-split fs-3 text-warning me-3"></i>
+            <div>
+                <div class="fw-bold">درخواست مجوز سرپرست در حال بررسی است:</div>
+                <div class="small">
+                    ثبت‌شده توسط: <strong>{{ latest_approval.requested_by.get_full_name|default:latest_approval.requested_by.username }}</strong>
+                    در تاریخ {{ latest_approval.jalali_created_at }} |
+                    <strong>دلیل درخواست:</strong> {{ latest_approval.request_reason }}
+                </div>
+            </div>
+        </div>
+    {% elif latest_approval.is_rejected %}
+        <div class="alert alert-danger border-danger shadow-sm d-flex align-items-center mb-4">
+            <i class="bi bi-x-octagon fs-3 text-danger me-3"></i>
+            <div>
+                <div class="fw-bold">درخواست مجوز سرپرست برای این قبض رد شده است:</div>
+                <div class="small">
+                    رد شده توسط: <strong>{{ latest_approval.reviewed_by.get_full_name|default:latest_approval.reviewed_by.username }}</strong>
+                    در تاریخ {{ latest_approval.jalali_reviewed_at }} |
+                    <strong>دلیل رد:</strong> {{ latest_approval.decision_reason }}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% endif %}
+{% endwith %}
+
 <!-- Hero Statistics Metric Row -->
 <div class="row g-3 mb-4">
     <!-- Gross -->

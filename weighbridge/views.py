@@ -24,6 +24,8 @@ from accounts.decorators import role_required, manager_or_admin_required, weighb
 from audit.services import log_audit
 from audit.models import AuditAction, AuditLog
 from monitoring.services.anomaly_engine import AnomalyDetectionEngine
+from monitoring.services.discrepancy_service import DiscrepancyApprovalService
+from monitoring.models import AlertType, ApprovalStatus
 from django.core.exceptions import ValidationError
 from weighbridge.plate_policy import DailyPlatePolicy, can_manage_plate_exceptions, can_manage_plate_autofill, normalize_plate
 
@@ -106,6 +108,16 @@ def ticket_create(request):
             ticket.weight_difference = calc_results["weight_difference"]
             ticket.weight_difference_percent = calc_results["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc_results["is_tolerance_exceeded"]
+
+            if has_w2:
+                eval_res = DiscrepancyApprovalService.evaluate_ticket_discrepancies(ticket, trial_weights=calc_results)
+                if not eval_res["can_finalize"]:
+                    ticket.status = TicketStatus.WAITING_SECOND
+                    messages.warning(
+                        request,
+                        f"هشدار پایش هوشمند: {eval_res['blocking_reason']} "
+                        "قبض صادر شد اما تکمیل نهایی آن در وضعیت «در انتظار وزن دوم / مجوز سرپرست» باقی ماند."
+                    )
 
             # Auto-register or link Vehicle and Driver into system MasterData
             VehicleDriverRegistrationService.resolve_or_create(ticket, form.cleaned_data)
@@ -242,7 +254,68 @@ def ticket_second_weight(request, pk):
         messages.error(request, "این قبض قبلاً تکمیل شده است و فقط مدیر باسکول مجاز به ویرایش آن می‌باشد.")
         return redirect("weighbridge:ticket_detail", pk=ticket.id)
 
-    if request.method == "POST":
+    action_btn = request.POST.get("submit_action") if request.method == "POST" else None
+
+    # 1. Handle explicit Request Approval from second weighing screen
+    if request.method == "POST" and action_btn == "request_approval":
+        form = SecondWeightForm(request.POST, instance=ticket)
+        if form.is_valid():
+            req_reason = request.POST.get("request_reason", "").strip()
+            if not req_reason or len(req_reason) < 5:
+                messages.error(request, "ثبت دلیل موجه جهت ارسال درخواست تأیید سرپرست (حداقل ۵ کاراکتر) الزامی است.")
+            else:
+                ticket = form.save(commit=False)
+                sec_date_j = form.cleaned_data.get("second_weight_date_jalali")
+                ticket.second_weight_date = jalali_to_gregorian(sec_date_j) if sec_date_j else get_today_gregorian()
+                sec_time_str = form.cleaned_data.get("second_weight_time_str")
+                if sec_time_str and ":" in sec_time_str:
+                    try:
+                        h, m = sec_time_str.split(":")[:2]
+                        ticket.second_weight_time = time(int(h), int(m))
+                    except Exception:
+                        ticket.second_weight_time = timezone.localtime().time()
+                else:
+                    ticket.second_weight_time = timezone.localtime().time()
+
+                calc_results = TicketCalculationService.calculate_ticket(
+                    first_weight=ticket.first_weight,
+                    second_weight=ticket.second_weight,
+                    sent_weight=ticket.sent_weight,
+                    loss_percent=ticket.loss_percent,
+                    manual_loss_weight=ticket.loss_weight if ticket.is_loss_overridden else None,
+                    product=ticket.product,
+                    is_loss_overridden=ticket.is_loss_overridden
+                )
+                ticket.gross_weight = calc_results["gross_weight"]
+                ticket.tare_weight = calc_results["tare_weight"]
+                ticket.net_weight = calc_results["net_weight"]
+                ticket.loss_percent = calc_results["loss_percent"]
+                ticket.loss_weight = calc_results["loss_weight"]
+                ticket.final_weight = calc_results["final_weight"]
+                ticket.weight_difference = calc_results["weight_difference"]
+                ticket.weight_difference_percent = calc_results["weight_difference_percent"]
+                ticket.is_tolerance_exceeded = calc_results["is_tolerance_exceeded"]
+                ticket.status = TicketStatus.WAITING_SECOND
+                ticket.second_weight_operator = request.user
+                ticket.save()
+
+                try:
+                    approval = DiscrepancyApprovalService.request_approval(
+                        ticket=ticket,
+                        user=request.user,
+                        reason=req_reason,
+                        discrepancy_type=AlertType.WEIGHT_DISCREPANCY,
+                        gross=calc_results["gross_weight"],
+                        tare=calc_results["tare_weight"],
+                        net=calc_results["net_weight"],
+                    )
+                    AnomalyDetectionEngine.run_for_ticket(ticket)
+                    messages.success(request, f"درخواست تأیید مغایرت برای قبض {ticket.serial_number} با موفقیت ثبت شد و به کارتابل سرپرست ارسال گردید.")
+                    return redirect("weighbridge:trucks_in_yard")
+                except ValidationError as exc:
+                    messages.error(request, f"خطا در ثبت درخواست: {exc}")
+
+    elif request.method == "POST":
         form = SecondWeightForm(request.POST, instance=ticket)
         if form.is_valid():
             ticket = form.save(commit=False)
@@ -262,7 +335,6 @@ def ticket_second_weight(request, pk):
                 ticket.second_weight_time = timezone.localtime().time()
 
             ticket.second_weight_operator = request.user
-            ticket.status = TicketStatus.COMPLETED
 
             # Calculate Gross, Tare, Net, Loss, Final
             calc_results = TicketCalculationService.calculate_ticket(
@@ -285,6 +357,44 @@ def ticket_second_weight(request, pk):
             ticket.weight_difference_percent = calc_results["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc_results["is_tolerance_exceeded"]
 
+            # Phase 3.1: Invalidate any stale approval if weights changed from approved snapshot
+            DiscrepancyApprovalService.check_and_invalidate_stale_approvals(
+                ticket,
+                calc_results["gross_weight"],
+                calc_results["tare_weight"],
+                calc_results["net_weight"]
+            )
+
+            # Evaluate discrepancies and blocking rules
+            eval_res = DiscrepancyApprovalService.evaluate_ticket_discrepancies(
+                ticket,
+                trial_weights=calc_results
+            )
+
+            if not eval_res["can_finalize"]:
+                # Blocking discrepancy without approval -> preserve entered weights, keep WAITING_SECOND
+                ticket.status = TicketStatus.WAITING_SECOND
+                ticket.save()
+                AnomalyDetectionEngine.run_for_ticket(ticket)
+
+                messages.error(
+                    request,
+                    f"⛔ عدم امکان تکمیل خودکار قبض: {eval_res['blocking_reason']}"
+                )
+                today_jalali = get_today_jalali()
+                today_time = timezone.localtime().strftime("%H:%M")
+                return render(request, "weighbridge/ticket_second_weight.html", {
+                    "form": form,
+                    "ticket": ticket,
+                    "title": f"ثبت وزن دوم - قبض شماره {ticket.serial_number}",
+                    "today_jalali": today_jalali,
+                    "today_time": today_time,
+                    "discrepancy_eval": eval_res,
+                    "active_approval": eval_res["active_approval"],
+                })
+
+            # Normal or approved ticket -> Complete
+            ticket.status = TicketStatus.COMPLETED
             ticket.save()
 
             # Update vehicle empty weight in masterdata if not previously set
@@ -320,10 +430,18 @@ def ticket_second_weight(request, pk):
     else:
         form = SecondWeightForm(instance=ticket)
 
+    today_jalali = get_today_jalali()
+    today_time = timezone.localtime().strftime("%H:%M")
+    eval_res = DiscrepancyApprovalService.evaluate_ticket_discrepancies(ticket)
+
     return render(request, "weighbridge/ticket_second_weight.html", {
         "form": form,
         "ticket": ticket,
         "title": f"ثبت وزن دوم - قبض شماره {ticket.serial_number}",
+        "today_jalali": today_jalali,
+        "today_time": today_time,
+        "discrepancy_eval": eval_res,
+        "active_approval": eval_res["active_approval"],
     })
 
 

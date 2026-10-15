@@ -10,7 +10,10 @@ from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 
-from accounts.decorators import role_required, manager_or_admin_required, admin_only_required, monitoring_role_required
+from accounts.decorators import (
+    role_required, manager_or_admin_required, admin_only_required,
+    monitoring_role_required, discrepancy_approver_required
+)
 from core.jalali import (
     get_today_gregorian, get_today_jalali, format_jalali_date, jalali_to_gregorian
 )
@@ -19,17 +22,23 @@ from weighbridge.models import WeighTicket, TicketStatus
 from masterdata.models import Product, Party, Vehicle, Driver
 from audit.services import log_audit
 from audit.models import AuditAction
+from django.core.exceptions import ValidationError, PermissionDenied
 
 from monitoring.models import (
-    MonitoringAlert, MonitoringRuleConfig, AlertType, AlertSeverity, AlertStatus, AlertConfidence
+    MonitoringAlert, MonitoringRuleConfig, AlertType, AlertSeverity,
+    AlertStatus, AlertConfidence, ApprovalStatus, DiscrepancyApproval
 )
-from monitoring.forms import MonitoringRuleConfigForm, AlertResolveForm, AlertFilterForm
+from monitoring.forms import (
+    MonitoringRuleConfigForm, AlertResolveForm, AlertFilterForm,
+    DiscrepancyApprovalRequestForm, DiscrepancyApprovalDecisionForm, DiscrepancyFilterForm
+)
 from monitoring.exports import export_monitoring_excel, export_monitoring_csv
 from monitoring.selectors.monitoring_queries import (
     get_vehicle_tare_stats, get_party_discrepancy_stats, get_loss_stats,
     get_net_weight_stats, get_waiting_time_stats, get_ticket_risk_score
 )
 from monitoring.services.anomaly_engine import AnomalyDetectionEngine
+from monitoring.services.discrepancy_service import DiscrepancyApprovalService
 
 
 @login_required
@@ -332,6 +341,7 @@ def monitoring_settings(request):
                 record_repr=f"تنظیمات قانون {updated_cfg.name_fa}",
                 new_values={
                     "enabled": updated_cfg.enabled,
+                    "requires_approval": updated_cfg.requires_approval,
                     "warning_threshold": float(updated_cfg.warning_threshold),
                     "high_threshold": float(updated_cfg.high_threshold),
                     "critical_threshold": float(updated_cfg.critical_threshold),
@@ -427,6 +437,20 @@ def monitoring_reports(request):
     ticket_risk_list.sort(key=lambda x: x["risk_score"], reverse=True)
     top_10_risk_tickets = ticket_risk_list[:10]
 
+    # 8. Discrepancy Approval Workflow Statistics (Phase 3.1)
+    total_approvals = DiscrepancyApproval.objects.count()
+    pending_approvals = DiscrepancyApproval.objects.filter(status=ApprovalStatus.PENDING).count()
+    approved_approvals = DiscrepancyApproval.objects.filter(status=ApprovalStatus.APPROVED).count()
+    rejected_approvals = DiscrepancyApproval.objects.filter(status=ApprovalStatus.REJECTED).count()
+
+    approval_type_summary = []
+    for row in DiscrepancyApproval.objects.values("discrepancy_type").annotate(cnt=Count("id")).order_by("-cnt"):
+        approval_type_summary.append({
+            "type_code": row["discrepancy_type"],
+            "type_name": dict(AlertType.choices).get(row["discrepancy_type"], row["discrepancy_type"]),
+            "count": row["cnt"],
+        })
+
     return render(request, "monitoring/reports.html", {
         "title": "گزارشات تحلیلی و آماری پایش هوشمند",
         "total_alerts": total_alerts,
@@ -437,5 +461,130 @@ def monitoring_reports(request):
         "top_discrepancy_parties": top_discrepancy_parties,
         "top_loss_products": top_loss_products,
         "top_10_risk_tickets": top_10_risk_tickets,
+        "total_approvals": total_approvals,
+        "pending_approvals": pending_approvals,
+        "approved_approvals": approved_approvals,
+        "rejected_approvals": rejected_approvals,
+        "approval_type_summary": approval_type_summary,
         "today_jalali": get_today_jalali(),
     })
+
+
+@login_required
+@discrepancy_approver_required
+def approval_list(request):
+    """
+    Supervisor Approval Dashboard (Phase 3.1).
+    Displays pending, approved, and rejected discrepancy requests with filters,
+    turnaround metrics, inline approve/reject actions, and separation of duties validation.
+    """
+    form = DiscrepancyFilterForm(request.GET)
+    qs = DiscrepancyApproval.objects.select_related(
+        "ticket", "ticket__product", "ticket__party", "ticket__vehicle",
+        "ticket__driver", "requested_by", "reviewed_by"
+    ).order_by("-id")
+
+    status_filter = request.GET.get("status")
+    type_filter = request.GET.get("discrepancy_type")
+    product_filter = request.GET.get("product")
+    search_query = request.GET.get("search", "").strip()
+
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    if type_filter:
+        qs = qs.filter(discrepancy_type=type_filter)
+    if product_filter:
+        qs = qs.filter(ticket__product_id=product_filter)
+    if search_query:
+        qs = qs.filter(
+            Q(ticket__serial_number__icontains=search_query) |
+            Q(ticket__license_plate_display__icontains=search_query) |
+            Q(ticket__normalized_plate__icontains=search_query) |
+            Q(ticket__driver_name_custom__icontains=search_query) |
+            Q(ticket__driver__full_name__icontains=search_query)
+        )
+
+    # Metrics Summary
+    total_requests = DiscrepancyApproval.objects.count()
+    pending_count = DiscrepancyApproval.objects.filter(status=ApprovalStatus.PENDING).count()
+    approved_count = DiscrepancyApproval.objects.filter(status=ApprovalStatus.APPROVED).count()
+    rejected_count = DiscrepancyApproval.objects.filter(status=ApprovalStatus.REJECTED).count()
+
+    paginator = Paginator(qs, 20)
+    page_number = request.GET.get("page", 1)
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, "monitoring/approval_list.html", {
+        "title": "کارتابل بررسی و مجوزهای مغایرت سرپرست",
+        "page_obj": page_obj,
+        "form": form,
+        "total_requests": total_requests,
+        "pending_count": pending_count,
+        "approved_count": approved_count,
+        "rejected_count": rejected_count,
+        "today_jalali": get_today_jalali(),
+    })
+
+
+@login_required
+@discrepancy_approver_required
+@require_POST
+def approval_decision(request, pk):
+    """
+    POST endpoint for supervisor to approve or reject a discrepancy approval request.
+    Enforces separation of duties and concurrency row-locking.
+    """
+    decision = request.POST.get("decision", "").strip()
+    reason = request.POST.get("decision_reason", "").strip()
+    redirect_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or "monitoring:approval_list"
+
+    try:
+        approval = DiscrepancyApprovalService.decide_approval(
+            approval_id=pk,
+            supervisor_user=request.user,
+            decision=decision,
+            decision_reason=reason
+        )
+        if decision == "approve":
+            messages.success(request, f"مجوز مغایرت قبض {approval.ticket.serial_number} با موفقیت صادر و تأیید شد.")
+        else:
+            messages.warning(request, f"درخواست مجوز قبض {approval.ticket.serial_number} توسط سرپرست رد شد.")
+    except (ValidationError, PermissionDenied) as e:
+        messages.error(request, f"خطا در ثبت تصمیم سرپرست: {e}")
+    except Exception as e:
+        logger.exception(f"Unexpected error in approval_decision {pk}: {e}")
+        messages.error(request, "خطای سیستمی رخ داد؛ لطفاً مجدداً تلاش نمایید.")
+
+    return redirect(redirect_url)
+
+
+@login_required
+@require_POST
+def ticket_request_approval(request, pk):
+    """
+    POST endpoint for operators to request supervisor approval for a ticket with discrepancies.
+    """
+    ticket = get_object_or_404(WeighTicket, pk=pk)
+    reason = request.POST.get("request_reason", "").strip()
+    discrepancy_type = request.POST.get("discrepancy_type", AlertType.WEIGHT_DISCREPANCY)
+    redirect_url = request.POST.get("next") or "weighbridge:ticket_second_weight"
+
+    try:
+        approval = DiscrepancyApprovalService.request_approval(
+            ticket=ticket,
+            user=request.user,
+            reason=reason,
+            discrepancy_type=discrepancy_type,
+            gross=ticket.gross_weight,
+            tare=ticket.tare_weight,
+            net=ticket.net_weight,
+        )
+        messages.success(request, f"درخواست تأیید مغایرت برای قبض {ticket.serial_number} با موفقیت ثبت شد و در کارتابل سرپرست قرار گرفت.")
+    except ValidationError as e:
+        messages.error(request, f"امکان ثبت درخواست وجود ندارد: {e}")
+    except Exception as e:
+        logger.exception(f"Unexpected error in ticket_request_approval for ticket {pk}: {e}")
+        messages.error(request, "خطای سیستمی در ثبت درخواست تأیید رخ داد.")
+
+    return redirect(redirect_url, pk=ticket.pk)
+

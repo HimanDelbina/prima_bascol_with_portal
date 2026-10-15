@@ -9,6 +9,17 @@
             <i class="bi bi-file-earmark-text text-secondary"></i>
             <span>{{ t.serial_number }}</span>
         </a>
+        {% with approval=t.discrepancy_approvals.first %}
+            {% if approval %}
+                {% if approval.is_pending %}
+                    <div class="mt-1"><span class="badge bg-warning text-dark border border-warning" style="font-size: 0.7rem;"><i class="bi bi-hourglass-split me-1"></i>در انتظار تأیید سرپرست</span></div>
+                {% elif approval.is_approved %}
+                    <div class="mt-1"><span class="badge bg-success text-white" style="font-size: 0.7rem;"><i class="bi bi-patch-check-fill me-1"></i>مغایرت تأیید شد</span></div>
+                {% elif approval.is_rejected %}
+                    <div class="mt-1"><span class="badge bg-danger text-white" style="font-size: 0.7rem;"><i class="bi bi-x-circle me-1"></i>رد سرپرست</span></div>
+                {% endif %}
+            {% endif %}
+        {% endwith %}
     </td>
     <td>
         <div class="iranian-plate-badge d-inline-flex align-items-center bg-white border border-dark rounded shadow-xs px-2 py-1" style="direction: rtl; unicode-bidi: isolate; font-family: monospace; font-size: 0.95rem;">

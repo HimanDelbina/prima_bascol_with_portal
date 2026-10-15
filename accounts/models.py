@@ -67,7 +67,11 @@ class UserProfile(models.Model):
 
     @property
     def can_view_monitoring(self):
-        return self.is_executive_manager
+        return self.is_executive_manager or self.role == RoleChoices.WEIGHBRIDGE_MANAGER
+
+    @property
+    def can_approve_discrepancy(self):
+        return self.is_admin_or_manager
 
     @property
     def can_manage_settings(self):

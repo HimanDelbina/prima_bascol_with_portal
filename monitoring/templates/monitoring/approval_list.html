@@ -1,0 +1,328 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<!-- Top Header & Summary Stats -->
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 pb-2 border-bottom gap-2">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <h4 class="fw-bold mb-0 text-slate-900" style="color: #0f172a;">
+                <i class="bi bi-shield-check text-primary me-2"></i>{{ title }}
+            </h4>
+            {% if pending_count > 0 %}
+                <span class="badge bg-danger fs-6 px-3 py-1 font-monospace animate__animated animate__pulse animate__infinite">
+                    {{ pending_count }} در انتظار بررسی
+                </span>
+            {% else %}
+                <span class="badge bg-success fs-6 px-3 py-1">همه درخواست‌ها بررسی شده</span>
+            {% endif %}
+        </div>
+        <p class="text-muted small mb-0">کارتابل جامع سرپرست جهت بررسی مستندات، تفکیک وظایف و صدور مجوزهای توزین دارای مغایرت</p>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'monitoring:dashboard' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-speedometer2 me-1"></i> داشبورد پایش
+        </a>
+        <a href="{% url 'weighbridge:trucks_in_yard' %}" class="btn btn-outline-dark">
+            <i class="bi bi-truck me-1"></i> خودروهای داخل محوطه
+        </a>
+    </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-md-3">
+        <div class="industrial-card p-3 border-start border-4 border-warning bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-bold">در انتظار بررسی</div>
+                    <div class="fs-4 fw-bold text-warning font-monospace">{{ pending_count }}</div>
+                </div>
+                <div class="bg-warning-subtle text-warning p-2 rounded-circle">
+                    <i class="bi bi-clock-history fs-4"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-md-3">
+        <div class="industrial-card p-3 border-start border-4 border-success bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-bold">تأیید شده (مجوزدار)</div>
+                    <div class="fs-4 fw-bold text-success font-monospace">{{ approved_count }}</div>
+                </div>
+                <div class="bg-success-subtle text-success p-2 rounded-circle">
+                    <i class="bi bi-check-circle-fill fs-4"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-md-3">
+        <div class="industrial-card p-3 border-start border-4 border-danger bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-bold">رد شده</div>
+                    <div class="fs-4 fw-bold text-danger font-monospace">{{ rejected_count }}</div>
+                </div>
+                <div class="bg-danger-subtle text-danger p-2 rounded-circle">
+                    <i class="bi bi-x-circle-fill fs-4"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-md-3">
+        <div class="industrial-card p-3 border-start border-4 border-primary bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-bold">کل درخواست‌ها</div>
+                    <div class="fs-4 fw-bold text-primary font-monospace">{{ total_requests }}</div>
+                </div>
+                <div class="bg-primary-subtle text-primary p-2 rounded-circle">
+                    <i class="bi bi-file-earmark-text fs-4"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="industrial-card p-3 mb-4 bg-light border">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small fw-bold text-secondary mb-1">وضعیت بررسی</label>
+            {{ form.status }}
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-bold text-secondary mb-1">نوع مغایرت</label>
+            {{ form.discrepancy_type }}
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-bold text-secondary mb-1">کالا / محصول</label>
+            {{ form.product }}
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-bold text-secondary mb-1">جستجو (قبض / پلاک / راننده)</label>
+            <div class="input-group">
+                {{ form.search }}
+                <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
+                <a href="{% url 'monitoring:approval_list' %}" class="btn btn-outline-secondary" title="پاکسازی فیلترها"><i class="bi bi-arrow-clockwise"></i></a>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Approvals Table -->
+<div class="industrial-card">
+    <div class="industrial-card-header d-flex justify-content-between align-items-center">
+        <h6 class="industrial-card-title mb-0"><i class="bi bi-list-check me-2"></i>فهرست درخواست‌های تأیید مغایرت</h6>
+        <span class="badge bg-secondary font-monospace">{{ page_obj.paginator.count }} رکورد</span>
+    </div>
+    <div class="industrial-card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped align-middle mb-0 text-center">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 50px;">#</th>
+                        <th>قبض / پلاک</th>
+                        <th>کالا و طرف حساب</th>
+                        <th>نوع مغایرت</th>
+                        <th>انحراف ثبت‌شده</th>
+                        <th>درخواست‌کننده و زمان</th>
+                        <th>دلیل اپراتور</th>
+                        <th>وضعیت و تصمیم</th>
+                        <th style="min-width: 140px;">عملیات سرپرست</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in page_obj %}
+                    <tr class="{% if item.is_pending %}table-warning{% elif item.is_rejected %}table-danger-subtle{% endif %}">
+                        <td class="font-monospace text-muted">{{ item.id }}</td>
+                        <td>
+                            <a href="{% url 'weighbridge:ticket_detail' pk=item.ticket.id %}" class="fw-bold text-dark font-monospace text-decoration-none">
+                                #{{ item.ticket.serial_number }}
+                            </a>
+                            <div class="mt-1">
+                                <span class="badge bg-white text-dark border border-dark font-monospace" style="direction: rtl; unicode-bidi: isolate;">
+                                    {{ item.ticket.license_plate_display }}
+                                </span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="fw-bold text-primary">{{ item.ticket.product.name|default:"-" }}</div>
+                            <small class="text-muted">{{ item.ticket.party.name|default:"-" }}</small>
+                        </td>
+                        <td>
+                            <div class="fw-bold">{{ item.get_discrepancy_type_display }}</div>
+                            {% if item.severity == 'CRITICAL' %}
+                                <span class="badge bg-danger text-white small">بحرانی (Critical)</span>
+                            {% elif item.severity == 'HIGH' %}
+                                <span class="badge bg-warning text-dark small">بالا (High)</span>
+                            {% else %}
+                                <span class="badge bg-info text-dark small">{{ item.get_severity_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="font-monospace fw-bold text-danger dir-ltr">
+                                {{ item.deviation_value|default:"0" }} Kg
+                            </div>
+                            {% if item.deviation_percent %}
+                                <small class="text-muted dir-ltr">({{ item.deviation_percent }}%)</small>
+                            {% endif %}
+                            {% if item.threshold_applied %}
+                                <div class="text-muted" style="font-size: 0.75rem;">حد مجاز: {{ item.threshold_applied }} Kg</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-bold">{{ item.requested_by.get_full_name|default:item.requested_by.username }}</div>
+                            <small class="text-muted font-monospace">{{ item.jalali_created_at }}</small>
+                        </td>
+                        <td class="text-start" style="max-width: 250px;">
+                            <div class="small text-dark p-1 rounded bg-white border">
+                                {{ item.request_reason|linebreaksbr }}
+                            </div>
+                        </td>
+                        <td>
+                            {% if item.is_pending %}
+                                <span class="badge bg-warning text-dark border border-warning fs-6 px-2 py-1">
+                                    <i class="bi bi-hourglass-split me-1"></i>در انتظار بررسی
+                                </span>
+                            {% elif item.is_approved %}
+                                <span class="badge bg-success fs-6 px-2 py-1">
+                                    <i class="bi bi-check-circle me-1"></i>تأیید شده
+                                </span>
+                                <div class="small text-muted mt-1">توسط: {{ item.reviewed_by.get_full_name|default:item.reviewed_by.username }}</div>
+                                <div class="small text-muted font-monospace" style="font-size: 0.7rem;">{{ item.jalali_reviewed_at }}</div>
+                                {% if item.decision_reason %}
+                                    <div class="small text-success mt-1 text-start" title="{{ item.decision_reason }}">
+                                        <strong>دلیل:</strong> {{ item.decision_reason|truncatechars:40 }}
+                                    </div>
+                                {% endif %}
+                            {% elif item.is_rejected %}
+                                <span class="badge bg-danger fs-6 px-2 py-1">
+                                    <i class="bi bi-x-circle me-1"></i>رد شده
+                                </span>
+                                <div class="small text-muted mt-1">توسط: {{ item.reviewed_by.get_full_name|default:item.reviewed_by.username }}</div>
+                                {% if item.decision_reason %}
+                                    <div class="small text-danger mt-1 text-start" title="{{ item.decision_reason }}">
+                                        <strong>دلیل:</strong> {{ item.decision_reason|truncatechars:40 }}
+                                    </div>
+                                {% endif %}
+                            {% elif item.is_cancelled %}
+                                <span class="badge bg-secondary fs-6 px-2 py-1">
+                                    <i class="bi bi-ban me-1"></i>لغو / منسوخ
+                                </span>
+                                {% if item.decision_reason %}
+                                    <div class="small text-muted mt-1 text-start">{{ item.decision_reason|truncatechars:40 }}</div>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.is_pending %}
+                                {% if item.requested_by_id == user.id and not user.is_superuser %}
+                                    <button class="btn btn-sm btn-secondary disabled" title="بر اساس تفکیک وظایف، اپراتور ثبت‌کننده نمی‌تواند درخواست خود را تأیید کند.">
+                                        <i class="bi bi-slash-circle me-1"></i>عدم امکان خودتأییدی
+                                    </button>
+                                {% else %}
+                                    <button type="button" class="btn btn-sm btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#decisionModal{{ item.id }}">
+                                        <i class="bi bi-pencil-square me-1"></i>تعیین تکلیف
+                                    </button>
+                                {% endif %}
+
+                                <!-- Decision Modal -->
+                                <div class="modal fade text-start" id="decisionModal{{ item.id }}" tabindex="-1" aria-labelledby="modalLabel{{ item.id }}" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered">
+                                        <div class="modal-content">
+                                            <form method="POST" action="{% url 'monitoring:approval_decision' pk=item.id %}">
+                                                {% csrf_token %}
+                                                <div class="modal-header bg-slate-900 text-white" style="background: #0f172a;">
+                                                    <h6 class="modal-title text-white fw-bold" id="modalLabel{{ item.id }}">
+                                                        <i class="bi bi-shield-check text-primary me-2"></i>تصمیم سرپرست - قبض #{{ item.ticket.serial_number }}
+                                                    </h6>
+                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body p-3">
+                                                    <div class="alert alert-light border p-2 mb-3 small">
+                                                        <div><strong>پلاک:</strong> {{ item.ticket.license_plate_display }}</div>
+                                                        <div><strong>کالا:</strong> {{ item.ticket.product.name|default:"-" }}</div>
+                                                        <div><strong>انحراف:</strong> {{ item.deviation_value }} Kg ({{ item.deviation_percent }}%)</div>
+                                                        <div><strong>دلیل اپراتور:</strong> {{ item.request_reason }}</div>
+                                                    </div>
+
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-bold small text-secondary">تصمیم سرپرست <span class="text-danger">*</span></label>
+                                                        <select name="decision" class="form-select fw-bold" required>
+                                                            <option value="approve" class="text-success">تأیید مغایرت و صدور مجوز تکمیل قبض</option>
+                                                            <option value="reject" class="text-danger">رد درخواست و عدم صدور مجوز</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-bold small text-secondary">دلیل و مستندات تصمیم <span class="text-danger">*</span></label>
+                                                        <textarea name="decision_reason" class="form-control" rows="3" placeholder="توضیح کامل ادله فنی یا مستندات مدیریتی تصمیم سرپرست (حداقل ۵ کاراکتر)..." required></textarea>
+                                                        <div class="form-text small">ثبت شرح تصمیم الزامی است و در تاریخچه ممیزی سامانه ثبت خواهد شد.</div>
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer bg-light p-2">
+                                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">انصراف</button>
+                                                    <button type="submit" class="btn btn-success btn-sm px-3 fw-bold">
+                                                        <i class="bi bi-check2-circle me-1"></i>ثبت نهایی تصمیم
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <a href="{% url 'weighbridge:ticket_detail' pk=item.ticket.id %}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-eye me-1"></i>مشاهده قبض
+                                </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="p-5 text-center text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
+                            هیچ درخواست تأیید مغایرتی با شرایط انتخاب‌شده یافت نشد.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<div class="d-flex justify-content-center mt-4">
+    <nav aria-label="Page navigation">
+        <ul class="pagination pagination-sm shadow-sm mb-0">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% for key, val in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ val }}{% endif %}{% endfor %}">اولین</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, val in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ val }}{% endif %}{% endfor %}">قبلی</a>
+                </li>
+            {% endif %}
+
+            <li class="page-item active">
+                <span class="page-link">{{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span>
+            </li>
+
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, val in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ val }}{% endif %}{% endfor %}">بعدی</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, val in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ val }}{% endif %}{% endfor %}">آخرین</a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+</div>
+{% endif %}
+{% endblock %}

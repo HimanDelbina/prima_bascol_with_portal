@@ -35,6 +35,13 @@ class AlertConfidence(models.TextChoices):
     HIGH = "high", "بالا (۵۰+ نمونه)"
 
 
+class ApprovalStatus(models.TextChoices):
+    PENDING = "PENDING", "در انتظار بررسی سرپرست"
+    APPROVED = "APPROVED", "تأیید شده"
+    REJECTED = "REJECTED", "رد شده"
+    CANCELLED = "CANCELLED", "لغو شده / منسوخ"
+
+
 class MonitoringRuleConfig(models.Model):
     """Configuration for monitoring anomaly detection rules."""
     rule_type = models.CharField(
@@ -46,6 +53,11 @@ class MonitoringRuleConfig(models.Model):
     name_fa = models.CharField(max_length=150, verbose_name="نام فارسی قانون")
     description = models.TextField(blank=True, verbose_name="شرح عملکرد قانون")
     enabled = models.BooleanField(default=True, verbose_name="فعال بودن قانون")
+    requires_approval = models.BooleanField(
+        default=False,
+        verbose_name="الزام تأیید سرپرست",
+        help_text="در صورت فعال بودن و بروز این مغایرت، تکمیل قبض منوط به بررسی و تأیید سرپرست خواهد بود."
+    )
     
     warning_threshold = models.DecimalField(
         max_digits=10,
@@ -390,3 +402,186 @@ class MonitoringAlert(models.Model):
             AlertSeverity.CRITICAL: 50,
         }
         return weights.get(self.severity, 10)
+
+
+class DiscrepancyApproval(models.Model):
+    """
+    Operational discrepancy approval workflow for factory supervisors and operators (Phase 3.1).
+    Tracks requests for exceptional tolerance/discrepancy approvals, separating duties,
+    maintaining immutable decision histories, and preventing unauthorized ticket finalization.
+    """
+    ticket = models.ForeignKey(
+        "weighbridge.WeighTicket",
+        on_delete=models.CASCADE,
+        related_name="discrepancy_approvals",
+        verbose_name="قبض باسکول"
+    )
+    alert = models.ForeignKey(
+        "monitoring.MonitoringAlert",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="discrepancy_approvals",
+        verbose_name="هشدار مرتبط"
+    )
+    discrepancy_type = models.CharField(
+        max_length=50,
+        choices=AlertType.choices,
+        default=AlertType.WEIGHT_DISCREPANCY,
+        db_index=True,
+        verbose_name="نوع مغایرت"
+    )
+    severity = models.CharField(
+        max_length=20,
+        choices=AlertSeverity.choices,
+        default=AlertSeverity.HIGH,
+        db_index=True,
+        verbose_name="سطح اهمیت"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+        db_index=True,
+        verbose_name="وضعیت تأیید"
+    )
+    rule_name = models.CharField(max_length=150, blank=True, verbose_name="عنوان قانون")
+    current_value = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="مقدار فعلی"
+    )
+    baseline_value = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="مقدار مبنا"
+    )
+    deviation_value = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="میزان انحراف عددی (Kg)"
+    )
+    deviation_percent = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="درصد انحراف (%)"
+    )
+    threshold_applied = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="آستانه اعمال‌شده"
+    )
+    
+    # Weight snapshots at time of request/approval (to invalidate if weights change post-approval)
+    gross_weight_snapshot = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="وزن ناخالص در زمان درخواست (Kg)"
+    )
+    tare_weight_snapshot = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="وزن خالی در زمان درخواست (Kg)"
+    )
+    net_weight_snapshot = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="وزن خالص در زمان درخواست (Kg)"
+    )
+
+    requested_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="requested_discrepancy_approvals",
+        verbose_name="اپراتور درخواست‌کننده"
+    )
+    request_reason = models.TextField(verbose_name="دلیل درخواست اپراتور")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="زمان ثبت درخواست")
+
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_discrepancy_approvals",
+        verbose_name="سرپرست بررسی‌کننده"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name="زمان تصمیم‌گیری")
+    decision_reason = models.TextField(blank=True, verbose_name="دلیل تصمیم سرپرست (تأیید / رد)")
+    metadata = models.JSONField(default=dict, blank=True, verbose_name="متادیتا و جزییات تکمیلی")
+
+    class Meta:
+        verbose_name = "مجوز تأیید مغایرت"
+        verbose_name_plural = "کارتابل مجوزهای تأیید مغایرت"
+        ordering = ["-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ticket"],
+                condition=models.Q(status="PENDING"),
+                name="unique_pending_approval_per_ticket"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["ticket", "status"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["discrepancy_type"]),
+        ]
+        permissions = [
+            ("can_approve_discrepancy", "امکان بررسی و تأیید یا رد مغایرت‌های باسکول"),
+        ]
+
+    def __str__(self):
+        return f"تأیید مغایرت {self.get_discrepancy_type_display()} - قبض {self.ticket.serial_number} ({self.get_status_display()})"
+
+    @property
+    def jalali_created_at(self):
+        return format_jalali_datetime(self.created_at)
+
+    @property
+    def jalali_reviewed_at(self):
+        return format_jalali_datetime(self.reviewed_at) if self.reviewed_at else "-"
+
+    @property
+    def is_pending(self):
+        return self.status == ApprovalStatus.PENDING
+
+    @property
+    def is_approved(self):
+        return self.status == ApprovalStatus.APPROVED
+
+    @property
+    def is_rejected(self):
+        return self.status == ApprovalStatus.REJECTED
+
+    @property
+    def is_cancelled(self):
+        return self.status == ApprovalStatus.CANCELLED
+
+    def are_weights_matching(self, gross, tare, net) -> bool:
+        """Verify whether current ticket weights match the approved snapshot weights."""
+        if self.gross_weight_snapshot is None or self.tare_weight_snapshot is None or self.net_weight_snapshot is None:
+            return True
+        from decimal import Decimal
+        return (
+            abs(Decimal(str(gross or 0)) - self.gross_weight_snapshot) < Decimal("0.01") and
+            abs(Decimal(str(tare or 0)) - self.tare_weight_snapshot) < Decimal("0.01") and
+            abs(Decimal(str(net or 0)) - self.net_weight_snapshot) < Decimal("0.01")
+        )
+

@@ -1,5 +1,5 @@
 from django import forms
-from monitoring.models import MonitoringAlert, MonitoringRuleConfig, AlertStatus, AlertSeverity, AlertType
+from monitoring.models import MonitoringAlert, MonitoringRuleConfig, AlertStatus, AlertSeverity, AlertType, ApprovalStatus
 from masterdata.models import Product, Party, Vehicle
 
 
@@ -8,6 +8,7 @@ class MonitoringRuleConfigForm(forms.ModelForm):
         model = MonitoringRuleConfig
         fields = [
             "enabled",
+            "requires_approval",
             "warning_threshold",
             "high_threshold",
             "critical_threshold",
@@ -18,6 +19,7 @@ class MonitoringRuleConfigForm(forms.ModelForm):
         ]
         widgets = {
             "enabled": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "requires_approval": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "warning_threshold": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "high_threshold": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "critical_threshold": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
@@ -105,3 +107,78 @@ class AlertFilterForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "1405/12/29"})
     )
+
+
+class DiscrepancyApprovalRequestForm(forms.Form):
+    """
+    Form used by weighbridge operators to request supervisor approval for discrepancies.
+    """
+    request_reason = forms.CharField(
+        widget=forms.Textarea(attrs={
+            "class": "form-control",
+            "rows": 3,
+            "placeholder": "شرح علت مغایرت و ادله درخواست تأیید سرپرست را بنویسید (حداقل ۵ کاراکتر)..."
+        }),
+        label="شرح و علت درخواست تأیید",
+        required=True
+    )
+
+    def clean_request_reason(self):
+        reason = self.cleaned_data.get("request_reason", "").strip()
+        if not reason or len(reason) < 5:
+            raise forms.ValidationError("وارد کردن دلیل موجه برای درخواست تأیید سرپرست (حداقل ۵ کاراکتر) الزامی است.")
+        return reason
+
+
+class DiscrepancyApprovalDecisionForm(forms.Form):
+    """
+    Form used by supervisors to approve or reject a discrepancy approval request.
+    """
+    decision = forms.ChoiceField(
+        choices=[
+            ("approve", "تأیید مغایرت و صدور مجوز تکمیل قبض"),
+            ("reject", "رد درخواست و عدم صدور مجوز"),
+        ],
+        widget=forms.Select(attrs={"class": "form-select fw-bold mb-3"}),
+        label="تصمیم سرپرست"
+    )
+    decision_reason = forms.CharField(
+        widget=forms.Textarea(attrs={
+            "class": "form-control",
+            "rows": 3,
+            "placeholder": "ثبت مستندات و دلیل تصمیم سرپرست الزامی است (حداقل ۵ کاراکتر)..."
+        }),
+        label="شرح مستندات و دلیل تصمیم",
+        required=True
+    )
+
+    def clean_decision_reason(self):
+        reason = self.cleaned_data.get("decision_reason", "").strip()
+        if not reason or len(reason) < 5:
+            raise forms.ValidationError("وارد کردن شرح و دلیل تصمیم سرپرست (حداقل ۵ کاراکتر) الزامی است.")
+        return reason
+
+
+class DiscrepancyFilterForm(forms.Form):
+    """Filter form for supervisor approvals dashboard."""
+    status = forms.ChoiceField(
+        required=False,
+        choices=[("", "همه وضعیت‌ها")] + list(ApprovalStatus.choices),
+        widget=forms.Select(attrs={"class": "form-select"})
+    )
+    discrepancy_type = forms.ChoiceField(
+        required=False,
+        choices=[("", "همه انواع مغایرت")] + list(AlertType.choices),
+        widget=forms.Select(attrs={"class": "form-select"})
+    )
+    product = forms.ModelChoiceField(
+        queryset=Product.objects.filter(is_active=True),
+        required=False,
+        empty_label="همه محصولات",
+        widget=forms.Select(attrs={"class": "form-select"})
+    )
+    search = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "شماره قبض، پلاک یا راننده..."})
+    )
+

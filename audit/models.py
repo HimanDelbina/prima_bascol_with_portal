@@ -12,6 +12,7 @@ class AuditAction(models.TextChoices):
     STATUS_CHANGE = "status_change", "تغییر وضعیت"
     RESTORE = "restore", "بازیابی اطلاعات"
     PRINT = "print", "چاپ قبض"
+    DISCREPANCY_APPROVAL = "discrepancy_approval", "تأیید/رد مغایرت سرپرست"
     LOGIN = "login", "ورود به سامانه"
     LOGOUT = "logout", "خروج از سامانه"
 
