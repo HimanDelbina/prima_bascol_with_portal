@@ -135,7 +135,7 @@
 <!-- No-print Action Controls -->
 <div class="text-center mb-3 no-print">
     <div class="d-inline-flex align-items-center gap-2 flex-wrap">
-        <button onclick="window.print()" class="btn btn-primary px-4 fw-bold shadow-sm">
+        <button onclick="doPrint('a4')" class="btn btn-primary px-4 fw-bold shadow-sm">
             چاپ برگه A4 (Ctrl + P)
         </button>
         <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a5" class="btn btn-outline-secondary">قالب A5 نیم‌صفحه</a>
@@ -164,7 +164,7 @@
                 </span>
                 {% if is_reprint %}
                 <div class="mt-1">
-                    <span class="reprint-badge">چاپ مجدد (نسخه {{ print_number }})</span>
+                    <span class="reprint-badge">چاپ مجدد (درخواست {{ print_number }})</span>
                 </div>
                 {% endif %}
             </div>
@@ -308,8 +308,8 @@
 
         {% if qr_b64 %}
         <div class="text-center ps-2">
-            <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR Verification" style="width: 76px; height: 76px; display: inline-block;">
-            <div class="text-muted" style="font-size: 8px;">اعتبارسنجی دیجیتال</div>
+            <img src="data:image/png;base64,{{ qr_b64 }}" alt="بارکد مشخصات قبض" style="width: 76px; height: 76px; display: inline-block;">
+            <div class="text-muted" style="font-size: 8px;">بارکد مشخصات قبض</div>
         </div>
         {% endif %}
     </div>
@@ -329,6 +329,22 @@
 </div>
 
 <script>
+function doPrint(templateType) {
+    try {
+        const csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
+        const csrftoken = csrfMatch ? csrfMatch[1] : '';
+        fetch("{% url 'weighbridge:log_ticket_print' ticket.id %}", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrftoken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: "template=" + encodeURIComponent(templateType)
+        }).catch(function(e) { console.warn("Print log error:", e); });
+    } catch(err) {}
+    window.print();
+}
+
 // Safe auto-print preventing infinite print loops on page refresh
 document.addEventListener("DOMContentLoaded", function() {
     const params = new URLSearchParams(window.location.search);
@@ -337,7 +353,7 @@ document.addEventListener("DOMContentLoaded", function() {
         const sessionKey = "printed_a4_" + ticketId;
         if (!sessionStorage.getItem(sessionKey)) {
             sessionStorage.setItem(sessionKey, "1");
-            window.print();
+            doPrint("a4");
         }
     }
 });

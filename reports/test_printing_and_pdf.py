@@ -175,13 +175,16 @@ class PrintingAndPdfOfflineTests(TestCase):
 
     def test_reprint_immutability_and_audit_logging(self):
         """
-        Verify that printing and reprinting:
-        1. Never changes ticket serial numbers or weights.
-        2. Accurately tracks initial print vs reprints in AuditLog.
-        3. Sets is_reprint=True and increments print_number on reprints.
+        Verify print audit semantics:
+        1. Viewing print preview (GET) does NOT artificially inflate print counters.
+        2. Refreshing or switching templates does NOT log AuditAction.PRINT.
+        3. Explicit print request (POST log_ticket_print) correctly logs AuditAction.PRINT.
+        4. Subsequent preview correctly reflects reprint badge and incremented request number.
+        5. Ticket serial number and weights remain strictly immutable throughout.
         """
         self.client.force_login(self.operator_user)
-        url = reverse("weighbridge:ticket_print", args=[self.ticket.pk])
+        preview_url = reverse("weighbridge:ticket_print", args=[self.ticket.pk])
+        log_print_url = reverse("weighbridge:log_ticket_print", args=[self.ticket.pk])
 
         # Capture state before print
         serial_before = self.ticket.serial_number
@@ -189,36 +192,62 @@ class PrintingAndPdfOfflineTests(TestCase):
         net_before = self.ticket.net_weight
         final_before = self.ticket.final_weight
 
-        # 1st Print (Initial)
-        resp1 = self.client.get(url, {"template": "a4"})
+        # 1. Preview access (GET): should NOT log AuditAction.PRINT
+        resp1 = self.client.get(preview_url, {"template": "a4"})
         self.assertEqual(resp1.status_code, 200)
         self.assertFalse(resp1.context["is_reprint"])
         self.assertEqual(resp1.context["print_number"], 1)
 
-        # 2nd Print (Reprint 1)
-        resp2 = self.client.get(url, {"template": "a4"})
-        self.assertEqual(resp2.status_code, 200)
-        self.assertTrue(resp2.context["is_reprint"])
-        self.assertEqual(resp2.context["print_number"], 2)
-        self.assertIn("چاپ مجدد (نسخه 2)", resp2.content.decode("utf-8"))
+        # 2. Simulate page refreshes and switching template formats
+        self.client.get(preview_url, {"template": "a4"})
+        self.client.get(preview_url, {"template": "a5"})
+        self.client.get(preview_url, {"template": "pos"})
 
-        # 3rd Print (Reprint 2)
-        resp3 = self.client.get(url, {"template": "pos"})
-        self.assertEqual(resp3.status_code, 200)
-        self.assertTrue(resp3.context["is_reprint"])
-        self.assertEqual(resp3.context["print_number"], 3)
-        self.assertIn("چاپ مجدد (نسخه 3)", resp3.content.decode("utf-8"))
+        # Verify NO AuditAction.PRINT was logged from preview requests
+        print_logs_count = AuditLog.objects.filter(
+            model_name="WeighTicket",
+            record_id=str(self.ticket.id),
+            action=AuditAction.PRINT
+        ).count()
+        self.assertEqual(print_logs_count, 0, "GET preview requests must not log AuditAction.PRINT")
 
-        # Check AuditLog
-        print_logs = AuditLog.objects.filter(
+        # 3. Explicit Print Request 1 (Initial Print via POST)
+        post_resp1 = self.client.post(log_print_url, {"template": "a4"})
+        self.assertEqual(post_resp1.status_code, 200)
+        data1 = post_resp1.json()
+        self.assertEqual(data1["print_number"], 1)
+        self.assertFalse(data1["is_reprint"])
+
+        # Check AuditLog after 1st print
+        logs = AuditLog.objects.filter(
             model_name="WeighTicket",
             record_id=str(self.ticket.id),
             action=AuditAction.PRINT
         ).order_by("id")
-        self.assertEqual(print_logs.count(), 3)
-        self.assertIn("اولیه", print_logs[0].reason)
-        self.assertIn("چاپ مجدد (نسخه 2)", print_logs[1].reason)
-        self.assertIn("چاپ مجدد (نسخه 3)", print_logs[2].reason)
+        self.assertEqual(logs.count(), 1)
+        self.assertIn("اولیه", logs[0].reason)
+
+        # 4. Subsequent Preview reflects reprint state
+        resp2 = self.client.get(preview_url, {"template": "a4"})
+        self.assertEqual(resp2.status_code, 200)
+        self.assertTrue(resp2.context["is_reprint"])
+        self.assertEqual(resp2.context["print_number"], 2)
+        self.assertIn("چاپ مجدد (درخواست 2)", resp2.content.decode("utf-8"))
+
+        # 5. Explicit Print Request 2 (Reprint via POST)
+        post_resp2 = self.client.post(log_print_url, {"template": "pos"})
+        self.assertEqual(post_resp2.status_code, 200)
+        data2 = post_resp2.json()
+        self.assertEqual(data2["print_number"], 2)
+        self.assertTrue(data2["is_reprint"])
+
+        logs = AuditLog.objects.filter(
+            model_name="WeighTicket",
+            record_id=str(self.ticket.id),
+            action=AuditAction.PRINT
+        ).order_by("id")
+        self.assertEqual(logs.count(), 2)
+        self.assertIn("چاپ مجدد - نسخه 2", logs[1].reason)
 
         # Verify Ticket Immutability
         self.ticket.refresh_from_db()
@@ -229,11 +258,11 @@ class PrintingAndPdfOfflineTests(TestCase):
 
     def test_persian_font_registration_and_shaping(self):
         """
-        Verify Persian TrueType font registration and arabic_reshaper / bidi display.
+        Verify Persian TrueType font registration using open-source Vazirmatn (SIL OFL).
         """
         reg_font, bold_font = get_or_register_persian_font()
-        self.assertIn("PersianTahoma", reg_font)
-        self.assertIn("PersianTahoma", bold_font)
+        self.assertIn("Vazirmatn", reg_font)
+        self.assertIn("Vazirmatn", bold_font)
 
         # Test Persian text shaping
         persian_input = "باسکول دیجیتال پریما"
@@ -245,6 +274,19 @@ class PrintingAndPdfOfflineTests(TestCase):
         # Empty / None string handling
         self.assertEqual(shape_persian(""), "")
         self.assertEqual(shape_persian(None), "")
+
+    def test_qr_code_terminology(self):
+        """
+        Verify QR code label uses accurate terminology 'بارکد مشخصات قبض' and avoids misleading claims.
+        """
+        self.client.force_login(self.operator_user)
+        for tmpl in ["a4", "a5", "pos"]:
+            with self.subTest(template=tmpl):
+                resp = self.client.get(reverse("weighbridge:ticket_print", args=[self.ticket.pk]), {"template": tmpl})
+                self.assertEqual(resp.status_code, 200)
+                content = resp.content.decode("utf-8")
+                self.assertIn("بارکد مشخصات قبض", content)
+                self.assertNotIn("کد اعتبارسنجی دیجیتال", content)
 
     def test_export_pdf_generates_valid_persian_document(self):
         """
@@ -283,15 +325,16 @@ class PrintingAndPdfOfflineTests(TestCase):
 
     def test_offline_static_assets_exist_on_disk(self):
         """
-        Verify that local font and CSS files exist on the filesystem and are non-empty.
+        Verify that licensed open-source Vazirmatn fonts, license attribution, and CSS exist on disk.
         """
         import os
         from django.conf import settings
 
         required_files = [
             os.path.join(settings.BASE_DIR, "static", "css", "ticket-print.css"),
-            os.path.join(settings.BASE_DIR, "static", "fonts", "tahoma.ttf"),
-            os.path.join(settings.BASE_DIR, "static", "fonts", "tahomabd.ttf"),
+            os.path.join(settings.BASE_DIR, "static", "fonts", "Vazirmatn-Regular.ttf"),
+            os.path.join(settings.BASE_DIR, "static", "fonts", "Vazirmatn-Bold.ttf"),
+            os.path.join(settings.BASE_DIR, "static", "fonts", "OFL.txt"),
         ]
         for fpath in required_files:
             self.assertTrue(os.path.exists(fpath), f"File {fpath} does not exist on disk")
@@ -334,4 +377,31 @@ class PrintingAndPdfOfflineTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertTrue(response.content.startswith(b"%PDF-"))
+
+    def test_pdf_long_text_wrapping_and_zero_overflow(self):
+        """
+        Verify that multi-page PDF generation with very long customer/product names
+        wraps cleanly without overflow errors.
+        """
+        long_party = Party.objects.create(name="شرکت مجتمع بین‌المللی تولید و نورد لوله‌های فولادی دقیق خاورمیانه")
+        long_product = Product.objects.create(name="میلگرد فولادی فوق کششی گرید A3 سایز ۲۸ کلاف سنگین")
+        
+        ticket2 = WeighTicket.objects.create(
+            serial_number="WB-1405-00999",
+            party=long_party,
+            product=long_product,
+            first_weight=Decimal("15000"),
+            second_weight=Decimal("42000"),
+            gross_weight=Decimal("42000"),
+            tare_weight=Decimal("15000"),
+            net_weight=Decimal("27000"),
+            final_weight=Decimal("27000"),
+            status=TicketStatus.COMPLETED
+        )
+
+        qs = WeighTicket.objects.filter(id__in=[self.ticket.id, ticket2.id])
+        response = export_pdf(qs, summaries=None, title="گزارش با اسامی طولانی")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"%PDF-"))
+
 

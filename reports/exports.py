@@ -521,30 +521,35 @@ def export_csv(queryset, title="گزارش باسکول"):
 def get_or_register_persian_font():
     """
     Locates and registers a local TrueType font supporting Persian characters in ReportLab.
-    Searches project static assets first, then fallback system font locations.
+    Prioritizes official Vazirmatn (SIL Open Font License) from static/fonts/.
     """
     import os
     from django.conf import settings
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
 
-    font_name = "PersianTahoma"
-    bold_font_name = "PersianTahoma-Bold"
+    font_name = "Vazirmatn"
+    bold_font_name = "Vazirmatn-Bold"
 
     registered = pdfmetrics.getRegisteredFontNames()
     if font_name in registered and bold_font_name in registered:
         return font_name, bold_font_name
 
     candidates = [
-        # 1. Project local static font directory
+        # 1. Project local open-source Vazirmatn (SIL OFL)
+        (
+            os.path.join(settings.BASE_DIR, "static", "fonts", "Vazirmatn-Regular.ttf"),
+            os.path.join(settings.BASE_DIR, "static", "fonts", "Vazirmatn-Bold.ttf")
+        ),
+        # 2. Local fallback if tahoma exists
         (
             os.path.join(settings.BASE_DIR, "static", "fonts", "tahoma.ttf"),
             os.path.join(settings.BASE_DIR, "static", "fonts", "tahomabd.ttf")
         ),
-        # 2. Windows system fonts
+        # 3. Windows system fonts fallback
         ("C:/Windows/Fonts/tahoma.ttf", "C:/Windows/Fonts/tahomabd.ttf"),
         ("C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/arialbd.ttf"),
-        # 3. Linux system fonts
+        # 4. Linux system fonts fallback
         (
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -583,15 +588,55 @@ def shape_persian(text) -> str:
         return text_str
 
 
+def wrap_persian_cell(text, font_name, font_size, max_width_pt):
+    """
+    Safely wraps Persian text for ReportLab Table Paragraphs without text clipping or column bleeding.
+    Calculates line breaks on logical words first, then applies bidi shaping to each individual line,
+    and returns an escaped HTML snippet with <br/> tags.
+    """
+    if text is None or str(text).strip() in ("", "-"):
+        return "-"
+
+    from django.utils.html import escape
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    words = str(text).split()
+    if not words:
+        return "-"
+
+    lines = []
+    current_line = []
+    # Leave 3 pt margin for cell borders/padding
+    safe_width = max(10, max_width_pt - 3)
+
+    for word in words:
+        trial_line = " ".join(current_line + [word])
+        trial_shaped = shape_persian(trial_line)
+        w = stringWidth(trial_shaped, font_name, font_size)
+        if w <= safe_width or not current_line:
+            current_line.append(word)
+        else:
+            lines.append(" ".join(current_line))
+            current_line = [word]
+
+    if current_line:
+        lines.append(" ".join(current_line))
+
+    shaped_lines = [escape(shape_persian(line)) for line in lines]
+    return "<br/>".join(shaped_lines)
+
+
 def export_pdf(queryset, summaries=None, title="گزارش باسکول"):
     """
     Generate an offline-capable, beautifully shaped Persian RTL PDF report.
-    Uses local Persian TrueType fonts, correct bidirectional layout, and summary aggregates.
+    Uses local Persian TrueType fonts, Paragraph cell wrapping for zero overflow,
+    correct bidirectional layout, and summary aggregates.
     """
     from reportlab.lib.pagesizes import landscape, A4
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
+    from django.utils.html import escape
 
     font_regular, font_bold = get_or_register_persian_font()
 
@@ -624,14 +669,31 @@ def export_pdf(queryset, summaries=None, title="گزارش باسکول"):
         textColor=colors.HexColor('#475569')
     )
 
+    cell_style = ParagraphStyle(
+        'PersianTableCell',
+        fontName=font_regular,
+        fontSize=6.2,
+        leading=7.8,
+        alignment=1,  # Center
+        textColor=colors.HexColor('#0F172A'),
+    )
+    header_style = ParagraphStyle(
+        'PersianTableHeader',
+        fontName=font_bold,
+        fontSize=6.5,
+        leading=8.2,
+        alignment=1,  # Center
+        textColor=colors.whitesmoke,
+    )
+
     settings_obj = SystemSetting.get_settings()
     full_title = f"{settings_obj.company_name} - {title}"
-    elements.append(Paragraph(shape_persian(full_title), title_style))
+    elements.append(Paragraph(escape(shape_persian(full_title)), title_style))
     elements.append(Spacer(1, 4))
 
     record_count = queryset.count() if hasattr(queryset, 'count') else len(queryset)
     date_info = f"تاریخ تهیه گزارش: {get_today_jalali()} | تعداد رکوردهای گزارش: {record_count}"
-    elements.append(Paragraph(shape_persian(date_info), sub_style))
+    elements.append(Paragraph(escape(shape_persian(date_info)), sub_style))
     elements.append(Spacer(1, 10))
 
     # RTL Table Headers (ordered Right-to-Left so column 0 appears on the far right)
@@ -641,7 +703,7 @@ def export_pdf(queryset, summaries=None, title="گزارش باسکول"):
         "وزن بارنامه", "وزن پر", "وزن خالی", "وزن خالص", "افت", "وزن نهایی", "وضعیت"
     ]
     # Reverse order for RTL display in ReportLab
-    rtl_headers = [shape_persian(h) for h in reversed(raw_headers)]
+    rtl_headers = [Paragraph(escape(shape_persian(h)), header_style) for h in reversed(raw_headers)]
     table_data = [rtl_headers]
 
     for idx, t in enumerate(queryset[:500], 1):
@@ -659,26 +721,34 @@ def export_pdf(queryset, summaries=None, title="گزارش باسکول"):
             str(d_str or "-"),
             str(t.first_time_str or "-"),
             str(t.second_time_str or "-"),
-            shape_persian(op_name),
-            shape_persian(party_name),
-            shape_persian(prod_name),
-            shape_persian(t.license_plate_display or "-"),
-            shape_persian(driver_name),
+            Paragraph(wrap_persian_cell(op_name, font_regular, 6.2, 50), cell_style),
+            Paragraph(wrap_persian_cell(party_name, font_regular, 6.2, 55), cell_style),
+            Paragraph(wrap_persian_cell(prod_name, font_regular, 6.2, 55), cell_style),
+            Paragraph(wrap_persian_cell(t.license_plate_display or "-", font_regular, 6.2, 55), cell_style),
+            Paragraph(wrap_persian_cell(driver_name, font_regular, 6.2, 50), cell_style),
             f"{int(t.sent_weight or 0):,}",
             f"{int(t.gross_weight or 0):,}",
             f"{int(t.tare_weight or 0):,}",
             f"{int(t.net_weight or 0):,}",
             f"{int(t.loss_weight or 0):,}",
             f"{int(t.final_weight or 0):,}",
-            shape_persian(status_display)
+            Paragraph(wrap_persian_cell(status_display, font_regular, 6.2, 40), cell_style)
         ]
         # Reverse row for RTL
         table_data.append(list(reversed(raw_row)))
 
     # Summary Row if available
     if summaries:
+        sum_style = ParagraphStyle(
+            'PersianTableSummary',
+            fontName=font_bold,
+            fontSize=6.8,
+            leading=8.5,
+            alignment=1,  # Center
+            textColor=colors.HexColor('#0F172A'),
+        )
         sum_row = [
-            shape_persian("مجموع"),
+            Paragraph(escape(shape_persian("مجموع")), sum_style),
             f"{summaries.get('total_tickets', record_count)}",
             "-", "-", "-", "-", "-", "-", "-", "-", "-",
             f"{int(summaries.get('sum_sent', 0) or 0):,}",
@@ -718,11 +788,12 @@ def export_pdf(queryset, summaries=None, title="گزارش باسکول"):
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A8A')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('FONTNAME', (0, 0), (-1, -1), font_regular),
         ('FONTNAME', (0, 0), (-1, 0), font_bold),
-        ('FONTSIZE', (0, 0), (-1, -1), 6.8),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('FONTSIZE', (0, 0), (-1, -1), 6.2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
         ('LEFTPADDING', (0, 0), (-1, -1), 1),
         ('RIGHTPADDING', (0, 0), (-1, -1), 1),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
@@ -739,7 +810,7 @@ def export_pdf(queryset, summaries=None, title="گزارش باسکول"):
         table_styles.extend([
             ('BACKGROUND', (0, last_idx), (-1, last_idx), colors.HexColor('#E2E8F0')),
             ('FONTNAME', (0, last_idx), (-1, last_idx), font_bold),
-            ('FONTSIZE', (0, last_idx), (-1, last_idx), 7.2),
+            ('FONTSIZE', (0, last_idx), (-1, last_idx), 7.0),
         ])
 
     t_table.setStyle(TableStyle(table_styles))

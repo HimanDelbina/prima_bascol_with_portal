@@ -165,7 +165,7 @@
 <!-- No-print Action Bar -->
 <div class="text-center no-print mb-2">
     <div class="d-inline-flex align-items-center gap-1 flex-wrap">
-        <button onclick="window.print()" class="btn btn-primary btn-sm fw-bold shadow-sm">
+        <button onclick="doPrint('a5')" class="btn btn-primary btn-sm fw-bold shadow-sm">
             چاپ برگه A5 (Ctrl + P)
         </button>
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleOrientation()">
@@ -202,7 +202,7 @@
                 </span>
                 {% if is_reprint %}
                 <div class="mt-1">
-                    <span class="reprint-badge">چاپ مجدد (نسخه {{ print_number }})</span>
+                    <span class="reprint-badge">چاپ مجدد (درخواست {{ print_number }})</span>
                 </div>
                 {% endif %}
             </div>
@@ -341,7 +341,8 @@
         </div>
         {% if qr_b64 %}
         <div class="text-center">
-            <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR" style="width: 48px; height: 48px; display: inline-block;">
+            <img src="data:image/png;base64,{{ qr_b64 }}" alt="بارکد مشخصات قبض" style="width: 48px; height: 48px; display: inline-block;">
+            <div class="text-muted" style="font-size: 7px;">بارکد مشخصات قبض</div>
         </div>
         {% endif %}
     </div>
@@ -366,6 +367,22 @@ function toggleOrientation() {
     }
 }
 
+function doPrint(templateType) {
+    try {
+        const csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
+        const csrftoken = csrfMatch ? csrfMatch[1] : '';
+        fetch("{% url 'weighbridge:log_ticket_print' ticket.id %}", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrftoken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: "template=" + encodeURIComponent(templateType)
+        }).catch(function(e) { console.warn("Print log error:", e); });
+    } catch(err) {}
+    window.print();
+}
+
 // Safe auto-print preventing infinite print loops on page refresh
 document.addEventListener("DOMContentLoaded", function() {
     const params = new URLSearchParams(window.location.search);
@@ -374,7 +391,7 @@ document.addEventListener("DOMContentLoaded", function() {
         const sessionKey = "printed_a5_" + ticketId;
         if (!sessionStorage.getItem(sessionKey)) {
             sessionStorage.setItem(sessionKey, "1");
-            window.print();
+            doPrint("a5");
         }
     }
 });

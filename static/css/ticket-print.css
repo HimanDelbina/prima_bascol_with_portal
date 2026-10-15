@@ -3,17 +3,19 @@
    Independent of external CDNs. Supports 80mm/58mm POS, A4, and A5 documents.
    ========================================================================== */
 
-/* Local font fallbacks */
+/* Local font definitions (SIL Open Font License - Vazirmatn) */
 @font-face {
-    font-family: 'LocalPersian';
-    src: url('/static/fonts/tahoma.ttf') format('truetype');
+    font-family: 'Vazirmatn';
+    src: url('../fonts/Vazirmatn-Regular.ttf') format('truetype'),
+         url('/static/fonts/Vazirmatn-Regular.ttf') format('truetype');
     font-weight: normal;
     font-style: normal;
 }
 
 @font-face {
-    font-family: 'LocalPersian';
-    src: url('/static/fonts/tahomabd.ttf') format('truetype');
+    font-family: 'Vazirmatn';
+    src: url('../fonts/Vazirmatn-Bold.ttf') format('truetype'),
+         url('/static/fonts/Vazirmatn-Bold.ttf') format('truetype');
     font-weight: bold;
     font-style: normal;
 }

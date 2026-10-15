@@ -86,7 +86,7 @@
 <!-- No-print Action Bar -->
 <div class="text-center no-print p-2 mb-2 bg-light border-bottom">
     <div class="d-flex justify-content-center align-items-center gap-2 flex-wrap">
-        <button onclick="window.print()" class="btn btn-primary btn-sm fw-bold shadow-sm">
+        <button onclick="doPrint('pos')" class="btn btn-primary btn-sm fw-bold shadow-sm">
             چاپ فیش حرارتی (Ctrl + P)
         </button>
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="togglePosWidth()">
@@ -106,7 +106,7 @@
         <div class="d-flex justify-content-center align-items-center gap-2 mt-1">
             <span class="fw-bold font-monospace" style="font-size: 13px;">قبض: {{ ticket.serial_number }}</span>
             {% if is_reprint %}
-            <span class="reprint-badge">چاپ مجدد (نسخه {{ print_number }})</span>
+            <span class="reprint-badge">چاپ مجدد (درخواست {{ print_number }})</span>
             {% endif %}
         </div>
         <div class="text-muted font-monospace" style="font-size: 8.5px; margin-top: 2px;">
@@ -221,11 +221,11 @@
         <span class="big-val text-dark">{{ ticket.final_weight|weight_fmt }} Kg</span>
     </div>
 
-    <!-- QR Code & Verification -->
+    <!-- QR Code & Quick Info -->
     {% if qr_b64 %}
     <div class="text-center mt-2 mb-1">
-        <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR Verification" style="width: 72px; height: 72px; display: inline-block;">
-        <div class="text-muted" style="font-size: 7.5px;">کد اعتبارسنجی دیجیتال باسکول</div>
+        <img src="data:image/png;base64,{{ qr_b64 }}" alt="بارکد مشخصات قبض" style="width: 72px; height: 72px; display: inline-block;">
+        <div class="text-muted" style="font-size: 7.5px;">بارکد مشخصات قبض</div>
     </div>
     {% endif %}
 
@@ -259,6 +259,22 @@ function togglePosWidth() {
     }
 }
 
+function doPrint(templateType) {
+    try {
+        const csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
+        const csrftoken = csrfMatch ? csrfMatch[1] : '';
+        fetch("{% url 'weighbridge:log_ticket_print' ticket.id %}", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrftoken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: "template=" + encodeURIComponent(templateType)
+        }).catch(function(e) { console.warn("Print log error:", e); });
+    } catch(err) {}
+    window.print();
+}
+
 // Safe auto-print preventing infinite print loops on page refresh
 document.addEventListener("DOMContentLoaded", function() {
     const params = new URLSearchParams(window.location.search);
@@ -267,7 +283,7 @@ document.addEventListener("DOMContentLoaded", function() {
         const sessionKey = "printed_pos_" + ticketId;
         if (!sessionStorage.getItem(sessionKey)) {
             sessionStorage.setItem(sessionKey, "1");
-            window.print();
+            doPrint("pos");
         }
     }
 });

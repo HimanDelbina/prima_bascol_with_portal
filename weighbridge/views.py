@@ -1,5 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
 from django.contrib import messages
 from django.db.models import Q, Sum
 from django.core.paginator import Paginator
@@ -834,8 +836,8 @@ def ticket_cancel(request, pk):
 def ticket_print(request, pk):
     """
     High quality, offline-ready print preview supporting A4, A5, and POS thermal receipts.
-    Guarantees that reprinting never modifies ticket numbers or weighing calculations.
-    Tracks reprints via AuditLog and embeds an offline verification QR code.
+    Guarantees that viewing preview never modifies ticket numbers, weighing calculations, or print counters.
+    Calculates prior print requests via AuditLog and embeds an offline verification QR code.
     """
     profile = getattr(request.user, "profile", None)
     can_print = request.user.is_superuser or (
@@ -859,7 +861,7 @@ def ticket_print(request, pk):
     if template_type not in ["a4", "a5", "pos"]:
         template_type = "a4"
 
-    # Audit log print & reprint tracking
+    # Query prior print requests (Read-Only: does NOT increment on GET preview, refresh or template switch)
     prior_prints = AuditLog.objects.filter(
         model_name="WeighTicket",
         record_id=str(ticket.id),
@@ -867,15 +869,6 @@ def ticket_print(request, pk):
     ).count()
     is_reprint = prior_prints > 0
     print_number = prior_prints + 1
-
-    log_audit(
-        action=AuditAction.PRINT,
-        model_name="WeighTicket",
-        record_id=ticket.id,
-        record_repr=f"قبض شماره {ticket.serial_number}",
-        user=request.user,
-        reason=f"چاپ {'مجدد (نسخه ' + str(print_number) + ')' if is_reprint else 'اولیه'} در قالب {template_type.upper()}"
-    )
 
     # Generate offline QR verification code (pure local computation)
     qr_b64 = ""
@@ -898,12 +891,58 @@ def ticket_print(request, pk):
     return render(request, template_name, {
         "ticket": ticket,
         "settings": settings_obj,
+        "template_type": template_type,
         "print_date": get_today_jalali(),
         "print_time": timezone.localtime().strftime("%H:%M"),
         "is_reprint": is_reprint,
         "print_number": print_number,
         "qr_b64": qr_b64,
         "title": f"چاپ قبض {ticket.serial_number}" + (f" (چاپ مجدد - نسخه {print_number})" if is_reprint else ""),
+    })
+
+
+@login_required
+@require_POST
+def log_ticket_print(request, pk):
+    """
+    Authenticated POST endpoint to explicitly record an operator print request.
+    Distinguishes preview access from explicit print execution commands.
+    Notes: Browser-initiated print events cannot guarantee actual physical paper output.
+    """
+    profile = getattr(request.user, "profile", None)
+    can_print = request.user.is_superuser or (
+        profile and profile.is_active and (profile.can_access_weighbridge or profile.can_access_reports)
+    )
+    if not can_print:
+        return JsonResponse({"error": "Forbidden"}, status=403)
+
+    ticket = get_object_or_404(WeighTicket, pk=pk)
+    template_type = request.POST.get("template", "a4").lower()
+    if template_type not in ["a4", "a5", "pos"]:
+        template_type = "a4"
+
+    prior_prints = AuditLog.objects.filter(
+        model_name="WeighTicket",
+        record_id=str(ticket.id),
+        action=AuditAction.PRINT
+    ).count()
+    is_reprint = prior_prints > 0
+    print_number = prior_prints + 1
+
+    log_audit(
+        action=AuditAction.PRINT,
+        model_name="WeighTicket",
+        record_id=ticket.id,
+        record_repr=f"قبض شماره {ticket.serial_number}",
+        user=request.user,
+        reason=f"درخواست ارسال به چاپگر ({'چاپ مجدد - نسخه ' + str(print_number) if is_reprint else 'چاپ اولیه'}) در قالب {template_type.upper()} [تأیید خروج فیزیکی کاغذ تنها با سخت‌افزار مجهز به حسگر Paper-Out امکان‌پذیر است]"
+    )
+
+    return JsonResponse({
+        "status": "ok",
+        "print_number": print_number,
+        "is_reprint": is_reprint,
+        "template": template_type
     })
 
 

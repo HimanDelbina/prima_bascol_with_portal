@@ -19,6 +19,7 @@ urlpatterns = [
     path("tickets/<int:pk>/edit/", views.ticket_edit, name="ticket_edit"),
     path("tickets/<int:pk>/cancel/", views.ticket_cancel, name="ticket_cancel"),
     path("tickets/<int:pk>/print/", views.ticket_print, name="ticket_print"),
+    path("tickets/<int:pk>/log-print/", views.log_ticket_print, name="log_ticket_print"),
     path("search/", views.global_search, name="global_search"),
     path("ajax/plate-lookup/", views.ajax_plate_lookup, name="ajax_plate_lookup"),
 
