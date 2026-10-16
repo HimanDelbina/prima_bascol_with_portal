@@ -192,6 +192,15 @@
     </div>
     {% endif %}
 
+    {% if is_superseded %}
+    <div class="draft-watermark" style="color: rgba(185, 28, 28, 0.28); border-color: rgba(185, 28, 28, 0.38);">
+        نسخه منسوخ‌شده — فاقد اعتبار قانونی (SUPERSEDED)
+    </div>
+    <div class="draft-banner" style="background-color: #fef2f2; border-color: #dc2626; color: #991b1b;">
+        ⛔ توجه: این برگه نسخه منسوخ‌شده گذشته است. برای این قبض نسخه جدیدتری صادر گردیده است.
+    </div>
+    {% endif %}
+
     <!-- Header -->
     <div class="header-box">
         <div class="d-flex justify-content-between align-items-center">
@@ -209,9 +218,16 @@
                 <span class="badge {% if ticket.status == 'completed' %}bg-success{% elif ticket.status == 'cancelled' %}bg-danger{% else %}bg-warning text-dark{% endif %} px-3 py-1 fs-6">
                     {{ ticket.get_status_display }}
                 </span>
+                <div class="mt-1">
+                    {% if is_revised %}
+                    <span class="badge bg-primary text-white font-monospace" style="font-size: 11px;">نسخه اصلاح‌شده (Rev. {{ revision_number }})</span>
+                    {% else %}
+                    <span class="badge bg-secondary text-white font-monospace" style="font-size: 11px;">نسخه اصلی (Rev. 0)</span>
+                    {% endif %}
+                </div>
                 {% if is_reprint %}
                 <div class="mt-1">
-                    <span class="reprint-badge">چاپ مجدد (درخواست {{ print_number }})</span>
+                    <span class="reprint-badge">بازچاپ / المثنی (نوبت {{ print_number }})</span>
                 </div>
                 {% endif %}
             </div>
@@ -227,6 +243,25 @@
             </div>
         </div>
     </div>
+
+    {% if is_revised %}
+    <div class="approval-badge-box" style="background-color: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; padding: 6px 12px; margin-bottom: 12px; font-size: 11px; border-radius: 4px;">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <strong>قبض اصلاح‌شده (ویرایش {{ revision_number }}):</strong>
+                <span>تأییدکننده بازنگری: <strong>{{ revision_approved_by|default:"سرپرست مجاز" }}</strong></span>
+                {% if revision_approved_at %}
+                <span class="ms-2 font-monospace">({{ revision_approved_at }})</span>
+                {% endif %}
+            </div>
+            {% if revision_reason %}
+            <div>
+                <span>علت اصلاحیه: {{ revision_reason }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Meta Information Table -->
     <table class="meta-table">

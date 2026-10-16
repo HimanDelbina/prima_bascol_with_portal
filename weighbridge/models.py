@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.core.validators import MinValueValidator
 from django.contrib.auth.models import User
@@ -215,6 +216,18 @@ class WeighTicket(BaseModel):
         verbose_name="آخرین ویرایش‌کننده"
     )
     last_edit_reason = models.TextField(blank=True, verbose_name="دلیل آخرین ویرایش")
+    current_revision_number = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        verbose_name="شماره نسخه جاری"
+    )
+    original_net_weight = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="وزن خالص اولیه ثبت‌شده (Kg)"
+    )
 
     class Meta:
         verbose_name = "قبض باسکول"
@@ -229,10 +242,21 @@ class WeighTicket(BaseModel):
             models.Index(fields=["party"]),
             models.Index(fields=["product"]),
             models.Index(fields=["waybill_number"]),
+            models.Index(fields=["current_revision_number"]),
         ]
 
     def __str__(self):
         return f"قبض {self.serial_number} - {self.license_plate_display} ({self.get_status_display()})"
+
+    @property
+    def has_revisions(self) -> bool:
+        return self.current_revision_number > 0
+
+    @property
+    def revision_display(self) -> str:
+        if self.current_revision_number == 0:
+            return "نسخه اصلی (Rev. 0)"
+        return f"نسخه اصلاح‌شده (Rev. {self.current_revision_number})"
 
     def clean(self):
         super().clean()
@@ -620,6 +644,170 @@ class TicketSequence(BaseModel):
 
     def __str__(self):
         return f"توالی {self.scope}: آخرین شماره {self.last_number} (پیشوند: '{self.prefix}')"
+
+
+class TicketRevision(models.Model):
+    """
+    Formal governance and versioning model for completed weighbridge tickets (Phase 3.2.3).
+    Ensures complete auditability, preserves historical weighing evidence,
+    records immutable before/after snapshots, and strictly isolates revision numbers from print counts.
+    """
+    class RevisionStatus(models.TextChoices):
+        PENDING = "PENDING", "در انتظار بررسی"
+        APPROVED = "APPROVED", "تأیید شده"
+        APPLIED = "APPLIED", "اعمال شده"
+        REJECTED = "REJECTED", "رد شده"
+        WITHDRAWN = "WITHDRAWN", "انصراف داده شده"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ticket = models.ForeignKey(
+        WeighTicket,
+        on_delete=models.PROTECT,
+        related_name="revisions",
+        verbose_name="قبض مربوطه"
+    )
+    revision_number = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="شماره نسخه اعمال‌شده"
+    )
+    ticket_current_revision_at_request = models.PositiveIntegerField(
+        default=0,
+        verbose_name="شماره نسخه قبض هنگام ثبت درخواست"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=RevisionStatus.choices,
+        default=RevisionStatus.PENDING,
+        db_index=True,
+        verbose_name="وضعیت بازنگری"
+    )
+    reason = models.TextField(
+        verbose_name="دلیل و توجیه درخواست بازنگری"
+    )
+
+    # Immutable JSON snapshots with Decimal-safe data
+    before_snapshot = models.JSONField(
+        default=dict,
+        verbose_name="اسنپ‌شات مقادیر قبل از اصلاح"
+    )
+    after_snapshot = models.JSONField(
+        default=dict,
+        verbose_name="اسنپ‌شات مقادیر پیشنهادی جدید"
+    )
+    changed_fields = models.JSONField(
+        default=list,
+        verbose_name="فهرست فیلدهای تغییریافته"
+    )
+
+    # Requester identity & audit
+    requested_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="requested_ticket_revisions",
+        verbose_name="ثبت‌کننده درخواست"
+    )
+    requested_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="زمان ثبت درخواست"
+    )
+
+    # Supervisor Reviewer identity & audit
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="reviewed_ticket_revisions",
+        verbose_name="بررسی‌کننده / تأییدکننده"
+    )
+    reviewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="زمان بررسی"
+    )
+    review_notes = models.TextField(
+        blank=True,
+        verbose_name="توضیحات و ادله بررسی"
+    )
+
+    # Applier identity & audit
+    applied_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="applied_ticket_revisions",
+        verbose_name="اعمال‌کننده در سیستم"
+    )
+    applied_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="زمان اعمال"
+    )
+
+    # Discrepancy link
+    discrepancy_approval = models.ForeignKey(
+        "monitoring.DiscrepancyApproval",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="revisions",
+        verbose_name="تأییدیه مغایرت مرتبط"
+    )
+    discrepancy_details = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="جزییات ارزیابی مغایرت"
+    )
+
+    class Meta:
+        verbose_name = "بازنگری قبض"
+        verbose_name_plural = "بازنگری‌های قبوض"
+        ordering = ["-requested_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ticket"],
+                condition=models.Q(status="PENDING"),
+                name="unique_pending_revision_per_ticket"
+            ),
+            models.UniqueConstraint(
+                fields=["ticket", "revision_number"],
+                condition=models.Q(revision_number__isnull=False),
+                name="unique_ticket_applied_revision_number"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["ticket", "status"]),
+            models.Index(fields=["status", "requested_at"]),
+        ]
+
+    def __str__(self):
+        rev_str = f"Rev. {self.revision_number}" if self.revision_number else "در انتظار بررسی"
+        return f"بازنگری قبض {self.ticket.serial_number} ({rev_str}) - {self.get_status_display()}"
+
+    @property
+    def jalali_requested_at(self):
+        return format_jalali_datetime(self.requested_at) if self.requested_at else "-"
+
+    @property
+    def jalali_reviewed_at(self):
+        return format_jalali_datetime(self.reviewed_at) if self.reviewed_at else "-"
+
+    @property
+    def jalali_applied_at(self):
+        return format_jalali_datetime(self.applied_at) if self.applied_at else "-"
+
+    @property
+    def is_pending(self):
+        return self.status == self.RevisionStatus.PENDING
+
+    @property
+    def is_applied(self):
+        return self.status == self.RevisionStatus.APPLIED
+
 
 
 

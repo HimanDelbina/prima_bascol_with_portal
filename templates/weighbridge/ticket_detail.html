@@ -15,6 +15,12 @@
                 <i class="bi bi-file-earmark-text text-primary me-2"></i>قبض باسکول شماره {{ ticket.serial_number }}
             </h4>
             {{ ticket.status|status_badge }}
+            {% if ticket.current_revision_number > 0 %}
+            <span class="badge bg-primary text-white ms-1"><i class="bi bi-clock-history me-1"></i>نسخه ویرایش {{ ticket.current_revision_number }}</span>
+            {% endif %}
+            {% if pending_revision %}
+            <span class="badge bg-warning text-dark ms-1"><i class="bi bi-hourglass-split me-1"></i>در انتظار بررسی بازنگری</span>
+            {% endif %}
         </div>
         <p class="text-muted small mb-0">تاریخ ثبت سند: {{ ticket.jalali_first_date }} ساعت {{ ticket.first_time_str }} | ثبت شده توسط: {% if ticket.first_weight_operator %}{{ ticket.first_weight_operator.get_full_name|default:ticket.first_weight_operator.username }}{% else %}-{% endif %}</p>
     </div>
@@ -75,6 +81,57 @@
     <div>
         <div class="fw-bold">هشدار مغایرت غیرمجاز در وزن باسکول:</div>
         <div class="small">اختلاف وزن خالص باسکول با وزن ارسالی در بارنامه مبدأ ({{ ticket.weight_difference|weight_fmt }} کیلوگرم - {{ ticket.weight_difference_percent }}%) فراتر از سقف مجاز انحراف استاندارد است.</div>
+    </div>
+</div>
+{% endif %}
+
+{% if pending_revision %}
+<div class="card border-warning shadow-sm mb-4">
+    <div class="card-header bg-warning bg-opacity-10 border-warning d-flex justify-content-between align-items-center py-2">
+        <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-hourglass-split me-2 text-warning"></i>درخواست بازنگری در انتظار بررسی سرپرست</h6>
+        <span class="badge bg-warning text-dark font-monospace">کد پیگیری: {{ pending_revision.id|stringformat:".8s" }}</span>
+    </div>
+    <div class="card-body py-3">
+        <div class="row align-items-center g-3">
+            <div class="col-lg-8">
+                <p class="mb-1 small">
+                    <strong>متقاضی بازنگری:</strong> {{ pending_revision.requested_by.get_full_name|default:pending_revision.requested_by.username }}
+                    <span class="mx-2">|</span>
+                    <strong>زمان ثبت:</strong> {{ pending_revision.jalali_requested_at }}
+                </p>
+                <p class="mb-1 text-dark"><strong>دلیل درخواست اصلاحیه:</strong> {{ pending_revision.reason }}</p>
+                <div class="small text-muted"><strong>فیلدهای تغییریافته:</strong> <span class="font-monospace text-primary">{{ pending_revision.changed_fields|join:", " }}</span></div>
+            </div>
+            <div class="col-lg-4 d-flex flex-column gap-2">
+                {% if user.profile.is_admin_or_manager or user.is_superuser %}
+                    {% if user.id != pending_revision.requested_by_id or user.is_superuser %}
+                    <form method="post" action="{% url 'weighbridge:ticket_revision_approve' pending_revision.id %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="review_reason" value="تأیید توسط سرپرست از طریق سامانه">
+                        <button type="submit" class="btn btn-success btn-sm w-100 fw-bold shadow-sm" onclick="return confirm('آیا از تأیید و اعمال مقادیر جدید این بازنگری بر قبض اطمینان دارید؟');">
+                            <i class="bi bi-check-circle me-1"></i> تأیید و اعمال بازنگری
+                        </button>
+                    </form>
+                    <form method="post" action="{% url 'weighbridge:ticket_revision_reject' pending_revision.id %}" class="d-inline">
+                        {% csrf_token %}
+                        <div class="input-group input-group-sm">
+                            <input type="text" name="review_reason" class="form-control" placeholder="دلیل رد درخواست..." required>
+                            <button type="submit" class="btn btn-outline-danger fw-bold">رد</button>
+                        </div>
+                    </form>
+                    {% endif %}
+                {% endif %}
+                {% if user.id == pending_revision.requested_by_id or user.is_superuser %}
+                <form method="post" action="{% url 'weighbridge:ticket_revision_withdraw' pending_revision.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="withdraw_reason" value="انصراف متقاضی">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm w-100" onclick="return confirm('آیا از انصراف از این درخواست بازنگری اطمینان دارید؟');">
+                        <i class="bi bi-x-circle me-1"></i> انصراف از درخواست
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </div>
 {% endif %}
@@ -402,4 +459,66 @@
         </div>
     </div>
 </div>
+
+<!-- Revisions History Section (Phase 3.2.3) -->
+{% if revisions %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold text-slate-800"><i class="bi bi-journal-text me-2 text-primary"></i>تاریخچه رسمی بازنگری‌ها و اصلاحات سند (Ticket Revision Governance)</h6>
+                <span class="badge bg-light text-dark border">تعداد سوابق: {{ revisions.count }}</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr class="small text-muted">
+                            <th class="text-center">شماره نسخه</th>
+                            <th>وضعیت</th>
+                            <th>ثبت‌کننده</th>
+                            <th>زمان درخواست</th>
+                            <th>دلیل درخواست</th>
+                            <th>فیلدهای اصلاحی</th>
+                            <th>بررسی‌کننده</th>
+                            <th>زمان بررسی / اعمال</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rev in revisions %}
+                        <tr>
+                            <td class="text-center font-monospace fw-bold">
+                                {% if rev.revision_number %}
+                                <span class="badge bg-primary">Rev. {{ rev.revision_number }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if rev.status == 'APPLIED' %}
+                                <span class="badge bg-success">اعمال شده</span>
+                                {% elif rev.status == 'PENDING' %}
+                                <span class="badge bg-warning text-dark">در انتظار بررسی</span>
+                                {% elif rev.status == 'REJECTED' %}
+                                <span class="badge bg-danger">رد شده</span>
+                                {% elif rev.status == 'WITHDRAWN' %}
+                                <span class="badge bg-secondary">انصراف</span>
+                                {% else %}
+                                <span class="badge bg-info">{{ rev.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{% if rev.requested_by %}{{ rev.requested_by.get_full_name|default:rev.requested_by.username }}{% else %}-{% endif %}</td>
+                            <td class="font-monospace small">{{ rev.jalali_requested_at }}</td>
+                            <td><span class="text-truncate d-inline-block" style="max-width: 220px;" title="{{ rev.reason }}">{{ rev.reason }}</span></td>
+                            <td class="small font-monospace">{{ rev.changed_fields|join:", " }}</td>
+                            <td>{% if rev.reviewed_by %}{{ rev.reviewed_by.get_full_name|default:rev.reviewed_by.username }}{% else %}-{% endif %}</td>
+                            <td class="font-monospace small">{{ rev.jalali_applied_at|default:rev.jalali_reviewed_at|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

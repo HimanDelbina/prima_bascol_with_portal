@@ -13,6 +13,10 @@ class AuditAction(models.TextChoices):
     RESTORE = "restore", "بازیابی اطلاعات"
     PRINT = "print", "چاپ قبض"
     DISCREPANCY_APPROVAL = "discrepancy_approval", "تأیید/رد مغایرت سرپرست"
+    REVISION_REQUEST = "revision_request", "درخواست بازنگری قبض"
+    REVISION_APPLY = "revision_apply", "تأیید و اعمال بازنگری قبض"
+    REVISION_REJECT = "revision_reject", "رد درخواست بازنگری"
+    REVISION_WITHDRAW = "revision_withdraw", "انصراف از بازنگری"
     LOGIN = "login", "ورود به سامانه"
     LOGOUT = "logout", "خروج از سامانه"
 

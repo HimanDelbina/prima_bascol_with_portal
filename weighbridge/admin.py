@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.core.exceptions import ValidationError
-from weighbridge.models import WeighTicket, EmergencyWeighTicket, TicketSequence, TicketStatus
+from weighbridge.models import WeighTicket, EmergencyWeighTicket, TicketSequence, TicketStatus, TicketRevision
 from weighbridge.services import TicketCalculationService
 from monitoring.services.discrepancy_service import DiscrepancyApprovalService
 
@@ -22,14 +22,46 @@ class WeighTicketAdmin(admin.ModelAdmin):
     def get_readonly_fields(self, request, obj=None):
         ro = list(self.readonly_fields)
         if obj:
-            ro.append("serial_number")
-            if not request.user.is_superuser:
-                if obj.status in [TicketStatus.COMPLETED, TicketStatus.CANCELLED]:
-                    return [f.name for f in self.model._meta.fields]
+            ro.extend(["serial_number", "current_revision_number", "original_net_weight"])
+            if obj.status in [TicketStatus.COMPLETED, TicketStatus.CANCELLED]:
+                # ALL users (including superusers) are blocked from mutating material/immutable fields in Admin
+                return [f.name for f in self.model._meta.fields if f.name != "notes"]
         return ro
 
     def save_model(self, request, obj, form, change):
-        if obj.first_weight and obj.second_weight:
+        if change and obj.pk:
+            old_ticket = WeighTicket.objects.get(pk=obj.pk)
+            if old_ticket.status in [TicketStatus.COMPLETED, TicketStatus.CANCELLED]:
+                from weighbridge.revision_service import TicketRevisionService
+                for field in TicketRevisionService.IMMUTABLE_FIELDS | TicketRevisionService.CONTROLLED_FIELDS:
+                    if hasattr(old_ticket, field):
+                        old_v = getattr(old_ticket, field)
+                        new_v = getattr(obj, field)
+                        if hasattr(old_v, "pk"):
+                            old_v = old_v.pk
+                        if hasattr(new_v, "pk"):
+                            new_v = new_v.pk
+                        if str(old_v or "") != str(new_v or ""):
+                            raise ValidationError(
+                                f"ویرایش مستقیم فیلد «{field}» برای قبض نهایی‌شده در پنل مدیریت مجاز نیست. "
+                                "برای اصلاح اطلاعات، لطفاً از فرآیند رسمی بازنگری قبض (Ticket Revision) استفاده فرمایید."
+                            )
+                if old_ticket.notes != obj.notes:
+                    from audit.utils import log_audit
+                    from audit.models import AuditAction
+                    log_audit(
+                        action=AuditAction.UPDATE,
+                        model_name="WeighTicket",
+                        record_id=str(obj.id),
+                        record_repr=f"قبض شماره {obj.serial_number}",
+                        user=request.user,
+                        old_values={"notes": old_ticket.notes},
+                        new_values={"notes": obj.notes},
+                        reason="ویرایش یادداشت‌ها از پنل مدیریت جنگو",
+                        source="DjangoAdmin"
+                    )
+
+        if obj.first_weight and obj.second_weight and obj.status != TicketStatus.COMPLETED:
             calc = TicketCalculationService.calculate_ticket(
                 first_weight=obj.first_weight,
                 second_weight=obj.second_weight,
@@ -58,7 +90,7 @@ class WeighTicketAdmin(admin.ModelAdmin):
                 current_sent_weight=obj.sent_weight,
             )
 
-        if obj.status == TicketStatus.COMPLETED:
+        if obj.status == TicketStatus.COMPLETED and not change:
             val_res = DiscrepancyApprovalService.validate_ticket_finalization(obj)
             if not val_res["valid"]:
                 raise ValidationError(
@@ -67,6 +99,26 @@ class WeighTicketAdmin(admin.ModelAdmin):
 
         from weighbridge.plate_policy import DailyPlatePolicy
         DailyPlatePolicy.save(obj, user=request.user)
+
+
+@admin.register(TicketRevision)
+class TicketRevisionAdmin(admin.ModelAdmin):
+    list_display = [
+        "id", "ticket", "revision_number", "status",
+        "requested_by", "requested_at", "reviewed_by", "reviewed_at", "applied_at"
+    ]
+    list_filter = ["status", "requested_at"]
+    search_fields = ["ticket__serial_number", "reason", "requested_by__username", "reviewed_by__username"]
+    ordering = ["-requested_at"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        return [f.name for f in self.model._meta.fields]
 
 
 @admin.register(EmergencyWeighTicket)

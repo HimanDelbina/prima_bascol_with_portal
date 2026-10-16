@@ -10,7 +10,7 @@ from datetime import datetime, time
 from decimal import Decimal
 import re
 
-from weighbridge.models import WeighTicket, TicketStatus, WeightMode, EmergencyWeighTicket, EmergencyTicketStatus
+from weighbridge.models import WeighTicket, TicketStatus, WeightMode, EmergencyWeighTicket, EmergencyTicketStatus, TicketRevision
 from weighbridge.forms import TicketCreateForm, SecondWeightForm, TicketEditManagerForm
 from weighbridge.services import TicketCalculationService, VehicleDriverRegistrationService
 from core.weight_provider import get_active_weight_provider
@@ -26,7 +26,7 @@ from audit.models import AuditAction, AuditLog
 from monitoring.services.anomaly_engine import AnomalyDetectionEngine
 from monitoring.services.discrepancy_service import DiscrepancyApprovalService
 from monitoring.models import AlertType, ApprovalStatus, DiscrepancyApproval
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, PermissionDenied
 from weighbridge.plate_policy import DailyPlatePolicy, can_manage_plate_exceptions, can_manage_plate_autofill, normalize_plate
 
 @login_required
@@ -788,10 +788,16 @@ def ticket_detail(request, pk):
     # Smart Monitoring Analysis Summary
     monitoring_summary = AnomalyDetectionEngine.get_ticket_analysis_summary(ticket)
 
+    # Historical and Pending Revisions
+    revisions = ticket.revisions.select_related("requested_by", "reviewed_by", "applied_by").order_by("-requested_at")
+    pending_revision = ticket.revisions.filter(status=TicketRevision.RevisionStatus.PENDING).first()
+
     return render(request, "weighbridge/ticket_detail.html", {
         "ticket": ticket,
         "audit_logs": audit_logs,
         "monitoring_summary": monitoring_summary,
+        "revisions": revisions,
+        "pending_revision": pending_revision,
         "title": f"جزئیات قبض شماره {ticket.serial_number}",
     })
 
@@ -825,6 +831,46 @@ def ticket_edit(request, pk):
         form = TicketEditManagerForm(request.POST, instance=ticket)
         if form.is_valid():
             reason = form.cleaned_data.get("manager_reason")
+
+            if ticket.status == TicketStatus.COMPLETED:
+                from weighbridge.revision_service import TicketRevisionService
+                proposed_data = {
+                    "first_weight": form.cleaned_data.get("first_weight"),
+                    "second_weight": form.cleaned_data.get("second_weight"),
+                    "sent_weight": form.cleaned_data.get("sent_weight"),
+                    "loss_percent": form.cleaned_data.get("loss_percent"),
+                    "loss_weight": form.cleaned_data.get("loss_weight"),
+                    "loss_type_id": form.cleaned_data.get("loss_type").id if form.cleaned_data.get("loss_type") else None,
+                    "product_id": form.cleaned_data.get("product").id if form.cleaned_data.get("product") else None,
+                    "party_id": form.cleaned_data.get("party").id if form.cleaned_data.get("party") else None,
+                    "license_plate_display": form.cleaned_data.get("license_plate_display"),
+                    "waybill_number": form.cleaned_data.get("waybill_number"),
+                    "freight_amount": form.cleaned_data.get("freight_amount"),
+                    "notes": form.cleaned_data.get("notes"),
+                    "driver_mobile": form.cleaned_data.get("driver_mobile_custom"),
+                }
+                try:
+                    rev = TicketRevisionService.request_revision(
+                        ticket=ticket,
+                        requester=request.user,
+                        proposed_data=proposed_data,
+                        reason=reason,
+                        client_ip=request.META.get("REMOTE_ADDR")
+                    )
+                    messages.success(
+                        request,
+                        f"درخواست بازنگری برای قبض نهایی‌شده {ticket.serial_number} با موفقیت ثبت شد و در انتظار بررسی سرپرست قرار گرفت."
+                    )
+                    return redirect("weighbridge:ticket_detail", pk=ticket.id)
+                except ValidationError as exc:
+                    err_msg = exc.messages[0] if hasattr(exc, "messages") else str(exc)
+                    messages.error(request, f"خطا در ثبت درخواست بازنگری: {err_msg}")
+                    sales_op_ids = list(OperationType.objects.filter(Q(direction='outbound') | Q(name__icontains='فروش')).values_list('id', flat=True))
+                    return render(request, "weighbridge/ticket_edit.html", {
+                        "form": form, "ticket": ticket, "title": f"اصلاح و ویرایش مدیریتی قبض {ticket.serial_number}",
+                        "sales_op_ids": sales_op_ids,
+                    })
+
             ticket = form.save(commit=False)
             ticket.last_edited_by = request.user
             ticket.last_edit_reason = reason
@@ -873,14 +919,14 @@ def ticket_edit(request, pk):
                 current_sent_weight=ticket.sent_weight,
             )
 
-            # Re-evaluate discrepancies after material edit
+            # Re-evaluate discrepancies after material edit (for in-flight tickets)
             eval_res = DiscrepancyApprovalService.evaluate_ticket_discrepancies(ticket, trial_weights=calc_results)
-            if ticket.status == TicketStatus.COMPLETED and not eval_res["can_finalize"]:
+            if not eval_res["can_finalize"]:
                 ticket.status = TicketStatus.WAITING_SECOND
                 messages.warning(
                     request,
                     f"توجه: تغییرات اعمال‌شده در قبض موجب بروز مغایرت مسدودکننده گردید ({eval_res['blocking_reason']}). "
-                    "وضعیت قبض از «تکمیل شده» به «در انتظار وزن دوم / مجوز سرپرست» تغییر یافت."
+                    "وضعیت قبض به «در انتظار وزن دوم / مجوز سرپرست» تنظیم شد."
                 )
 
             try:
@@ -1044,6 +1090,34 @@ def ticket_print(request, pk):
         elif not eval_res["can_finalize"]:
             draft_reason = f"سند دارای مغایرت مسدودکننده فاقد تأییدیه معتبر سرپرست است ({eval_res['blocking_reason']})."
 
+    # Phase 3.2.3 Ticket Revision Handling
+    current_rev_number = int(ticket.current_revision_number or 0)
+    requested_rev_param = request.GET.get("rev")
+    is_superseded = False
+    if requested_rev_param is not None:
+        try:
+            req_rev = int(requested_rev_param)
+            if req_rev < current_rev_number:
+                is_superseded = True
+        except ValueError:
+            req_rev = current_rev_number
+
+    is_revised = current_rev_number > 0
+    latest_applied_rev = None
+    revision_approved_by = None
+    revision_approved_at = None
+    revision_reason = None
+    if is_revised:
+        latest_applied_rev = ticket.revisions.filter(
+            status=TicketRevision.RevisionStatus.APPLIED,
+            revision_number=current_rev_number
+        ).select_related("reviewed_by").first()
+        if latest_applied_rev:
+            if latest_applied_rev.reviewed_by:
+                revision_approved_by = latest_applied_rev.reviewed_by.get_full_name() or latest_applied_rev.reviewed_by.username
+            revision_approved_at = latest_applied_rev.jalali_applied_at
+            revision_reason = latest_applied_rev.reason
+
     template_name = f"weighbridge/ticket_print_{template_type}.html"
     return render(request, template_name, {
         "ticket": ticket,
@@ -1053,11 +1127,17 @@ def ticket_print(request, pk):
         "print_time": timezone.localtime().strftime("%H:%M"),
         "is_reprint": is_reprint,
         "print_number": print_number,
+        "revision_number": current_rev_number,
+        "is_revised": is_revised,
+        "is_superseded": is_superseded,
+        "revision_approved_by": revision_approved_by,
+        "revision_approved_at": revision_approved_at,
+        "revision_reason": revision_reason,
         "qr_b64": qr_b64,
         "is_draft": is_draft,
         "draft_reason": draft_reason,
         "latest_approval": latest_approval,
-        "title": f"چاپ قبض {ticket.serial_number}" + (f" (چاپ مجدد - نسخه {print_number})" if is_reprint else ""),
+        "title": f"چاپ قبض {ticket.serial_number}" + (f" (ویرایش {current_rev_number})" if is_revised else "") + (f" (چاپ مجدد - نسخه {print_number})" if is_reprint else ""),
     })
 
 
@@ -2062,5 +2142,92 @@ def batch_print(request):
     if layout == "summary":
         return render(request, "weighbridge/print_summary_sheet.html", context)
     return render(request, "weighbridge/batch_ticket_print.html", context)
+
+
+@login_required
+@manager_or_admin_required
+@require_POST
+def ticket_revision_approve(request, revision_id):
+    """
+    Supervisor action to approve and apply an existing pending revision.
+    Enforces separation of duties and atomic lock acquisition.
+    """
+    review_reason = request.POST.get("review_reason", "").strip()
+    from weighbridge.revision_service import TicketRevisionService
+    try:
+        rev = TicketRevisionService.approve_revision(
+            revision=revision_id,
+            reviewer=request.user,
+            review_reason=review_reason,
+            auto_apply=True,
+            client_ip=request.META.get("REMOTE_ADDR")
+        )
+        messages.success(
+            request,
+            f"بازنگری ویرایش {rev.revision_number} با موفقیت تأیید و مقادیر جدید بر قبض {rev.ticket.serial_number} اعمال گردید."
+        )
+        return redirect("weighbridge:ticket_detail", pk=rev.ticket_id)
+    except (ValidationError, PermissionDenied) as exc:
+        err_msg = exc.messages[0] if hasattr(exc, "messages") else str(exc)
+        messages.error(request, f"عدم امکان تأیید بازنگری: {err_msg}")
+        rev_obj = TicketRevision.objects.filter(pk=revision_id).first()
+        ticket_id = rev_obj.ticket_id if rev_obj else None
+        if ticket_id:
+            return redirect("weighbridge:ticket_detail", pk=ticket_id)
+        return redirect("weighbridge:ticket_list")
+
+
+@login_required
+@manager_or_admin_required
+@require_POST
+def ticket_revision_reject(request, revision_id):
+    """
+    Supervisor action to reject a pending revision.
+    """
+    review_reason = request.POST.get("review_reason", "").strip()
+    if not review_reason:
+        messages.error(request, "ثبت دلیل برای رد درخواست بازنگری اجباری است.")
+        rev_obj = TicketRevision.objects.filter(pk=revision_id).first()
+        return redirect("weighbridge:ticket_detail", pk=rev_obj.ticket_id) if rev_obj else redirect("weighbridge:ticket_list")
+
+    from weighbridge.revision_service import TicketRevisionService
+    try:
+        rev = TicketRevisionService.reject_revision(
+            revision=revision_id,
+            reviewer=request.user,
+            review_reason=review_reason,
+            client_ip=request.META.get("REMOTE_ADDR")
+        )
+        messages.warning(request, f"درخواست بازنگری برای قبض {rev.ticket.serial_number} رد شد.")
+        return redirect("weighbridge:ticket_detail", pk=rev.ticket_id)
+    except (ValidationError, PermissionDenied) as exc:
+        err_msg = exc.messages[0] if hasattr(exc, "messages") else str(exc)
+        messages.error(request, f"عدم امکان رد بازنگری: {err_msg}")
+        rev_obj = TicketRevision.objects.filter(pk=revision_id).first()
+        return redirect("weighbridge:ticket_detail", pk=rev_obj.ticket_id) if rev_obj else redirect("weighbridge:ticket_list")
+
+
+@login_required
+@require_POST
+def ticket_revision_withdraw(request, revision_id):
+    """
+    Requester action to withdraw a pending revision.
+    """
+    withdraw_reason = request.POST.get("withdraw_reason", "").strip()
+    from weighbridge.revision_service import TicketRevisionService
+    try:
+        rev = TicketRevisionService.withdraw_revision(
+            revision=revision_id,
+            user=request.user,
+            reason=withdraw_reason,
+            client_ip=request.META.get("REMOTE_ADDR")
+        )
+        messages.info(request, f"انصراف از درخواست بازنگری برای قبض {rev.ticket.serial_number} با موفقیت ثبت شد.")
+        return redirect("weighbridge:ticket_detail", pk=rev.ticket_id)
+    except (ValidationError, PermissionDenied) as exc:
+        err_msg = exc.messages[0] if hasattr(exc, "messages") else str(exc)
+        messages.error(request, f"عدم امکان انصراف: {err_msg}")
+        rev_obj = TicketRevision.objects.filter(pk=revision_id).first()
+        return redirect("weighbridge:ticket_detail", pk=rev_obj.ticket_id) if rev_obj else redirect("weighbridge:ticket_list")
 
 

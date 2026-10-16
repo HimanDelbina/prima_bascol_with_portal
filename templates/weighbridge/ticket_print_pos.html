@@ -106,6 +106,19 @@
     </div>
     {% endif %}
 
+    {% if is_superseded %}
+    <div style="border: 2px dashed #000; padding: 4px; text-align: center; font-weight: 900; font-size: 10px; margin: 4px 0; background: #fee2e2; color: #991b1b;">
+        *** نسخه منسوخ‌شده گذشته — فاقد اعتبار (SUPERSEDED) ***
+    </div>
+    {% endif %}
+
+    {% if is_revised %}
+    <div style="border: 1px dotted #1e40af; padding: 3px; font-size: 8.5px; margin: 4px 0; background: #eff6ff;">
+        <strong>نسخه اصلاح‌شده (ویرایش {{ revision_number }}):</strong> تأیید: {{ revision_approved_by|default:"سرپرست مجاز" }}
+        {% if revision_reason %}<br>علت: {{ revision_reason }}{% endif %}
+    </div>
+    {% endif %}
+
     {% if latest_approval and latest_approval.is_approved %}
     <div style="border: 1px solid #000; padding: 3px; font-size: 9px; margin: 4px 0; background: #f0fdf4;">
         <strong>مجوز سرپرست:</strong> {{ latest_approval.reviewed_by.get_full_name|default:latest_approval.reviewed_by.username }} | {{ latest_approval.decision_reason|truncatechars:40 }}
@@ -116,10 +129,15 @@
         <div class="fw-bold" style="font-size: 13px;">{{ settings.company_name }}</div>
         <div class="text-muted small" style="font-size: 9.5px;">{{ settings.receipt_header_title }}</div>
         
-        <div class="d-flex justify-content-center align-items-center gap-2 mt-1">
+        <div class="d-flex justify-content-center align-items-center gap-2 mt-1 flex-wrap">
             <span class="fw-bold font-monospace" style="font-size: 13px;">قبض: {{ ticket.serial_number }}</span>
+            {% if is_revised %}
+            <span class="badge bg-primary text-white font-monospace" style="font-size: 8.5px;">Rev. {{ revision_number }}</span>
+            {% else %}
+            <span class="badge bg-secondary text-white font-monospace" style="font-size: 8.5px;">Rev. 0</span>
+            {% endif %}
             {% if is_reprint %}
-            <span class="reprint-badge">چاپ مجدد (درخواست {{ print_number }})</span>
+            <span class="reprint-badge">چاپ مجدد ({{ print_number }})</span>
             {% endif %}
         </div>
         <div class="text-muted font-monospace" style="font-size: 8.5px; margin-top: 2px;">
