@@ -15,6 +15,313 @@ from audit.services import log_audit
 logger = logging.getLogger("weighbridge.revision")
 
 
+
+class TicketRevisionPresentationAdapter:
+    """
+    Dedicated, read-only presentation adapter for reconstructing historical ticket revisions (Rev. 0, Rev. N).
+    Wraps a WeighTicket instance without mutating the underlying database record or memory instance.
+    Preserves exact Decimal precision, foreign-key object relations, computed tonnage,
+    print badges, and offline verification details.
+    """
+    def __init__(self, ticket: WeighTicket, target_rev: int, snapshot: Dict[str, Any]):
+        self._ticket = ticket
+        self._target_rev = target_rev
+        self._snapshot = snapshot or {}
+        self._cache = {}
+
+    @property
+    def id(self):
+        return self._ticket.id
+
+    @property
+    def pk(self):
+        return self._ticket.pk
+
+    @property
+    def serial_number(self):
+        return self._ticket.serial_number
+
+    @property
+    def current_revision_number(self):
+        return self._target_rev
+
+    @property
+    def revision_number(self):
+        return self._target_rev
+
+    @property
+    def is_superseded(self):
+        return self._target_rev < (self._ticket.current_revision_number or 0)
+
+    @property
+    def is_historical(self):
+        return self.is_superseded
+
+    @property
+    def status(self):
+        return self._snapshot.get("status", self._ticket.status)
+
+    def get_status_display(self):
+        if self._snapshot.get("status"):
+            st = self._snapshot.get("status")
+            return dict(TicketStatus.choices).get(st, st)
+        return self._ticket.get_status_display()
+
+    # Weights with exact Decimal precision
+    @property
+    def first_weight(self) -> Decimal:
+        val = self._snapshot.get("first_weight")
+        return Decimal(str(val)) if val is not None else (self._ticket.first_weight or Decimal("0.00"))
+
+    @property
+    def second_weight(self) -> Optional[Decimal]:
+        val = self._snapshot.get("second_weight")
+        if val is None:
+            return None
+        return Decimal(str(val))
+
+    @property
+    def gross_weight(self) -> Decimal:
+        val = self._snapshot.get("gross_weight")
+        return Decimal(str(val)) if val is not None else (self._ticket.gross_weight or Decimal("0.00"))
+
+    @property
+    def tare_weight(self) -> Decimal:
+        val = self._snapshot.get("tare_weight")
+        return Decimal(str(val)) if val is not None else (self._ticket.tare_weight or Decimal("0.00"))
+
+    @property
+    def net_weight(self) -> Decimal:
+        val = self._snapshot.get("net_weight")
+        return Decimal(str(val)) if val is not None else (self._ticket.net_weight or Decimal("0.00"))
+
+    @property
+    def final_weight(self) -> Decimal:
+        val = self._snapshot.get("final_weight")
+        return Decimal(str(val)) if val is not None else (self._ticket.final_weight or Decimal("0.00"))
+
+    @property
+    def sent_weight(self) -> Decimal:
+        val = self._snapshot.get("sent_weight")
+        return Decimal(str(val)) if val is not None else (self._ticket.sent_weight or Decimal("0.00"))
+
+    @property
+    def weight_difference(self) -> Decimal:
+        val = self._snapshot.get("weight_difference")
+        return Decimal(str(val)) if val is not None else (self._ticket.weight_difference or Decimal("0.00"))
+
+    @property
+    def weight_difference_percent(self) -> Decimal:
+        val = self._snapshot.get("weight_difference_percent")
+        return Decimal(str(val)) if val is not None else (self._ticket.weight_difference_percent or Decimal("0.00"))
+
+    @property
+    def loss_percent(self) -> Decimal:
+        val = self._snapshot.get("loss_percent")
+        return Decimal(str(val)) if val is not None else (self._ticket.loss_percent or Decimal("0.00"))
+
+    @property
+    def loss_weight(self) -> Decimal:
+        val = self._snapshot.get("loss_weight")
+        return Decimal(str(val)) if val is not None else (self._ticket.loss_weight or Decimal("0.00"))
+
+    @property
+    def is_loss_overridden(self) -> bool:
+        if "is_loss_overridden" in self._snapshot:
+            return bool(self._snapshot["is_loss_overridden"])
+        return self._ticket.is_loss_overridden
+
+    @property
+    def loss_override_reason(self) -> str:
+        return self._snapshot.get("loss_override_reason", self._ticket.loss_override_reason or "")
+
+    @property
+    def is_tolerance_exceeded(self) -> bool:
+        if "is_tolerance_exceeded" in self._snapshot:
+            return bool(self._snapshot["is_tolerance_exceeded"])
+        return self._ticket.is_tolerance_exceeded
+
+    @property
+    def freight_amount(self) -> Optional[Decimal]:
+        val = self._snapshot.get("freight_amount")
+        if val is not None:
+            try:
+                return Decimal(str(val))
+            except Exception:
+                pass
+        return self._ticket.freight_amount
+
+    # Tonnages
+    @property
+    def gross_tonnage(self) -> Decimal:
+        return round((self.gross_weight or Decimal("0")) / Decimal("1000"), 3)
+
+    @property
+    def tare_tonnage(self) -> Decimal:
+        return round((self.tare_weight or Decimal("0")) / Decimal("1000"), 3)
+
+    @property
+    def net_tonnage(self) -> Decimal:
+        return round((self.net_weight or Decimal("0")) / Decimal("1000"), 3)
+
+    # Plate and Strings
+    @property
+    def license_plate_display(self) -> str:
+        return self._snapshot.get("license_plate_display") or self._ticket.license_plate_display
+
+    @property
+    def waybill_number(self) -> str:
+        return self._snapshot.get("waybill_number") or self._ticket.waybill_number
+
+    @property
+    def notes(self) -> str:
+        return self._snapshot.get("notes") or self._ticket.notes
+
+    @property
+    def load_count(self) -> int:
+        return self._snapshot.get("load_count") or self._ticket.load_count
+
+    @property
+    def ingot_count(self) -> Optional[int]:
+        return self._snapshot.get("ingot_count", self._ticket.ingot_count)
+
+    # FK Relations
+    @property
+    def product(self):
+        p_id = self._snapshot.get("product_id")
+        if p_id is not None:
+            if self._ticket.product_id == p_id:
+                return self._ticket.product
+            if "product" not in self._cache:
+                from masterdata.models import Product
+                self._cache["product"] = Product.objects.filter(pk=p_id).first() or self._ticket.product
+            return self._cache["product"]
+        return self._ticket.product
+
+    @property
+    def party(self):
+        pty_id = self._snapshot.get("party_id")
+        if pty_id is not None:
+            if self._ticket.party_id == pty_id:
+                return self._ticket.party
+            if "party" not in self._cache:
+                from masterdata.models import Party
+                self._cache["party"] = Party.objects.filter(pk=pty_id).first() or self._ticket.party
+            return self._cache["party"]
+        return self._ticket.party
+
+    @property
+    def vehicle(self):
+        v_id = self._snapshot.get("vehicle_id")
+        if v_id is not None:
+            if self._ticket.vehicle_id == v_id:
+                return self._ticket.vehicle
+            if "vehicle" not in self._cache:
+                from masterdata.models import Vehicle
+                self._cache["vehicle"] = Vehicle.objects.filter(pk=v_id).first() or self._ticket.vehicle
+            return self._cache["vehicle"]
+        return self._ticket.vehicle
+
+    @property
+    def vehicle_type(self):
+        vt_id = self._snapshot.get("vehicle_type_id")
+        if vt_id is not None:
+            if self._ticket.vehicle_type_id == vt_id:
+                return self._ticket.vehicle_type
+            if "vehicle_type" not in self._cache:
+                from masterdata.models import VehicleType
+                self._cache["vehicle_type"] = VehicleType.objects.filter(pk=vt_id).first() or self._ticket.vehicle_type
+            return self._cache["vehicle_type"]
+        return self._ticket.vehicle_type
+
+    @property
+    def vehicle_type_display(self):
+        vt_name = self._snapshot.get("vehicle_type_name")
+        if vt_name:
+            return vt_name
+        return self._ticket.vehicle_type_display
+
+    @property
+    def driver(self):
+        d_id = self._snapshot.get("driver_id")
+        if d_id is not None:
+            if self._ticket.driver_id == d_id:
+                return self._ticket.driver
+            if "driver" not in self._cache:
+                from masterdata.models import Driver
+                self._cache["driver"] = Driver.objects.filter(pk=d_id).first() or self._ticket.driver
+            return self._cache["driver"]
+        return self._ticket.driver
+
+    @property
+    def driver_display(self):
+        d_name = self._snapshot.get("driver_name")
+        if d_name:
+            return d_name
+        return self._ticket.driver_display
+
+    @property
+    def driver_name_custom(self):
+        return self._snapshot.get("driver_name", self._ticket.driver_name_custom)
+
+    @property
+    def driver_mobile_custom(self):
+        return self._snapshot.get("driver_mobile", self._ticket.driver_mobile_custom)
+
+    @property
+    def loss_type(self):
+        lt_id = self._snapshot.get("loss_type_id")
+        if lt_id is not None:
+            if self._ticket.loss_type_id == lt_id:
+                return self._ticket.loss_type
+            if "loss_type" not in self._cache:
+                from masterdata.models import LossType
+                self._cache["loss_type"] = LossType.objects.filter(pk=lt_id).first() or self._ticket.loss_type
+            return self._cache["loss_type"]
+        return self._ticket.loss_type
+
+    @property
+    def operation_type(self):
+        op_id = self._snapshot.get("operation_type_id")
+        if op_id is not None:
+            if self._ticket.operation_type_id == op_id:
+                return self._ticket.operation_type
+            if "operation_type" not in self._cache:
+                from masterdata.models import OperationType
+                self._cache["operation_type"] = OperationType.objects.filter(pk=op_id).first() or self._ticket.operation_type
+            return self._cache["operation_type"]
+        return self._ticket.operation_type
+
+    @property
+    def origin(self):
+        return self._ticket.origin
+
+    @property
+    def destination(self):
+        return self._ticket.destination
+
+    @property
+    def unload_location(self):
+        ul_id = self._snapshot.get("unload_location_id")
+        if ul_id is not None:
+            if self._ticket.unload_location_id == ul_id:
+                return self._ticket.unload_location
+            if "unload_location" not in self._cache:
+                from masterdata.models import UnloadLocation
+                self._cache["unload_location"] = UnloadLocation.objects.filter(pk=ul_id).first() or self._ticket.unload_location
+            return self._cache["unload_location"]
+        return self._ticket.unload_location
+
+    def __getattr__(self, name):
+        return getattr(self._ticket, name)
+
+    def save(self, *args, **kwargs):
+        raise RuntimeError("TicketRevisionPresentationAdapter is a read-only presentation object and cannot be saved.")
+
+    def delete(self, *args, **kwargs):
+        raise RuntimeError("TicketRevisionPresentationAdapter is a read-only presentation object and cannot be deleted.")
+
+
 class TicketRevisionService:
     """
     Centralized, concurrency-safe, auditable revision governance service
@@ -87,9 +394,13 @@ class TicketRevisionService:
 
     @staticmethod
     def _to_decimal_safe(val: Any) -> Any:
-        """Converts Decimal objects into string representations for JSON serialization."""
+        """Converts Decimal objects and other non-JSON-serializable types into safe representations."""
         if isinstance(val, Decimal):
             return str(val)
+        if hasattr(val, "pk"):
+            return val.pk
+        if hasattr(val, "isoformat"):
+            return val.isoformat()
         if isinstance(val, (dict,)):
             return {k: TicketRevisionService._to_decimal_safe(v) for k, v in val.items()}
         if isinstance(val, (list, tuple)):
@@ -370,14 +681,18 @@ class TicketRevisionService:
     ) -> TicketRevision:
         """
         Approves a pending ticket revision.
-        Enforces separation of duties (requester != reviewer) and detects stale requests.
+        Strictly enforces separation of duties (requester cannot approve their own revision,
+        with zero exemption for superusers), requires a meaningful decision reason,
+        and verifies authorization for any blocking discrepancies.
         """
         rev_id = revision.id if hasattr(revision, "id") else revision
-        actual_notes = review_reason or decision_notes or ""
+        actual_notes = (review_reason or decision_notes or "").strip()
+
+        if not actual_notes or len(actual_notes) < 3:
+            raise ValidationError("ثبت ادله تصمیم (حداقل ۳ نویسه) برای تأیید بازنگری الزامی است.")
 
         with transaction.atomic():
             # Strict lock order: WeighTicket first, then TicketRevision
-            # First fetch ticket ID
             rev_obj = TicketRevision.objects.select_related("ticket").get(pk=rev_id)
             locked_ticket = WeighTicket.objects.select_for_update().get(pk=rev_obj.ticket_id)
             locked_revision = TicketRevision.objects.select_for_update().get(pk=rev_id)
@@ -385,8 +700,8 @@ class TicketRevisionService:
             if locked_revision.status != TicketRevision.RevisionStatus.PENDING:
                 raise ValidationError(f"درخواست بازنگری در وضعیت «{locked_revision.get_status_display()}» بوده و قابل تأیید نیست.")
 
-            # Separation of duties check
-            if locked_revision.requested_by_id == reviewer.id and not reviewer.is_superuser:
+            # Separation of duties check - STRICT: requester cannot approve their own revision (even superusers)
+            if locked_revision.requested_by_id == reviewer.id:
                 raise PermissionDenied("اصل تفکیک وظایف: کاربر ثبت‌کننده درخواست نمی‌تواند رأساً آن را تأیید نماید.")
 
             # Stale revision conflict check
@@ -398,11 +713,16 @@ class TicketRevisionService:
 
             # Check blocking discrepancies authorization
             disc_details = locked_revision.discrepancy_details or {}
-            if disc_details.get("has_blocking"):
-                can_approve_disc = reviewer.is_superuser or getattr(reviewer.profile, "is_admin_or_manager", False)
+            has_blocking = bool(disc_details.get("has_blocking") or disc_details.get("requires_approval"))
+            if has_blocking:
+                can_approve_disc = (
+                    reviewer.is_superuser
+                    or getattr(reviewer.profile, "is_admin_or_manager", False)
+                    or reviewer.has_perm("monitoring.can_approve_discrepancy")
+                )
                 if not can_approve_disc:
                     raise PermissionDenied(
-                        f"این بازنگری دارای مغایرت مسدودکننده است ({disc_details.get('blocking_reason')}) "
+                        f"این بازنگری دارای مغایرت مسدودکننده است ({disc_details.get('blocking_reason', 'مغایرت نیازمند مجوز')}) "
                         "و نیازمند مجوز سرپرست ارشد جهت تأیید می‌باشد."
                     )
 
@@ -410,7 +730,7 @@ class TicketRevisionService:
             locked_revision.status = TicketRevision.RevisionStatus.APPROVED
             locked_revision.reviewed_by = reviewer
             locked_revision.reviewed_at = now
-            locked_revision.review_notes = actual_notes.strip()
+            locked_revision.review_notes = actual_notes
             locked_revision.save()
 
             if auto_apply:
@@ -428,6 +748,7 @@ class TicketRevisionService:
         """
         Atomically applies an approved revision to WeighTicket.
         Increments current_revision_number, stores original_net_weight if first revision,
+        updates or creates matching DiscrepancyApproval, invalidates stale approvals,
         and ensures ticket.status NEVER transitions to WAITING_SECOND.
         """
         rev_id = revision.id if hasattr(revision, "id") else revision
@@ -440,9 +761,9 @@ class TicketRevisionService:
             if locked_revision.status not in [TicketRevision.RevisionStatus.APPROVED, TicketRevision.RevisionStatus.PENDING]:
                 raise ValidationError(f"درخواست بازنگری در وضعیت «{locked_revision.get_status_display()}» امکان اعمال شدن ندارد.")
 
-            # If revision was pending and directly applied by an authorized manager (with separation of duties)
+            # If revision was pending and directly applied by an authorized manager (strict separation of duties)
             if locked_revision.status == TicketRevision.RevisionStatus.PENDING:
-                if locked_revision.requested_by_id == applied_by.id and not applied_by.is_superuser:
+                if locked_revision.requested_by_id == applied_by.id:
                     raise PermissionDenied("اصل تفکیک وظایف: کاربر ثبت‌کننده درخواست نمی‌تواند آن را اعمال کند.")
                 locked_revision.reviewed_by = applied_by
                 locked_revision.reviewed_at = timezone.now()
@@ -528,6 +849,61 @@ class TicketRevisionService:
             # Save ticket safely with DailyPlatePolicy
             DailyPlatePolicy.save(locked_ticket, user=applied_by)
 
+            # Discrepancy Approval Synchronization and Invalidation
+            from monitoring.models import DiscrepancyApproval, ApprovalStatus, AlertType, AlertSeverity
+            disc_details = locked_revision.discrepancy_details or {}
+            has_blocking = bool(disc_details.get("has_blocking") or disc_details.get("requires_approval"))
+
+            # Invalidate any stale PENDING discrepancy approvals on this ticket
+            DiscrepancyApproval.objects.filter(
+                ticket=locked_ticket,
+                status=ApprovalStatus.PENDING
+            ).update(
+                status=ApprovalStatus.CANCELLED,
+                decision_reason=f"منسوخ‌شده با اعمال نسخه بازنگری {new_rev_number}"
+            )
+
+            if has_blocking:
+                rule_t = AlertType.WEIGHT_DISCREPANCY
+                if disc_details.get("blocking_alerts"):
+                    rule_t = disc_details["blocking_alerts"][0].get("rule_type", AlertType.WEIGHT_DISCREPANCY)
+
+                disc_approval = DiscrepancyApproval.objects.create(
+                    ticket=locked_ticket,
+                    discrepancy_type=rule_t,
+                    severity=AlertSeverity.HIGH,
+                    status=ApprovalStatus.APPROVED,
+                    rule_name="تأییدیه همگام با بازنگری قبض",
+                    requested_by=locked_revision.requested_by,
+                    request_reason=locked_revision.reason,
+                    reviewed_by=applied_by,
+                    reviewed_at=timezone.now(),
+                    decision_reason=f"تأیید همگام با بازنگری نسخه {new_rev_number}: {locked_revision.review_notes or locked_revision.reason}",
+                    gross_weight_snapshot=locked_ticket.gross_weight,
+                    tare_weight_snapshot=locked_ticket.tare_weight,
+                    net_weight_snapshot=locked_ticket.net_weight,
+                    sent_weight_snapshot=locked_ticket.sent_weight,
+                    product_snapshot=locked_ticket.product,
+                )
+                locked_revision.discrepancy_approval = disc_approval
+
+            # Invalidate any older approved discrepancy approvals with mismatched snapshots
+            prior_approved = DiscrepancyApproval.objects.filter(
+                ticket=locked_ticket,
+                status=ApprovalStatus.APPROVED
+            ).exclude(pk=getattr(locked_revision.discrepancy_approval, "pk", None))
+            for old_app in prior_approved:
+                if not old_app.are_parameters_matching(
+                    gross=locked_ticket.gross_weight,
+                    tare=locked_ticket.tare_weight,
+                    net=locked_ticket.net_weight,
+                    product=locked_ticket.product,
+                    sent_weight=locked_ticket.sent_weight,
+                ):
+                    old_app.status = ApprovalStatus.CANCELLED
+                    old_app.decision_reason = f"منسوخ‌شده به دلیل تغییر اوزان در بازنگری نسخه {new_rev_number}"
+                    old_app.save(update_fields=["status", "decision_reason"])
+
             # Finalize revision record
             now = timezone.now()
             locked_revision.status = TicketRevision.RevisionStatus.APPLIED
@@ -564,10 +940,12 @@ class TicketRevisionService:
     ) -> TicketRevision:
         """
         Rejects a pending ticket revision.
+        Strictly enforces separation of duties (requester cannot reject their own revision,
+        with zero exemption for superusers; must use withdraw), and requires a meaningful reason.
         """
-        actual_reason = review_reason or decision_notes or ""
-        if not actual_reason or not str(actual_reason).strip():
-            raise ValidationError({"review_notes": "ثبت دلیل رد درخواست بازنگری الزامی است."})
+        actual_reason = (review_reason or decision_notes or "").strip()
+        if not actual_reason or len(actual_reason) < 3:
+            raise ValidationError("ثبت ادله تصمیم (حداقل ۳ نویسه) برای رد درخواست بازنگری الزامی است.")
 
         rev_id = revision.id if hasattr(revision, "id") else revision
 
@@ -579,14 +957,15 @@ class TicketRevisionService:
             if locked_revision.status != TicketRevision.RevisionStatus.PENDING:
                 raise ValidationError(f"درخواست بازنگری در وضعیت «{locked_revision.get_status_display()}» بوده و قابل رد کردن نیست.")
 
-            if locked_revision.requested_by_id == reviewer.id and not reviewer.is_superuser:
+            # Separation of duties check - STRICT: requester cannot review/reject their own request (even superusers)
+            if locked_revision.requested_by_id == reviewer.id:
                 raise PermissionDenied("کاربر متقاضی نمی‌تواند درخواست خود را رد کند؛ لطفاً از گزینه انصراف (Withdraw) استفاده فرمایید.")
 
             now = timezone.now()
             locked_revision.status = TicketRevision.RevisionStatus.REJECTED
             locked_revision.reviewed_by = reviewer
             locked_revision.reviewed_at = now
-            locked_revision.review_notes = actual_reason.strip()
+            locked_revision.review_notes = actual_reason
             locked_revision.save()
 
             log_audit(
@@ -596,8 +975,8 @@ class TicketRevisionService:
                 record_repr=f"قبض شماره {locked_ticket.serial_number}",
                 user=reviewer,
                 old_values={"revision_id": str(locked_revision.id)},
-                new_values={"status": locked_revision.status, "reason": actual_reason.strip()},
-                reason=f"رد درخواست بازنگری: {actual_reason.strip()}",
+                new_values={"status": locked_revision.status, "reason": actual_reason},
+                reason=f"رد درخواست بازنگری: {actual_reason}",
                 ip_address=client_ip,
                 source="TicketRevisionService"
             )
@@ -689,3 +1068,44 @@ class TicketRevisionService:
         return ticket.revisions.select_related(
             "requested_by", "reviewed_by", "applied_by"
         ).order_by("-requested_at")
+
+    @classmethod
+    def get_revision_presentation(cls, ticket: WeighTicket, target_rev: int) -> TicketRevisionPresentationAdapter:
+        """
+        Constructs a read-only TicketRevisionPresentationAdapter for a specific revision (Rev. 0 or Rev. N).
+        Ensures zero mutation of the underlying ORM model instance while reconstructing exact historical snapshot values.
+        """
+        current_rev = int(ticket.current_revision_number or 0)
+        if target_rev < 0 or target_rev > current_rev:
+            raise ValidationError(f"شماره نسخه درخواستی ({target_rev}) نامعتبر بوده یا هنوز در سیستم وجود ندارد.")
+
+        if target_rev == current_rev:
+            snapshot = cls.serialize_ticket_state(ticket)
+            return TicketRevisionPresentationAdapter(ticket, target_rev, snapshot)
+
+        if target_rev == 0:
+            # Reconstruct Rev. 0 from the before_snapshot of Rev. 1
+            first_applied_rev = ticket.revisions.filter(
+                revision_number=1,
+                status=TicketRevision.RevisionStatus.APPLIED
+            ).first()
+            if not first_applied_rev or not first_applied_rev.before_snapshot:
+                snapshot = cls.serialize_ticket_state(ticket)
+                if ticket.original_net_weight is not None:
+                    snapshot["net_weight"] = str(ticket.original_net_weight)
+                    snapshot["final_weight"] = str(ticket.original_net_weight)
+            else:
+                snapshot = dict(first_applied_rev.before_snapshot)
+            return TicketRevisionPresentationAdapter(ticket, 0, snapshot)
+
+        # For 0 < target_rev < current_rev
+        target_applied_rev = ticket.revisions.filter(
+            revision_number=target_rev,
+            status=TicketRevision.RevisionStatus.APPLIED
+        ).first()
+        if not target_applied_rev or not target_applied_rev.after_snapshot:
+            raise ValidationError(f"اسنپ‌شات نسخه بازنگری شماره {target_rev} یافت نشد.")
+
+        snapshot = dict(target_applied_rev.after_snapshot)
+        return TicketRevisionPresentationAdapter(ticket, target_rev, snapshot)
+

@@ -208,10 +208,10 @@
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleOrientation()">
             چرخش (افقی / عمودی)
         </button>
-        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a4" class="btn btn-outline-secondary btn-sm">
+        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a4{% if requested_rev_param is not None %}&rev={{ revision_number }}{% endif %}" class="btn btn-outline-secondary btn-sm">
             قالب A4
         </a>
-        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=pos" class="btn btn-outline-secondary btn-sm">
+        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=pos{% if requested_rev_param is not None %}&rev={{ revision_number }}{% endif %}" class="btn btn-outline-secondary btn-sm">
             فیش POS
         </a>
         <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-outline-dark btn-sm">
@@ -233,10 +233,10 @@
 
     {% if is_superseded %}
     <div class="draft-watermark" style="color: rgba(185, 28, 28, 0.28); border-color: rgba(185, 28, 28, 0.38); font-size: 20px;">
-        نسخه منسوخ‌شده — فاقد اعتبار قانونی (SUPERSEDED)
+        نسخه منسوخ‌شده — فاقد اعتبار قانونی و مالی (SUPERSEDED)
     </div>
     <div class="draft-banner" style="background-color: #fef2f2; border-color: #dc2626; color: #991b1b;">
-        ⛔ توجه: این برگه نسخه منسوخ‌شده گذشته است. برای این قبض نسخه جدیدتری صادر گردیده است.
+        ⛔ توجه: این برگه نسخه منسوخ‌شده (Rev. {{ revision_number }}) است. برای این قبض نسخه جدیدتری (Rev. {{ ticket_current_rev }}) صادر گردیده و نسخه حاضر از نظر مالی، حقوقی و خروج کالا فاقد اعتبار می‌باشد.
     </div>
     {% endif %}
 
@@ -257,10 +257,18 @@
                     {{ ticket.get_status_display }}
                 </span>
                 <div class="mt-1">
-                    {% if is_revised %}
-                    <span class="badge bg-primary text-white font-monospace" style="font-size: 8.5px;">نسخه اصلاح‌شده (Rev. {{ revision_number }})</span>
+                    {% if is_superseded %}
+                        {% if is_revised %}
+                        <span class="badge bg-danger text-white font-monospace" style="font-size: 8.5px;">نسخه اصلاح‌شده (Rev. {{ revision_number }}) [منسوخ‌شده]</span>
+                        {% else %}
+                        <span class="badge bg-secondary text-white font-monospace" style="font-size: 8.5px;">نسخه اصلی اولیه (Rev. 0) [منسوخ‌شده]</span>
+                        {% endif %}
                     {% else %}
-                    <span class="badge bg-secondary text-white font-monospace" style="font-size: 8.5px;">نسخه اصلی (Rev. 0)</span>
+                        {% if is_revised %}
+                        <span class="badge bg-primary text-white font-monospace" style="font-size: 8.5px;">نسخه اصلاح‌شده (Rev. {{ revision_number }})</span>
+                        {% else %}
+                        <span class="badge bg-secondary text-white font-monospace" style="font-size: 8.5px;">نسخه اصلی (Rev. 0)</span>
+                        {% endif %}
                     {% endif %}
                 </div>
                 {% if is_reprint %}
@@ -468,7 +476,7 @@ function doPrint(templateType) {
                 "X-CSRFToken": csrftoken,
                 "Content-Type": "application/x-www-form-urlencoded",
             },
-            body: "template=" + encodeURIComponent(templateType)
+            body: "template=" + encodeURIComponent(templateType) + "{% if requested_rev_param is not None %}&rev={{ revision_number }}{% endif %}"
         }).catch(function(e) { console.warn("Print log error:", e); });
     } catch(err) {}
     window.print();

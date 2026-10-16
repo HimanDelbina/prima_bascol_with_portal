@@ -29,9 +29,11 @@ class WeighTicketAdmin(admin.ModelAdmin):
         return ro
 
     def save_model(self, request, obj, form, change):
+        is_already_completed = False
         if change and obj.pk:
             old_ticket = WeighTicket.objects.get(pk=obj.pk)
             if old_ticket.status in [TicketStatus.COMPLETED, TicketStatus.CANCELLED]:
+                is_already_completed = True
                 from weighbridge.revision_service import TicketRevisionService
                 for field in TicketRevisionService.IMMUTABLE_FIELDS | TicketRevisionService.CONTROLLED_FIELDS:
                     if hasattr(old_ticket, field):
@@ -61,7 +63,7 @@ class WeighTicketAdmin(admin.ModelAdmin):
                         source="DjangoAdmin"
                     )
 
-        if obj.first_weight and obj.second_weight and obj.status != TicketStatus.COMPLETED:
+        if obj.first_weight and obj.second_weight and not is_already_completed:
             calc = TicketCalculationService.calculate_ticket(
                 first_weight=obj.first_weight,
                 second_weight=obj.second_weight,
@@ -90,7 +92,7 @@ class WeighTicketAdmin(admin.ModelAdmin):
                 current_sent_weight=obj.sent_weight,
             )
 
-        if obj.status == TicketStatus.COMPLETED and not change:
+        if obj.status == TicketStatus.COMPLETED and not is_already_completed:
             val_res = DiscrepancyApprovalService.validate_ticket_finalization(obj)
             if not val_res["valid"]:
                 raise ValidationError(

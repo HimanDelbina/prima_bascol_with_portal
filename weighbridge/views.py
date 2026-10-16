@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 from django.contrib import messages
 from django.db.models import Q, Sum
 from django.core.paginator import Paginator
@@ -1026,6 +1026,7 @@ def ticket_print(request, pk):
     High quality, offline-ready print preview supporting A4, A5, and POS thermal receipts.
     Guarantees that viewing preview never modifies ticket numbers, weighing calculations, or print counters.
     Calculates prior print requests via AuditLog and embeds an offline verification QR code.
+    Supports reconstructing exact historical revisions (Rev. 0, Rev. N) with superseding watermarks.
     """
     profile = getattr(request.user, "profile", None)
     can_print = request.user.is_superuser or (
@@ -1058,14 +1059,54 @@ def ticket_print(request, pk):
     is_reprint = prior_prints > 0
     print_number = prior_prints + 1
 
-    # Generate offline QR verification code (pure local computation)
+    # Phase 3.2.3 Ticket Revision Handling & Reconstruction
+    from weighbridge.revision_service import TicketRevisionService
+    current_rev_number = int(ticket.current_revision_number or 0)
+    requested_rev_param = request.GET.get("rev")
+    target_rev = current_rev_number
+
+    if requested_rev_param is not None:
+        try:
+            target_rev = int(requested_rev_param)
+        except (ValueError, TypeError):
+            raise Http404("شناسه نسخه بازنگری نامعتبر است.")
+        if target_rev < 0 or target_rev > current_rev_number:
+            raise Http404(f"نسخه بازنگری درخواستی (Rev. {target_rev}) برای این قبض وجود ندارد یا هنوز اعمال نشده است.")
+
+    is_superseded = target_rev < current_rev_number
+    is_revised = target_rev > 0
+
+    if target_rev == current_rev_number:
+        presentation_ticket = ticket
+    else:
+        presentation_ticket = TicketRevisionService.get_revision_presentation(ticket, target_rev)
+
+    # Historical revision metadata
+    revision_approved_by = None
+    revision_approved_at = None
+    revision_reason = None
+
+    if is_revised:
+        hist_rev = ticket.revisions.filter(
+            status=TicketRevision.RevisionStatus.APPLIED,
+            revision_number=target_rev
+        ).select_related("reviewed_by").first()
+        if hist_rev:
+            if hist_rev.reviewed_by:
+                revision_approved_by = hist_rev.reviewed_by.get_full_name() or hist_rev.reviewed_by.username
+            revision_approved_at = hist_rev.jalali_applied_at
+            revision_reason = hist_rev.reason
+    elif target_rev == 0 and is_superseded:
+        revision_reason = "سند اولیه پیش از اعمال اصلاحات"
+
+    # Generate offline QR verification code (derived strictly from presentation values)
     qr_b64 = ""
     try:
         import qrcode
         import base64
         import io
         qr = qrcode.QRCode(version=1, box_size=3, border=1)
-        qr_data = f"WB:{ticket.serial_number}|PL:{ticket.license_plate_display}|W:{ticket.final_weight}KG|D:{get_today_jalali()}"
+        qr_data = f"WB:{presentation_ticket.serial_number}|PL:{presentation_ticket.license_plate_display}|W:{presentation_ticket.final_weight}KG|REV:{target_rev}|D:{get_today_jalali()}"
         qr.add_data(qr_data)
         qr.make(fit=True)
         qr_img = qr.make_image(fill_color="black", back_color="white")
@@ -1090,46 +1131,21 @@ def ticket_print(request, pk):
         elif not eval_res["can_finalize"]:
             draft_reason = f"سند دارای مغایرت مسدودکننده فاقد تأییدیه معتبر سرپرست است ({eval_res['blocking_reason']})."
 
-    # Phase 3.2.3 Ticket Revision Handling
-    current_rev_number = int(ticket.current_revision_number or 0)
-    requested_rev_param = request.GET.get("rev")
-    is_superseded = False
-    if requested_rev_param is not None:
-        try:
-            req_rev = int(requested_rev_param)
-            if req_rev < current_rev_number:
-                is_superseded = True
-        except ValueError:
-            req_rev = current_rev_number
-
-    is_revised = current_rev_number > 0
-    latest_applied_rev = None
-    revision_approved_by = None
-    revision_approved_at = None
-    revision_reason = None
-    if is_revised:
-        latest_applied_rev = ticket.revisions.filter(
-            status=TicketRevision.RevisionStatus.APPLIED,
-            revision_number=current_rev_number
-        ).select_related("reviewed_by").first()
-        if latest_applied_rev:
-            if latest_applied_rev.reviewed_by:
-                revision_approved_by = latest_applied_rev.reviewed_by.get_full_name() or latest_applied_rev.reviewed_by.username
-            revision_approved_at = latest_applied_rev.jalali_applied_at
-            revision_reason = latest_applied_rev.reason
-
     template_name = f"weighbridge/ticket_print_{template_type}.html"
     return render(request, template_name, {
-        "ticket": ticket,
+        "ticket": presentation_ticket,
+        "underlying_ticket": ticket,
         "settings": settings_obj,
         "template_type": template_type,
         "print_date": get_today_jalali(),
         "print_time": timezone.localtime().strftime("%H:%M"),
         "is_reprint": is_reprint,
         "print_number": print_number,
-        "revision_number": current_rev_number,
+        "revision_number": target_rev,
+        "ticket_current_rev": current_rev_number,
         "is_revised": is_revised,
         "is_superseded": is_superseded,
+        "requested_rev_param": requested_rev_param,
         "revision_approved_by": revision_approved_by,
         "revision_approved_at": revision_approved_at,
         "revision_reason": revision_reason,
@@ -1137,7 +1153,7 @@ def ticket_print(request, pk):
         "is_draft": is_draft,
         "draft_reason": draft_reason,
         "latest_approval": latest_approval,
-        "title": f"چاپ قبض {ticket.serial_number}" + (f" (ویرایش {current_rev_number})" if is_revised else "") + (f" (چاپ مجدد - نسخه {print_number})" if is_reprint else ""),
+        "title": f"چاپ قبض {presentation_ticket.serial_number}" + (f" (ویرایش {target_rev})" if is_revised else " (نسخه اصلی)") + (" [منسوخ‌شده]" if is_superseded else "") + (f" (چاپ مجدد - نسخه {print_number})" if is_reprint else ""),
     })
 
 
@@ -1146,8 +1162,8 @@ def ticket_print(request, pk):
 def log_ticket_print(request, pk):
     """
     Authenticated POST endpoint to explicitly record an operator print request.
-    Distinguishes preview access from explicit print execution commands.
-    Notes: Browser-initiated print events cannot guarantee actual physical paper output.
+    Distinguishes preview access from explicit print execution commands and
+    records the exact revision number printed.
     """
     profile = getattr(request.user, "profile", None)
     can_print = request.user.is_superuser or (
@@ -1161,6 +1177,17 @@ def log_ticket_print(request, pk):
     if template_type not in ["a4", "a5", "pos"]:
         template_type = "a4"
 
+    requested_rev_param = request.POST.get("rev") or request.GET.get("rev")
+    current_rev_number = int(ticket.current_revision_number or 0)
+    target_rev = current_rev_number
+    if requested_rev_param is not None:
+        try:
+            target_rev = int(requested_rev_param)
+        except (ValueError, TypeError):
+            pass
+
+    is_superseded = target_rev < current_rev_number
+
     prior_prints = AuditLog.objects.filter(
         model_name="WeighTicket",
         record_id=str(ticket.id),
@@ -1169,21 +1196,25 @@ def log_ticket_print(request, pk):
     is_reprint = prior_prints > 0
     print_number = prior_prints + 1
 
+    rev_label = f"Rev. {target_rev}" + (" (منسوخ‌شده / فاقد اعتبار جاری)" if is_superseded else " (نسخه جاری)")
     log_audit(
         action=AuditAction.PRINT,
         model_name="WeighTicket",
         record_id=ticket.id,
         record_repr=f"قبض شماره {ticket.serial_number}",
         user=request.user,
-        reason=f"درخواست ارسال به چاپگر ({'چاپ مجدد - نسخه ' + str(print_number) if is_reprint else 'چاپ اولیه'}) در قالب {template_type.upper()} [تأیید خروج فیزیکی کاغذ تنها با سخت‌افزار مجهز به حسگر Paper-Out امکان‌پذیر است]"
+        reason=f"درخواست ارسال به چاپگر ({'چاپ مجدد - نسخه ' + str(print_number) if is_reprint else 'چاپ اولیه'}) در قالب {template_type.upper()} [نسخه بازنگری: {rev_label}] [تأیید خروج فیزیکی کاغذ تنها با سخت‌افزار مجهز به حسگر Paper-Out امکان‌پذیر است]"
     )
 
     return JsonResponse({
         "status": "ok",
         "print_number": print_number,
         "is_reprint": is_reprint,
-        "template": template_type
+        "template": template_type,
+        "printed_revision": target_rev,
+        "is_superseded": is_superseded,
     })
+
 
 
 @login_required
@@ -2153,6 +2184,11 @@ def ticket_revision_approve(request, revision_id):
     Enforces separation of duties and atomic lock acquisition.
     """
     review_reason = request.POST.get("review_reason", "").strip()
+    if not review_reason or len(review_reason) < 3:
+        messages.error(request, "ثبت ادله تصمیم (حداقل ۳ نویسه) برای تأیید درخواست بازنگری الزامی است.")
+        rev_obj = TicketRevision.objects.filter(pk=revision_id).first()
+        return redirect("weighbridge:ticket_detail", pk=rev_obj.ticket_id) if rev_obj else redirect("weighbridge:ticket_list")
+
     from weighbridge.revision_service import TicketRevisionService
     try:
         rev = TicketRevisionService.approve_revision(
@@ -2185,8 +2221,8 @@ def ticket_revision_reject(request, revision_id):
     Supervisor action to reject a pending revision.
     """
     review_reason = request.POST.get("review_reason", "").strip()
-    if not review_reason:
-        messages.error(request, "ثبت دلیل برای رد درخواست بازنگری اجباری است.")
+    if not review_reason or len(review_reason) < 3:
+        messages.error(request, "ثبت دلیل برای رد درخواست بازنگری الزامی است (حداقل ۳ نویسه).")
         rev_obj = TicketRevision.objects.filter(pk=revision_id).first()
         return redirect("weighbridge:ticket_detail", pk=rev_obj.ticket_id) if rev_obj else redirect("weighbridge:ticket_list")
 

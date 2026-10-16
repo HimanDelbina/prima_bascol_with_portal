@@ -157,7 +157,7 @@ class DiscrepancyApprovalSecurityHotfixesTests(TestCase):
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, TicketStatus.WAITING_SECOND)
 
-    # 4. API: Ticket correction invalidates stale approval and demotes COMPLETED ticket
+    # 4. API: Ticket correction on completed ticket creates revision and preserves COMPLETED status (Phase 3.2.3)
     def test_api_ticket_correct_invalidates_stale_and_demotes_completed(self):
         calc = TicketCalculationService.calculate_ticket(
             first_weight=Decimal("15000.00"),
@@ -206,23 +206,33 @@ class DiscrepancyApprovalSecurityHotfixesTests(TestCase):
         ticket.status = TicketStatus.COMPLETED
         ticket.save()
 
-        # Manager corrects weight via API
+        # Manager requests correction via API -> Under Phase 3.2.3 governance, returns 202 ACCEPTED
         self.api_client.force_authenticate(user=self.supervisor)
         res = self.api_client.post(f"/api/v1/tickets/{ticket.id}/correct/", {
             "field": "second_weight",
             "new_value": "42000",
             "reason": "اصلاح وزن دوم توسط مدیر"
         })
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.status_code, status.HTTP_202_ACCEPTED)
 
-        # Verify approval is now CANCELLED (stale)
+        # Apply the revision via authorized reviewer
+        from weighbridge.revision_service import TicketRevisionService
+        rev_id = res.data["data"]["revision_id"]
+        TicketRevisionService.approve_revision(
+            revision=rev_id,
+            reviewer=self.superadmin,
+            review_reason="تأیید اصلاح وزن دوم",
+            auto_apply=True
+        )
+
+        # Verify old approval is now CANCELLED (stale)
         app_req.refresh_from_db()
         self.assertEqual(app_req.status, ApprovalStatus.CANCELLED)
-        self.assertIn("ابطال خودکار به دلیل تغییر مقادیر", app_req.decision_reason)
 
-        # Verify ticket was demoted from COMPLETED to WAITING_SECOND
+        # Verify ticket remained COMPLETED (never demoted to WAITING_SECOND in Phase 3.2.3)
         ticket.refresh_from_db()
-        self.assertEqual(ticket.status, TicketStatus.WAITING_SECOND)
+        self.assertEqual(ticket.status, TicketStatus.COMPLETED)
+        self.assertEqual(ticket.current_revision_number, 1)
 
     # 5. Separation of duties: Requester cannot self-approve, even if superuser
     def test_strict_separation_of_duties_prohibits_self_approval(self):

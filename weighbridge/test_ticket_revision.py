@@ -713,3 +713,334 @@ class ReportingAndPrintingTests(TicketRevisionBaseTestCase):
         res_pos_rev1 = self.client.get(reverse("weighbridge:ticket_print", kwargs={"pk": self.ticket.pk}) + "?template=pos")
         self.assertEqual(res_pos_rev1.status_code, 200)
         self.assertContains(res_pos_rev1, "Rev. 1")
+
+    def test_exact_historical_reconstruction_rev0_rev1_rev2(self):
+        """
+        Verify exact reconstruction of Rev. 0, Rev. 1, and Rev. 2 snapshots
+        with zero mutation of the underlying WeighTicket ORM instance.
+        """
+        self.client.force_login(self.operator)
+
+        # 1. Apply Revision 1: Modify tare weight and product
+        rev1 = TicketRevisionService.request_revision(
+            ticket=self.ticket,
+            proposed_data={
+                "tare_weight": Decimal("14000.00"),
+                "product_id": self.product_scrap.id,
+                "waybill_number": "WB-REV1-9900",
+            },
+            requested_by=self.operator,
+            reason="اصلاح وزن خالی و تغییر کالا به ضایعات مس",
+        )
+        TicketRevisionService.approve_revision(
+            revision=rev1,
+            reviewer=self.supervisor,
+            review_reason="تأیید اصلاحیه اول توسط سرپرست",
+            auto_apply=True,
+        )
+
+        # Refresh ticket from DB: now at Rev. 1
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.current_revision_number, 1)
+        self.assertEqual(self.ticket.tare_weight, Decimal("14000.00"))
+        self.assertEqual(self.ticket.product, self.product_scrap)
+
+        # 2. Apply Revision 2: Modify gross weight, party, and notes
+        rev2 = TicketRevisionService.request_revision(
+            ticket=self.ticket,
+            proposed_data={
+                "gross_weight": Decimal("40000.00"),
+                "party_id": self.party_b.id,
+                "notes": "یادداشت اصلاح‌شده در نسخه دوم",
+            },
+            requested_by=self.operator,
+            reason="اصلاح بار ناخالص و طرف حساب به مجتمع فولاد اهواز",
+        )
+        TicketRevisionService.approve_revision(
+            revision=rev2,
+            reviewer=self.other_supervisor,
+            review_reason="تأیید اصلاحیه دوم توسط سرپرست دوم",
+            auto_apply=True,
+        )
+
+        # Refresh ticket from DB: now at Rev. 2
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.current_revision_number, 2)
+        self.assertEqual(self.ticket.gross_weight, Decimal("40000.00"))
+        self.assertEqual(self.ticket.party, self.party_b)
+        self.assertEqual(self.ticket.net_weight, Decimal("26000.00"))
+
+        # 3. Test Rev. 0 Reconstructed Presentation Adapter
+        adapter_rev0 = TicketRevisionService.get_revision_presentation(self.ticket, 0)
+        self.assertEqual(adapter_rev0.current_revision_number, 0)
+        self.assertTrue(adapter_rev0.is_superseded)
+        self.assertEqual(adapter_rev0.gross_weight, Decimal("38500.00"))
+        self.assertEqual(adapter_rev0.tare_weight, Decimal("14200.00"))
+        self.assertEqual(adapter_rev0.net_weight, Decimal("24300.00"))
+        self.assertEqual(adapter_rev0.product, self.product_iron)
+        self.assertEqual(adapter_rev0.party, self.party_a)
+        self.assertEqual(adapter_rev0.waybill_number, "WB-8899")
+
+        # Verify adapter is strictly read-only and save() raises RuntimeError
+        with self.assertRaises(RuntimeError):
+            adapter_rev0.save()
+
+        # Verify underlying ticket ORM instance was NOT mutated in DB
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.current_revision_number, 2)
+        self.assertEqual(self.ticket.gross_weight, Decimal("40000.00"))
+        self.assertEqual(self.ticket.net_weight, Decimal("26000.00"))
+
+        # 4. Test Rev. 1 Reconstructed Presentation Adapter
+        adapter_rev1 = TicketRevisionService.get_revision_presentation(self.ticket, 1)
+        self.assertEqual(adapter_rev1.current_revision_number, 1)
+        self.assertTrue(adapter_rev1.is_superseded)
+        self.assertEqual(adapter_rev1.gross_weight, Decimal("38500.00"))
+        self.assertEqual(adapter_rev1.tare_weight, Decimal("14000.00"))
+        self.assertEqual(adapter_rev1.net_weight, Decimal("24500.00"))
+        self.assertEqual(adapter_rev1.product, self.product_scrap)
+        self.assertEqual(adapter_rev1.party, self.party_a)
+        self.assertEqual(adapter_rev1.waybill_number, "WB-REV1-9900")
+
+        # 5. Test Rev. 2 Reconstructed Presentation Adapter
+        adapter_rev2 = TicketRevisionService.get_revision_presentation(self.ticket, 2)
+        self.assertEqual(adapter_rev2.current_revision_number, 2)
+        self.assertFalse(adapter_rev2.is_superseded)
+        self.assertEqual(adapter_rev2.gross_weight, Decimal("40000.00"))
+        self.assertEqual(adapter_rev2.tare_weight, Decimal("14000.00"))
+        self.assertEqual(adapter_rev2.net_weight, Decimal("26000.00"))
+        self.assertEqual(adapter_rev2.product, self.product_scrap)
+        self.assertEqual(adapter_rev2.party, self.party_b)
+        self.assertEqual(adapter_rev2.notes, "یادداشت اصلاح‌شده در نسخه دوم")
+
+        # 6. Test HTTP Print Views for Rev 0, Rev 1, and Rev 2
+        # Rev 0: Must show Rev. 0, superseded watermark, and original values
+        res0 = self.client.get(reverse("weighbridge:ticket_print", kwargs={"pk": self.ticket.pk}) + "?rev=0")
+        self.assertEqual(res0.status_code, 200)
+        self.assertContains(res0, "Rev. 0")
+        self.assertContains(res0, "SUPERSEDED")
+        self.assertContains(res0, "میلگرد ۱۶")
+        self.assertContains(res0, "شرکت فولاد اکسین")
+
+        # Rev 1: Must show Rev. 1, superseded watermark, and Rev 1 values
+        res1 = self.client.get(reverse("weighbridge:ticket_print", kwargs={"pk": self.ticket.pk}) + "?rev=1")
+        self.assertEqual(res1.status_code, 200)
+        self.assertContains(res1, "Rev. 1")
+        self.assertContains(res1, "SUPERSEDED")
+        self.assertContains(res1, "ضایعات مس")
+        self.assertContains(res1, "WB-REV1-9900")
+
+        # Rev 2: Must show Rev. 2, NO superseded watermark, and Rev 2 values
+        res2 = self.client.get(reverse("weighbridge:ticket_print", kwargs={"pk": self.ticket.pk}) + "?rev=2")
+        self.assertEqual(res2.status_code, 200)
+        self.assertContains(res2, "Rev. 2")
+        self.assertNotContains(res2, "SUPERSEDED")
+        self.assertContains(res2, "مجتمع فولاد اهواز")
+
+        # Default (no rev param): Displays effective Rev. 2
+        res_default = self.client.get(reverse("weighbridge:ticket_print", kwargs={"pk": self.ticket.pk}))
+        self.assertEqual(res_default.status_code, 200)
+        self.assertContains(res_default, "Rev. 2")
+        self.assertNotContains(res_default, "SUPERSEDED")
+
+        # Invalid revision numbers must safely return 404
+        self.assertEqual(self.client.get(reverse("weighbridge:ticket_print", kwargs={"pk": self.ticket.pk}) + "?rev=-1").status_code, 404)
+        self.assertEqual(self.client.get(reverse("weighbridge:ticket_print", kwargs={"pk": self.ticket.pk}) + "?rev=99").status_code, 404)
+        self.assertEqual(self.client.get(reverse("weighbridge:ticket_print", kwargs={"pk": self.ticket.pk}) + "?rev=invalid").status_code, 404)
+
+    def test_separation_of_duties_strict_no_superuser_exemption(self):
+        """
+        Verify that separation of duties is strictly enforced with ZERO exemption for superusers.
+        A superuser who requests a revision CANNOT approve, apply, or reject that request.
+        """
+        # Superuser requests revision
+        rev = TicketRevisionService.request_revision(
+            ticket=self.ticket,
+            proposed_data={"sent_weight": Decimal("24400.00")},
+            requested_by=self.superuser,
+            reason="اصلاح وزن بارنامه توسط مدیر ارشد",
+        )
+
+        # 1. Superuser attempts to approve own revision: MUST fail with PermissionDenied
+        with self.assertRaises(PermissionDenied):
+            TicketRevisionService.approve_revision(
+                revision=rev,
+                reviewer=self.superuser,
+                review_reason="تلاش مدیر برای تأیید درخواست خود",
+            )
+
+        # 2. Superuser attempts to apply own pending revision: MUST fail with PermissionDenied
+        with self.assertRaises(PermissionDenied):
+            TicketRevisionService.apply_revision(
+                revision=rev,
+                applied_by=self.superuser,
+            )
+
+        # 3. Superuser attempts to reject own revision: MUST fail with PermissionDenied (must use withdraw)
+        with self.assertRaises(PermissionDenied):
+            TicketRevisionService.reject_revision(
+                revision=rev,
+                reviewer=self.superuser,
+                review_reason="تلاش برای رد درخواست خود",
+            )
+
+        # 4. Another authorized supervisor can approve successfully
+        approved_rev = TicketRevisionService.approve_revision(
+            revision=rev,
+            reviewer=self.supervisor,
+            review_reason="تأییدیه قانونی توسط سرپرست مستقل",
+            auto_apply=True,
+        )
+        self.assertEqual(approved_rev.status, TicketRevision.RevisionStatus.APPLIED)
+
+    def test_decision_reason_length_validation(self):
+        """
+        Verify that both approval and rejection enforce a minimum decision reason length (>= 3 chars).
+        """
+        rev = TicketRevisionService.request_revision(
+            ticket=self.ticket,
+            proposed_data={"notes": "یادداشت جدید"},
+            requested_by=self.operator,
+            reason="ثبت یادداشت تکمیلی",
+        )
+
+        # Empty or short approval reason (< 3 chars)
+        with self.assertRaises(ValidationError):
+            TicketRevisionService.approve_revision(
+                revision=rev,
+                reviewer=self.supervisor,
+                review_reason="  ",
+            )
+        with self.assertRaises(ValidationError):
+            TicketRevisionService.approve_revision(
+                revision=rev,
+                reviewer=self.supervisor,
+                review_reason="OK",
+            )
+
+        # Empty or short rejection reason (< 3 chars)
+        with self.assertRaises(ValidationError):
+            TicketRevisionService.reject_revision(
+                revision=rev,
+                reviewer=self.supervisor,
+                review_reason="",
+            )
+        with self.assertRaises(ValidationError):
+            TicketRevisionService.reject_revision(
+                revision=rev,
+                reviewer=self.supervisor,
+                review_reason="رد",
+            )
+
+    def test_discrepancy_approval_unified_resolution_and_invalidation(self):
+        """
+        Verify that revisions with blocking discrepancies automatically create
+        an authorized DiscrepancyApproval record with status APPROVED and matching snapshots,
+        and invalidate any stale pending discrepancy approvals.
+        """
+        from monitoring.models import DiscrepancyApproval, ApprovalStatus, AlertType, MonitoringRuleConfig
+        from monitoring.services.discrepancy_service import DiscrepancyApprovalService
+
+        # Configure rule to require approval for weight discrepancies
+        rule_cfg = MonitoringRuleConfig.get_rule_config(AlertType.WEIGHT_DISCREPANCY)
+        rule_cfg.requires_approval = True
+        rule_cfg.warning_threshold = Decimal("50.00")
+        rule_cfg.critical_threshold = Decimal("200.00")
+        rule_cfg.save()
+
+        # Create a prior pending discrepancy approval on the ticket
+        prior_pending = DiscrepancyApproval.objects.create(
+            ticket=self.ticket,
+            discrepancy_type=AlertType.WEIGHT_DISCREPANCY,
+            status=ApprovalStatus.PENDING,
+            requested_by=self.operator,
+            request_reason="مغایرت اولیه در انتظار بررسی",
+        )
+
+        # Request revision with a huge discrepancy (gross 50,000 kg vs sent weight 24,350 kg)
+        rev = TicketRevisionService.request_revision(
+            ticket=self.ticket,
+            proposed_data={
+                "gross_weight": Decimal("50000.00"),
+                "tare_weight": Decimal("14200.00"),
+            },
+            requested_by=self.operator,
+            reason="اصلاح وزن ناخالص به مقدار بحرانی",
+        )
+        self.assertTrue(rev.discrepancy_details.get("has_blocking") or rev.discrepancy_details.get("requires_approval"))
+
+        # Supervisor approves revision
+        approved_rev = TicketRevisionService.approve_revision(
+            revision=rev,
+            reviewer=self.supervisor,
+            review_reason="تأیید رسمی انحراف وزن ناخالص بر اساس بازرسی فیزیکی",
+            auto_apply=True,
+        )
+
+        # Verify prior pending discrepancy approval was invalidated (CANCELLED)
+        prior_pending.refresh_from_db()
+        self.assertEqual(prior_pending.status, ApprovalStatus.CANCELLED)
+
+        # Verify a new DiscrepancyApproval was created in APPROVED status and linked
+        self.assertIsNotNone(approved_rev.discrepancy_approval)
+        self.assertEqual(approved_rev.discrepancy_approval.status, ApprovalStatus.APPROVED)
+        self.assertEqual(approved_rev.discrepancy_approval.gross_weight_snapshot, Decimal("50000.00"))
+        self.assertEqual(approved_rev.discrepancy_approval.tare_weight_snapshot, Decimal("14200.00"))
+        self.assertEqual(approved_rev.discrepancy_approval.net_weight_snapshot, Decimal("35800.00"))
+
+        # Verify DiscrepancyApprovalService evaluates ticket as valid for release
+        self.ticket.refresh_from_db()
+        eval_res = DiscrepancyApprovalService.evaluate_ticket_discrepancies(self.ticket)
+        self.assertTrue(eval_res["can_finalize"])
+        self.assertTrue(eval_res["is_approved"])
+
+        # Verify ticket print is NOT marked as draft
+        self.client.force_login(self.operator)
+        res_print = self.client.get(reverse("weighbridge:ticket_print", kwargs={"pk": self.ticket.pk}))
+        self.assertEqual(res_print.status_code, 200)
+        self.assertNotContains(res_print, "پیشنویس")
+
+    def test_print_audit_log_records_exact_revision(self):
+        """
+        Verify that POST to log_ticket_print records the printed revision in AuditLog metadata.
+        """
+        self.client.force_login(self.operator)
+
+        # Apply a revision so current_revision_number is 1
+        rev = TicketRevisionService.request_revision(
+            ticket=self.ticket,
+            proposed_data={"notes": "یادداشت ویرایش اول"},
+            requested_by=self.operator,
+            reason="اصلاح یادداشت",
+        )
+        TicketRevisionService.approve_revision(
+            revision=rev,
+            reviewer=self.supervisor,
+            review_reason="تأیید شد",
+            auto_apply=True,
+        )
+
+        # Log print for Rev. 0
+        res0 = self.client.post(
+            reverse("weighbridge:log_ticket_print", kwargs={"pk": self.ticket.pk}),
+            data={"template": "a4", "rev": 0}
+        )
+        self.assertEqual(res0.status_code, 200)
+        self.assertEqual(res0.json()["printed_revision"], 0)
+        self.assertTrue(res0.json()["is_superseded"])
+
+        log0 = AuditLog.objects.filter(model_name="WeighTicket", record_id=str(self.ticket.pk), action=AuditAction.PRINT).order_by("id").first()
+        self.assertIn("Rev. 0 (منسوخ‌شده", log0.reason)
+
+        # Log print for Rev. 1
+        res1 = self.client.post(
+            reverse("weighbridge:log_ticket_print", kwargs={"pk": self.ticket.pk}),
+            data={"template": "a4", "rev": 1}
+        )
+        self.assertEqual(res1.status_code, 200)
+        self.assertEqual(res1.json()["printed_revision"], 1)
+        self.assertFalse(res1.json()["is_superseded"])
+
+        log1 = AuditLog.objects.filter(model_name="WeighTicket", record_id=str(self.ticket.pk), action=AuditAction.PRINT).order_by("-id").first()
+        self.assertIn("Rev. 1 (نسخه جاری)", log1.reason)
+

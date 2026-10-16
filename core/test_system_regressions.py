@@ -109,11 +109,18 @@ class SystemRegressionTests(TestCase):
         self.assertEqual(Decimal(response.data["freight_amount"]), Decimal("1250000"))
 
     def test_api_correction_masterdata_and_invalid_values(self):
-        url = f"/api/v1/tickets/{self.ticket.pk}/correct/"
+        in_flight_ticket = WeighTicket.objects.create(
+            serial_number="SYSTEM-INFLIGHT-1",
+            license_plate_display="12 ع 345 - ایران 67",
+            first_weight=12000,
+            status=TicketStatus.WAITING_SECOND,
+            first_weight_date=timezone.localdate()
+        )
+        url = f"/api/v1/tickets/{in_flight_ticket.pk}/correct/"
         response = self.api.post(url, {"field": "product", "new_value": str(self.product.pk), "reason": "اصلاح کالا"})
         self.assertEqual(response.status_code, 200)
-        self.ticket.refresh_from_db()
-        self.assertEqual(self.ticket.product, self.product)
+        in_flight_ticket.refresh_from_db()
+        self.assertEqual(in_flight_ticket.product, self.product)
         for field, value in (("product", "abc"), ("first_weight", "NaN"), ("loss_percent", "-1")):
             with self.subTest(field=field):
                 self.assertEqual(self.api.post(url, {"field": field, "new_value": value, "reason": "اصلاح آزمایشی"}).status_code, 400)

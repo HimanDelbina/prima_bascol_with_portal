@@ -134,7 +134,7 @@ class HardenedSecurityTests(TestCase):
             tare_weight=Decimal("15000.00"),
             net_weight=Decimal("20000.00"),
             final_weight=Decimal("20000.00"),
-            status=TicketStatus.COMPLETED
+            status=TicketStatus.WAITING_SECOND
         )
         self.client.force_authenticate(user=self.user)
 
