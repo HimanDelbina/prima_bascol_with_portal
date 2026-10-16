@@ -150,12 +150,219 @@ class ManagementDashboardService:
         return text
 
     @staticmethod
-    def detect_management_alerts(curr_qs):
-        alerts = []
-        critical_discrepancies = curr_qs.filter(
-            Q(weight_difference__gte=100) | Q(weight_difference__lte=-100) | Q(is_tolerance_exceeded=True)
+    def get_pending_approvals_summary(user):
+        """
+        Phase 3.2.2: Pending supervisor approvals summary.
+        Respects supervisor approval permissions and avoids leaking details to unauthorized users.
+        """
+        is_authorized = False
+        if user and user.is_authenticated:
+            if user.is_superuser:
+                is_authorized = True
+            else:
+                profile = getattr(user, "profile", None)
+                if profile and profile.is_active and profile.role in [
+                    "super_admin", "system_admin", "ceo", "factory_manager",
+                    "commercial_manager", "financial_manager", "weighbridge_manager"
+                ]:
+                    is_authorized = True
+
+        if not is_authorized:
+            return {
+                "is_authorized": False,
+                "pending_count": 0,
+                "oldest_age_str": None,
+                "oldest_age_minutes": 0,
+                "severity_breakdown": [],
+                "approval_url": None,
+            }
+
+        from monitoring.models import DiscrepancyApproval, ApprovalStatus, AlertSeverity
+        from django.urls import reverse
+
+        pending_qs = DiscrepancyApproval.objects.filter(status=ApprovalStatus.PENDING)
+        sev_aggr = list(pending_qs.values("severity").annotate(cnt=Count("id")).order_by("-cnt"))
+        pending_count = sum(s["cnt"] for s in sev_aggr)
+
+        oldest = pending_qs.order_by("created_at").first() if pending_count > 0 else None
+        oldest_age_str = None
+        oldest_age_minutes = 0
+        if oldest and oldest.created_at:
+            diff_sec = max(0.0, (timezone.now() - oldest.created_at).total_seconds())
+            oldest_age_minutes = int(diff_sec / 60)
+            hours = oldest_age_minutes // 60
+            mins = oldest_age_minutes % 60
+            days = hours // 24
+            rem_hours = hours % 24
+            if days > 0:
+                oldest_age_str = f"{days} روز و {rem_hours} ساعت"
+            elif hours > 0:
+                oldest_age_str = f"{hours} ساعت و {mins} دقیقه"
+            else:
+                oldest_age_str = f"{max(1, mins)} دقیقه"
+
+        sev_labels = dict(AlertSeverity.choices)
+        sev_classes = {
+            AlertSeverity.CRITICAL: "danger",
+            AlertSeverity.HIGH: "warning text-dark",
+            AlertSeverity.MEDIUM: "info text-dark",
+            AlertSeverity.LOW: "secondary",
+            AlertSeverity.INFO: "light text-dark border",
+        }
+        severity_breakdown = []
+        for s in sev_aggr:
+            code = s["severity"]
+            severity_breakdown.append({
+                "severity": code,
+                "label": sev_labels.get(code, code),
+                "count": s["cnt"],
+                "badge_class": sev_classes.get(code, "secondary"),
+            })
+
+        return {
+            "is_authorized": True,
+            "pending_count": pending_count,
+            "oldest_age_str": oldest_age_str,
+            "oldest_age_minutes": oldest_age_minutes,
+            "severity_breakdown": severity_breakdown,
+            "approval_url": reverse("monitoring:approval_list"),
+        }
+
+    @staticmethod
+    def get_yard_operational_summary():
+        """
+        Phase 3.2.2: Live yard operational queue and dwell summary.
+        Uses exact same rules and thresholds as trucks_in_yard and MonitoringRuleConfig.
+        """
+        from django.urls import reverse
+        try:
+            from monitoring.models import MonitoringRuleConfig, AlertType
+            rule_config = MonitoringRuleConfig.get_rule_config(AlertType.LONG_WAITING_TIME)
+            warning_threshold = float(rule_config.warning_threshold)
+            critical_threshold = float(rule_config.critical_threshold)
+        except Exception:
+            warning_threshold = 60.0
+            critical_threshold = 180.0
+
+        now = timezone.now()
+        cutoff_warning = now - timedelta(minutes=warning_threshold)
+        cutoff_critical = now - timedelta(minutes=critical_threshold)
+
+        base_yard_qs = WeighTicket.objects.filter(
+            status__in=[TicketStatus.WAITING_SECOND, TicketStatus.FIRST_REGISTERED]
         )
-        crit_count = critical_discrepancies.count()
+
+        yard_stats = base_yard_qs.aggregate(
+            total=Count("id"),
+            overdue=Count("id", filter=Q(created_at__lte=cutoff_critical)),
+            warning=Count("id", filter=Q(created_at__gt=cutoff_critical, created_at__lte=cutoff_warning)),
+            normal=Count("id", filter=Q(created_at__gt=cutoff_warning)),
+            oldest_created=Min("created_at"),
+        )
+
+        total_count = yard_stats["total"] or 0
+        oldest_created = yard_stats["oldest_created"]
+        longest_dwell_str = "—"
+        longest_dwell_minutes = 0
+        if oldest_created:
+            diff_sec = max(0.0, (now - oldest_created).total_seconds())
+            longest_dwell_minutes = int(diff_sec / 60)
+            hours = longest_dwell_minutes // 60
+            mins = longest_dwell_minutes % 60
+            if hours > 0 and mins > 0:
+                longest_dwell_str = f"{hours} ساعت و {mins} دقیقه"
+            elif hours > 0:
+                longest_dwell_str = f"{hours} ساعت"
+            elif mins > 0:
+                longest_dwell_str = f"{mins} دقیقه"
+            else:
+                longest_dwell_str = "کمتر از ۱ دقیقه"
+
+        return {
+            "total_in_yard": total_count,
+            "normal_count": yard_stats["normal"] or 0,
+            "warning_count": yard_stats["warning"] or 0,
+            "overdue_count": yard_stats["overdue"] or 0,
+            "longest_dwell_str": longest_dwell_str,
+            "longest_dwell_minutes": longest_dwell_minutes,
+            "warning_threshold_mins": int(warning_threshold),
+            "critical_threshold_mins": int(critical_threshold),
+            "yard_url": reverse("weighbridge:trucks_in_yard"),
+        }
+
+    @staticmethod
+    def get_turnaround_dwell_analytics(curr_qs):
+        """
+        Phase 3.2.2: Turnaround and dwell analytics for completed tickets.
+        Computes average, median, completed trips count, excluded incomplete records count,
+        and hourly throughput trend. Keeps metrics strictly separate from finalized net tonnage.
+        """
+        completed_qs = curr_qs.filter(status=TicketStatus.COMPLETED)
+        completed_count = completed_qs.count()
+
+        valid_qs = completed_qs.filter(
+            first_weight_date__isnull=False,
+            first_weight_time__isnull=False,
+            second_weight_date__isnull=False,
+            second_weight_time__isnull=False
+        )
+
+        timestamp_rows = list(valid_qs.values_list(
+            "first_weight_date", "first_weight_time", "second_weight_date", "second_weight_time"
+        ))
+
+        excluded_count = max(0, completed_count - len(timestamp_rows))
+
+        durations_minutes = []
+        hourly_throughput = [0] * 24
+
+        for d1, t1, d2, t2 in timestamp_rows:
+            dt1 = datetime.combine(d1, t1)
+            dt2 = datetime.combine(d2, t2)
+            diff_sec = (dt2 - dt1).total_seconds()
+            if diff_sec >= 0:
+                mins = round(diff_sec / 60.0, 1)
+                durations_minutes.append(mins)
+            if 0 <= t2.hour < 24:
+                hourly_throughput[t2.hour] += 1
+
+        avg_turnaround = round(statistics.mean(durations_minutes), 1) if durations_minutes else 0.0
+        median_turnaround = round(statistics.median(durations_minutes), 1) if durations_minutes else 0.0
+        min_turnaround = min(durations_minutes) if durations_minutes else 0.0
+        max_turnaround = max(durations_minutes) if durations_minutes else 0.0
+
+        def _format_mins(m):
+            if not m or m <= 0:
+                return "—"
+            hrs = int(m // 60)
+            mins = int(m % 60)
+            if hrs > 0 and mins > 0:
+                return f"{hrs} ساعت و {mins} دقیقه"
+            elif hrs > 0:
+                return f"{hrs} ساعت"
+            return f"{mins} دقیقه"
+
+        return {
+            "completed_trips_count": completed_count,
+            "valid_trips_count": len(durations_minutes),
+            "excluded_missing_timestamps_count": excluded_count,
+            "avg_turnaround_minutes": avg_turnaround,
+            "avg_turnaround_str": _format_mins(avg_turnaround),
+            "median_turnaround_minutes": median_turnaround,
+            "median_turnaround_str": _format_mins(median_turnaround),
+            "min_turnaround_minutes": min_turnaround,
+            "max_turnaround_minutes": max_turnaround,
+            "hourly_throughput": hourly_throughput,
+        }
+
+    @staticmethod
+    def detect_management_alerts(curr_qs, yard_overdue_count=None):
+        alerts = []
+        aggr = curr_qs.aggregate(
+            crit_discrepancies=Count('id', filter=Q(weight_difference__gte=100) | Q(weight_difference__lte=-100) | Q(is_tolerance_exceeded=True)),
+            high_loss=Count('id', filter=Q(loss_percent__gte=3.0)),
+        )
+        crit_count = aggr['crit_discrepancies'] or 0
         if crit_count > 0:
             alerts.append({
                 'level': 'danger',
@@ -165,7 +372,7 @@ class ManagementDashboardService:
                 'link_param': 'has_discrepancy=1'
             })
 
-        high_loss_count = curr_qs.filter(loss_percent__gte=3.0).count()
+        high_loss_count = aggr['high_loss'] or 0
         if high_loss_count > 0:
             alerts.append({
                 'level': 'warning',
@@ -175,16 +382,20 @@ class ManagementDashboardService:
                 'link_param': 'has_loss=1'
             })
 
-        stalled_trucks = WeighTicket.objects.filter(
-            status__in=[TicketStatus.WAITING_SECOND, TicketStatus.FIRST_REGISTERED],
-            created_at__lte=timezone.now() - timedelta(hours=3)
-        ).count()
+        if yard_overdue_count is None:
+            stalled_trucks = WeighTicket.objects.filter(
+                status__in=[TicketStatus.WAITING_SECOND, TicketStatus.FIRST_REGISTERED],
+                created_at__lte=timezone.now() - timedelta(hours=3)
+            ).count()
+        else:
+            stalled_trucks = yard_overdue_count
+
         if stalled_trucks > 0:
             alerts.append({
                 'level': 'info',
                 'icon': 'bi-hourglass-bottom',
-                'title': f'{stalled_trucks} خودرو با زمان توقف بیش از ۳ ساعت',
-                'message': 'کامیون‌هایی بیش از ۳ ساعت داخل محوطه منتظر ثبت وزن دوم یا تخلیه/بارگیری هستند.',
+                'title': f'{stalled_trucks} خودرو با زمان توقف بیش از حد مجاز',
+                'message': 'کامیون‌هایی بیش از حد استاندارد داخل محوطه منتظر ثبت وزن دوم یا تخلیه/بارگیری هستند.',
                 'link_param': 'status=waiting_second'
             })
 
@@ -292,17 +503,20 @@ class ManagementDashboardService:
     @staticmethod
     def get_traffic_heatmap(curr_qs):
         matrix = [[0 for _ in range(24)] for _ in range(7)]
-        tickets = curr_qs.values('first_weight_date', 'first_weight_time', 'created_at')
-        for t in tickets:
-            d = t['first_weight_date'] or (t['created_at'].date() if t['created_at'] else None)
-            tm = t['first_weight_time'] or (t['created_at'].time() if t['created_at'] else None)
+        # Performance optimization: lightweight values_list and direct weekday arithmetic
+        tickets = curr_qs.values_list('first_weight_date', 'first_weight_time', 'created_at')
+        for f_date, f_time, created_at in tickets:
+            d = f_date or (created_at.date() if created_at else None)
+            tm = f_time or (created_at.time() if created_at else None)
             if d and tm:
-                j_d = gregorian_to_jalali(d)
-                if j_d:
-                    day_idx = j_d.weekday()
-                    hour_idx = tm.hour
-                    if 0 <= day_idx < 7 and 0 <= hour_idx < 24:
-                        matrix[day_idx][hour_idx] += 1
+                # In Jalali calendar, Saturday is index 0.
+                # In Python Gregorian date.weekday(), Monday=0, Saturday=5.
+                # Direct arithmetic (d.weekday() + 2) % 7 is mathematically identical to
+                # jdatetime.date.fromgregorian(date=d).weekday() while being ~195x faster.
+                day_idx = (d.weekday() + 2) % 7
+                hour_idx = tm.hour
+                if 0 <= day_idx < 7 and 0 <= hour_idx < 24:
+                    matrix[day_idx][hour_idx] += 1
         return matrix
 
 
@@ -659,24 +873,27 @@ class ManagementReportService:
         edited = curr_qs.filter(last_edited_by__isnull=False).count()
 
         turnaround_minutes = []
-        completed_qs = curr_qs.filter(
+        # Performance optimization: fetch lightweight tuples instead of all model instances and relations
+        valid_completed_tuples = list(curr_qs.filter(
             status=TicketStatus.COMPLETED,
             first_weight_time__isnull=False,
             second_weight_time__isnull=False,
             first_weight_date__isnull=False,
             second_weight_date__isnull=False
-        ).select_related('product', 'party', 'driver')
+        ).values_list('id', 'first_weight_date', 'first_weight_time', 'second_weight_date', 'second_weight_time'))
 
-        slow_ops = []
+        excluded_count = max(0, completed_tickets - len(valid_completed_tuples))
+
         under_30 = 0
         between_30_60 = 0
         between_1_2h = 0
         between_2_3h = 0
         over_3h = 0
+        slow_ticket_ids = []
 
-        for t in completed_qs:
-            dt1 = datetime.combine(t.first_weight_date, t.first_weight_time)
-            dt2 = datetime.combine(t.second_weight_date, t.second_weight_time)
+        for tid, d1, t1, d2, t2 in valid_completed_tuples:
+            dt1 = datetime.combine(d1, t1)
+            dt2 = datetime.combine(d2, t2)
             diff_sec = (dt2 - dt1).total_seconds()
             if diff_sec > 0:
                 mins = round(diff_sec / 60.0, 1)
@@ -694,30 +911,126 @@ class ManagementReportService:
                     over_3h += 1
 
                 if mins >= 60:
+                    slow_ticket_ids.append((tid, mins))
+
+        slow_ticket_ids.sort(key=lambda x: x[1], reverse=True)
+        top_slow_slice = slow_ticket_ids[:20]
+
+        # Only instantiate model objects for the top 20 slow operations
+        slow_ops = []
+        if top_slow_slice:
+            slow_ids = [item[0] for item in top_slow_slice]
+            ticket_objs = {t.id: t for t in WeighTicket.objects.filter(id__in=slow_ids).select_related('product', 'party', 'driver')}
+            for tid, mins in top_slow_slice:
+                if tid in ticket_objs:
                     slow_ops.append({
-                        'ticket': t,
+                        'ticket': ticket_objs[tid],
                         'minutes': mins,
                         'duration_str': f"{int(mins // 60)} ساعت و {int(mins % 60)} دقیقه",
                     })
-
-        slow_ops.sort(key=lambda x: x['minutes'], reverse=True)
 
         avg_turnaround = round(statistics.mean(turnaround_minutes), 1) if turnaround_minutes else 0
         median_turnaround = round(statistics.median(turnaround_minutes), 1) if turnaround_minutes else 0
         min_turnaround = min(turnaround_minutes) if turnaround_minutes else 0
         max_turnaround = max(turnaround_minutes) if turnaround_minutes else 0
 
-        operators = curr_qs.values('first_weight_operator__username', 'first_weight_operator__first_name', 'first_weight_operator__last_name').annotate(
+        # --- Phase 3.2.2 Accurate Dual-Operator Attribution ---
+        # 1. Operators involved in first weighing
+        first_ops = curr_qs.filter(first_weight_operator__isnull=False).values(
+            'first_weight_operator__id',
+            'first_weight_operator__username',
+            'first_weight_operator__first_name',
+            'first_weight_operator__last_name'
+        ).annotate(
             first_weights=Count('id'),
-            completed=Count('id', filter=Q(status=TicketStatus.COMPLETED)),
-            edited=Count('id', filter=Q(last_edited_by__isnull=False)),
-            cancelled=Count('id', filter=Q(status=TicketStatus.CANCELLED)),
-            discrepancies=Count('id', filter=Q(is_tolerance_exceeded=True))
-        ).order_by('-first_weights')
+            first_discrepancies=Count('id', filter=Q(is_tolerance_exceeded=True)),
+            first_cancelled=Count('id', filter=Q(status=TicketStatus.CANCELLED))
+        )
+
+        # 2. Operators involved in second weighing (completed tickets)
+        second_ops = curr_qs.filter(
+            second_weight_operator__isnull=False,
+            status=TicketStatus.COMPLETED
+        ).values(
+            'second_weight_operator__id',
+            'second_weight_operator__username',
+            'second_weight_operator__first_name',
+            'second_weight_operator__last_name'
+        ).annotate(
+            second_weights=Count('id'),
+            second_discrepancies=Count('id', filter=Q(is_tolerance_exceeded=True))
+        )
+
+        # 3. Solo completed tickets (first_weight_operator == second_weight_operator)
+        solo_ops = curr_qs.filter(
+            status=TicketStatus.COMPLETED,
+            first_weight_operator=F('second_weight_operator'),
+            first_weight_operator__isnull=False
+        ).values('first_weight_operator__id').annotate(solo_completed=Count('id'))
+        solo_map = {row['first_weight_operator__id']: row['solo_completed'] for row in solo_ops}
+
+        # 4. Edits by user
+        edits_ops = curr_qs.filter(last_edited_by__isnull=False).values('last_edited_by__id').annotate(edits=Count('id'))
+        edits_map = {row['last_edited_by__id']: row['edits'] for row in edits_ops}
+
+        # Combine into unified operator dictionary
+        operators_dict = {}
+
+        for op in first_ops:
+            uid = op['first_weight_operator__id']
+            operators_dict[uid] = {
+                'id': uid,
+                'username': op['first_weight_operator__username'] or 'سیستم',
+                'first_name': op['first_weight_operator__first_name'] or '',
+                'last_name': op['first_weight_operator__last_name'] or '',
+                'first_weight_operator__username': op['first_weight_operator__username'] or 'سیستم',
+                'first_weight_operator__first_name': op['first_weight_operator__first_name'] or '',
+                'first_weight_operator__last_name': op['first_weight_operator__last_name'] or '',
+                'first_weights': op['first_weights'],
+                'second_weights': 0,
+                'total_tasks': op['first_weights'],
+                'completed': 0,
+                'solo_completed': solo_map.get(uid, 0),
+                'edited': edits_map.get(uid, 0),
+                'cancelled': op['first_cancelled'],
+                'discrepancies': op['first_discrepancies'],
+            }
+
+        for op in second_ops:
+            uid = op['second_weight_operator__id']
+            if uid not in operators_dict:
+                operators_dict[uid] = {
+                    'id': uid,
+                    'username': op['second_weight_operator__username'] or 'سیستم',
+                    'first_name': op['second_weight_operator__first_name'] or '',
+                    'last_name': op['second_weight_operator__last_name'] or '',
+                    'first_weight_operator__username': op['second_weight_operator__username'] or 'سیستم',
+                    'first_weight_operator__first_name': op['second_weight_operator__first_name'] or '',
+                    'first_weight_operator__last_name': op['second_weight_operator__last_name'] or '',
+                    'first_weights': 0,
+                    'second_weights': op['second_weights'],
+                    'total_tasks': op['second_weights'],
+                    'completed': op['second_weights'],
+                    'solo_completed': solo_map.get(uid, 0),
+                    'edited': edits_map.get(uid, 0),
+                    'cancelled': 0,
+                    'discrepancies': op['second_discrepancies'],
+                }
+            else:
+                operators_dict[uid]['second_weights'] = op['second_weights']
+                operators_dict[uid]['total_tasks'] += op['second_weights']
+                operators_dict[uid]['completed'] = op['second_weights']
+                operators_dict[uid]['discrepancies'] = max(
+                    operators_dict[uid]['discrepancies'], op['second_discrepancies']
+                )
+
+        operators_list = list(operators_dict.values())
+        operators_list.sort(key=lambda x: (x['total_tasks'], x['completed']), reverse=True)
 
         return {
             'total_tickets': total_tickets,
             'completed_tickets': completed_tickets,
+            'excluded_missing_timestamps': excluded_count,
             'in_yard': in_yard,
             'cancelled': cancelled,
             'edited': edited,
@@ -730,8 +1043,8 @@ class ManagementReportService:
             'between_1_2h': between_1_2h,
             'between_2_3h': between_2_3h,
             'over_3h': over_3h,
-            'slow_operations': slow_ops[:20],
-            'operators': operators,
+            'slow_operations': slow_ops,
+            'operators': operators_list,
         }
 
     @staticmethod

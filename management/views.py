@@ -64,7 +64,13 @@ def dashboard_view(request):
 
     kpis, prev_kpis, comparison = ManagementDashboardService.calculate_kpis_with_comparison(curr_qs, prev_qs)
     top10 = ManagementDashboardService.get_top10_metrics(curr_qs)
-    alerts = ManagementDashboardService.detect_management_alerts(curr_qs)
+
+    # Phase 3.2.2 Operational Visibility Components
+    pending_approvals = ManagementDashboardService.get_pending_approvals_summary(request.user)
+    yard_summary = ManagementDashboardService.get_yard_operational_summary()
+    turnaround = ManagementDashboardService.get_turnaround_dwell_analytics(curr_qs)
+
+    alerts = ManagementDashboardService.detect_management_alerts(curr_qs, yard_overdue_count=yard_summary["overdue_count"])
 
     top_prod_name = top10['top_products'][0]['name'] if top10['top_products'] else ""
     top_party_name = top10['top_parties'][0]['name'] if top10['top_parties'] else ""
@@ -95,11 +101,15 @@ def dashboard_view(request):
         'comparison': comparison,
         'top10': top10,
         'alerts': alerts,
+        'pending_approvals': pending_approvals,
+        'yard_summary': yard_summary,
+        'turnaround': turnaround,
         'monitoring_open_count': monitoring_open_count,
         'monitoring_critical_count': monitoring_critical_count,
         'narrative_summary': narrative_summary,
         'trends_json': json.dumps(trends),
         'heatmap_json': json.dumps(heatmap_matrix),
+        'hourly_throughput_json': json.dumps(turnaround['hourly_throughput']),
         'granularity': granularity,
         'today_jalali': get_today_jalali(),
     })
@@ -116,12 +126,20 @@ def api_dashboard_charts(request):
     trends = ManagementDashboardService.get_tonnage_trend(start_date, end_date, granularity=granularity)
     heatmap = ManagementDashboardService.get_traffic_heatmap(curr_qs)
     top10 = ManagementDashboardService.get_top10_metrics(curr_qs)
+    turnaround = ManagementDashboardService.get_turnaround_dwell_analytics(curr_qs)
 
     return JsonResponse({
         'trends': trends,
         'heatmap': heatmap,
         'top_products': top10['top_products'],
         'top_parties': top10['top_parties'],
+        'turnaround': {
+            'completed_trips_count': turnaround['completed_trips_count'],
+            'avg_turnaround_minutes': turnaround['avg_turnaround_minutes'],
+            'median_turnaround_minutes': turnaround['median_turnaround_minutes'],
+            'excluded_missing_timestamps_count': turnaround['excluded_missing_timestamps_count'],
+        },
+        'hourly_throughput': turnaround['hourly_throughput'],
     })
 
 @login_required
