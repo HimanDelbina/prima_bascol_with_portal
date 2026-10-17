@@ -152,6 +152,22 @@ class WeighTicket(BaseModel):
         related_name="first_weight_tickets", 
         verbose_name="مسئول وزن اول"
     )
+    first_weight_shift_session = models.ForeignKey(
+        'shifts.ShiftSession',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="first_weight_tickets",
+        verbose_name="جلسه شیفت وزن اول",
+        db_constraint=False,
+    )
+    first_weight_out_of_shift = models.BooleanField(
+        default=False,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="توزین اول خارج از شیفت / بدون شیفت فعال"
+    )
     
     # Second Weight
     second_weight = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="وزن دوم (Kg)")
@@ -164,6 +180,22 @@ class WeighTicket(BaseModel):
         blank=True, 
         related_name="second_weight_tickets", 
         verbose_name="مسئول وزن دوم"
+    )
+    second_weight_shift_session = models.ForeignKey(
+        'shifts.ShiftSession',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="second_weight_tickets",
+        verbose_name="جلسه شیفت وزن دوم",
+        db_constraint=False,
+    )
+    second_weight_out_of_shift = models.BooleanField(
+        default=False,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="توزین دوم خارج از شیفت / بدون شیفت فعال"
     )
     
     # Official Computed Weights (Gross / Tare / Net)
@@ -279,6 +311,11 @@ class WeighTicket(BaseModel):
         elif not self.serial_number:
             from weighbridge.services import SerialNumberService
             self.serial_number = SerialNumberService.allocate_serial_number(SerialNumberService.SCOPE_STANDARD)
+
+        if self.first_weight_out_of_shift is None:
+            self.first_weight_out_of_shift = False
+        if self.second_weight_out_of_shift is None:
+            self.second_weight_out_of_shift = False
 
         return super().save(*args, **kwargs)
 

@@ -78,6 +78,24 @@ class UserProfile(models.Model):
         return self.user.is_superuser or self.role in [RoleChoices.SUPER_ADMIN, RoleChoices.SYSTEM_ADMIN]
 
     @property
+    def can_manage_shifts(self):
+        return self.is_admin_or_manager
+
+    @property
+    def can_operate_shift(self):
+        return self.user.is_superuser or self.role in [
+            RoleChoices.SUPER_ADMIN,
+            RoleChoices.SYSTEM_ADMIN,
+            RoleChoices.FACTORY_MANAGER,
+            RoleChoices.WEIGHBRIDGE_MANAGER,
+            RoleChoices.WEIGHBRIDGE_OPERATOR,
+        ]
+
+    @property
+    def can_authorize_substitution(self):
+        return self.is_admin_or_manager
+
+    @property
     def can_edit_completed_ticket(self):
         return self.user.is_superuser or self.role in [
             RoleChoices.SUPER_ADMIN,

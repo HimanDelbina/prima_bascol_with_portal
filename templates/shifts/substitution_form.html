@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <div>
+                <h4 class="fw-bold mb-1" style="color: #0f172a;">
+                    <i class="bi bi-arrow-repeat text-warning me-2"></i>{{ title }}
+                </h4>
+                <p class="text-muted small mb-0">جلسه شیفت: {{ session.shift.name }} ({{ session.jalali_operational_date }})</p>
+            </div>
+            <a href="{% url 'shifts:session_detail' session.pk %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-right me-1"></i>بازگشت
+            </a>
+        </div>
+
+        <div class="industrial-card shadow-sm">
+            <div class="industrial-card-header bg-light">
+                <span class="fw-bold text-dark">تعویض اضطراری اپراتور</span>
+            </div>
+            <div class="p-4">
+                <div class="alert alert-warning border-0 mb-3">
+                    <i class="bi bi-shield-exclamation me-1"></i>
+                    اپراتور در حال کار: <strong>{{ assignment.operator.get_full_name|default:assignment.operator.username }}</strong><br>
+                    این عملیات حضور اپراتور فعلی را متوقف کرده و اپراتور جدید را با تایید شما (<strong>{{ request.user.get_full_name|default:request.user.username }}</strong>) فعال می‌سازد.
+                </div>
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {% for error in form.non_field_errors %}
+                        <div><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">اپراتور جایگزین <span class="text-danger">*</span></label>
+                        {{ form.replacement_operator }}
+                        {% if form.replacement_operator.errors %}<div class="text-danger small mt-1">{{ form.replacement_operator.errors.0 }}</div>{% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">دلیل و مستندات جایگزینی اضطراری <span class="text-danger">*</span></label>
+                        {{ form.substitution_reason }}
+                        {% if form.substitution_reason.errors %}<div class="text-danger small mt-1">{{ form.substitution_reason.errors.0 }}</div>{% endif %}
+                        <div class="form-text small">حداقل ۵ کاراکتر جهت درج در گزارشات ممیزی و AuditLog الزامی است.</div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                        <a href="{% url 'shifts:session_detail' session.pk %}" class="btn btn-secondary">انصراف</a>
+                        <button type="submit" class="btn btn-warning fw-bold px-4">
+                            <i class="bi bi-check-circle me-1"></i>تایید و اعمال جایگزینی
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -66,6 +66,33 @@
         </li>
         {% endif %}
 
+        {% if user.is_superuser or user.profile.can_operate_shift or user.profile.can_manage_shifts %}
+        <div class="sidebar-heading">شیفت و اپراتوری</div>
+
+        <li>
+            <a href="{% url 'shifts:session_list' %}" class="sidebar-link {% if request.resolver_match.app_name == 'shifts' and 'session' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="bi bi-clock-history text-info"></i>
+                <span>جلسات شیفت کاری</span>
+            </a>
+        </li>
+
+        {% if user.is_superuser or user.profile.can_manage_shifts %}
+        <li>
+            <a href="{% url 'shifts:shift_list' %}" class="sidebar-link {% if request.resolver_match.app_name == 'shifts' and 'shift' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="bi bi-calendar-range text-primary"></i>
+                <span>تعریف الگوهای شیفت</span>
+            </a>
+        </li>
+
+        <li>
+            <a href="{% url 'shifts:exception_list' %}" class="sidebar-link {% if request.resolver_match.app_name == 'shifts' and 'exception' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+                <span>استثنائات توزین خارج از شیفت</span>
+            </a>
+        </li>
+        {% endif %}
+        {% endif %}
+
         <div class="sidebar-heading">گزارشات و آمار</div>
 
         <!-- Report Builder -->

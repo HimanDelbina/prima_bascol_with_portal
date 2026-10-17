@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <div>
+                <h4 class="fw-bold mb-1" style="color: #0f172a;">
+                    <i class="bi bi-clock text-primary me-2"></i>{{ title }}
+                </h4>
+                <p class="text-muted small mb-0">مشخصات ساعت شروع و پایان، کدینگ، مهلت تاخیر و تاریخ اعتبار</p>
+            </div>
+            <a href="{% url 'shifts:shift_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-right me-1"></i>بازگشت به لیست الگوها
+            </a>
+        </div>
+
+        <div class="industrial-card shadow-sm">
+            <div class="industrial-card-header bg-light">
+                <span class="fw-bold text-dark">اطلاعات الگوی شیفت</span>
+            </div>
+            <div class="p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {% for error in form.non_field_errors %}
+                        <div><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">نام شیفت <span class="text-danger">*</span></label>
+                            {{ form.name }}
+                            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">کد یکتا <span class="text-danger">*</span></label>
+                            {{ form.code }}
+                            {% if form.code.errors %}<div class="text-danger small mt-1">{{ form.code.errors.0 }}</div>{% endif %}
+                            <div class="form-text small">کد لاتین منحصربه‌فرد، مانند SHIFT-MORNING یا LINE2-NIGHT</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">ساعت شروع <span class="text-danger">*</span></label>
+                            {{ form.start_time }}
+                            {% if form.start_time.errors %}<div class="text-danger small mt-1">{{ form.start_time.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">ساعت پایان <span class="text-danger">*</span></label>
+                            {{ form.end_time }}
+                            {% if form.end_time.errors %}<div class="text-danger small mt-1">{{ form.end_time.errors.0 }}</div>{% endif %}
+                            <div class="form-text small">در صورتی که ساعت پایان کوچکتر از شروع باشد، سیستم به صورت خودکار آن را شیفت شبانه تلقی می‌کند.</div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">مهلت تاخیر ورود (دقیقه)</label>
+                            {{ form.allowed_grace_minutes }}
+                            {% if form.allowed_grace_minutes.errors %}<div class="text-danger small mt-1">{{ form.allowed_grace_minutes.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">معتبر از تاریخ (شمسی)</label>
+                            {{ form.valid_from_jalali }}
+                            {% if form.valid_from_jalali.errors %}<div class="text-danger small mt-1">{{ form.valid_from_jalali.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">معتبر تا تاریخ (شمسی)</label>
+                            {{ form.valid_until_jalali }}
+                            {% if form.valid_until_jalali.errors %}<div class="text-danger small mt-1">{{ form.valid_until_jalali.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold">توضیحات و دستورالعمل‌ها</label>
+                            {{ form.description }}
+                            {% if form.description.errors %}<div class="text-danger small mt-1">{{ form.description.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch mt-2">
+                                {{ form.is_active }}
+                                <label class="form-check-label fw-bold" for="{{ form.is_active.id_for_label }}">الگوی شیفت فعال است</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                        <a href="{% url 'shifts:shift_list' %}" class="btn btn-secondary">انصراف</a>
+                        <button type="submit" class="btn btn-primary fw-bold px-4">
+                            <i class="bi bi-check2-circle me-1"></i>ذخیره الگوی شیفت
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

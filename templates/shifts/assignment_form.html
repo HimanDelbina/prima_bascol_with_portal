@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <div>
+                <h4 class="fw-bold mb-1" style="color: #0f172a;">
+                    <i class="bi bi-person-plus text-primary me-2"></i>{{ title }}
+                </h4>
+                <p class="text-muted small mb-0">جلسه شیفت: {{ session.shift.name }} ({{ session.jalali_operational_date }})</p>
+            </div>
+            <a href="{% url 'shifts:session_detail' session.pk %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-right me-1"></i>بازگشت
+            </a>
+        </div>
+
+        <div class="industrial-card shadow-sm">
+            <div class="industrial-card-header bg-light">
+                <span class="fw-bold text-dark">انتخاب اپراتور و نقش</span>
+            </div>
+            <div class="p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {% for error in form.non_field_errors %}
+                        <div><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">اپراتور <span class="text-danger">*</span></label>
+                        {{ form.operator }}
+                        {% if form.operator.errors %}<div class="text-danger small mt-1">{{ form.operator.errors.0 }}</div>{% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">نقش در شیفت <span class="text-danger">*</span></label>
+                        {{ form.role }}
+                        {% if form.role.errors %}<div class="text-danger small mt-1">{{ form.role.errors.0 }}</div>{% endif %}
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                        <a href="{% url 'shifts:session_detail' session.pk %}" class="btn btn-secondary">انصراف</a>
+                        <button type="submit" class="btn btn-primary fw-bold px-4">
+                            <i class="bi bi-check2 me-1"></i>تخصیص اپراتور
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <div>
+                <h4 class="fw-bold mb-1" style="color: #0f172a;">
+                    <i class="bi bi-stop-circle text-danger me-2"></i>{{ title }}
+                </h4>
+                <p class="text-muted small mb-0">بستن نهایی شیفت کاری و ثبت خودکار پایان حضور اپراتورهای حاضر</p>
+            </div>
+            <a href="{% url 'shifts:session_detail' session.pk %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-right me-1"></i>انصراف
+            </a>
+        </div>
+
+        <div class="industrial-card shadow-sm">
+            <div class="industrial-card-header bg-light">
+                <span class="fw-bold text-dark">تایید خاتمه شیفت</span>
+            </div>
+            <div class="p-4">
+                <div class="alert alert-warning border-0">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>توجه:</strong> با بستن این شیفت، تمامی اپراتورهای فعال حاضر در این جلسه به صورت خودکار در وضعیت «پایان حضور» قرار می‌گیرند و امکان ثبت توزین جدید با این جلسه شیفت متوقف می‌شود.
+                </div>
+
+                <div class="mb-3">
+                    <div class="small text-muted mb-1">الگوی شیفت: <strong class="text-dark">{{ session.shift.name }}</strong></div>
+                    <div class="small text-muted mb-1">تاریخ عملیاتی: <strong class="text-dark">{{ session.jalali_operational_date }}</strong></div>
+                    <div class="small text-muted mb-1">زمان شروع: <strong class="text-dark font-monospace">{{ session.actual_start|date:"Y/m/d H:i" }}</strong></div>
+                </div>
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">یادداشت‌ها و گزارش نهایی پایان شیفت</label>
+                        {{ form.notes }}
+                        {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors.0 }}</div>{% endif %}
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                        <a href="{% url 'shifts:session_detail' session.pk %}" class="btn btn-secondary">انصراف</a>
+                        <button type="submit" class="btn btn-danger fw-bold px-4">
+                            <i class="bi bi-check-circle me-1"></i>تایید و بستن قطعی شیفت
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

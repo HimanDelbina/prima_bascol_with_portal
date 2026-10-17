@@ -64,7 +64,10 @@ class TicketNumberingSequentialTests(TestCase):
         If a ticket with a future number already exists (e.g. manual import),
         the allocator must automatically skip it and provide the next free number.
         """
-        seq = TicketSequence.objects.get(scope=SerialNumberService.SCOPE_STANDARD)
+        seq, _ = TicketSequence.objects.get_or_create(
+            scope=SerialNumberService.SCOPE_STANDARD,
+            defaults={"last_number": self.settings.serial_start_number - 1}
+        )
         target_collision_num = seq.last_number + 1
         collision_serial = f"WB-{target_collision_num}"
 

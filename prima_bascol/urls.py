@@ -19,6 +19,7 @@ urlpatterns = [
     path('dashboard/', include('dashboard.urls')),
     path('management/', include('management.urls')),
     path('monitoring/', include('monitoring.urls')),
+    path('shifts/', include('shifts.urls')),
     
     # Root Health Check (Standard for Docker & Load Balancers)
     path('health/', HealthCheckView.as_view(), name='root_health_check'),

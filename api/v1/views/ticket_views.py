@@ -15,6 +15,8 @@ from audit.services import log_audit
 from audit.models import AuditAction
 from monitoring.services.anomaly_engine import AnomalyDetectionEngine
 from monitoring.services.discrepancy_service import DiscrepancyApprovalService
+from shifts.services import ShiftResolutionService
+from shifts.models import ShiftExceptionLog
 
 from api.v1.serializers.ticket_serializers import (
     WeighTicketListSerializer, WeighTicketDetailSerializer,
@@ -101,6 +103,7 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                 **validated,
                 first_weight_operator=request.user
             )
+            ShiftResolutionService.record_weighing_shift(ticket, is_second_weight=False, operator=request.user)
 
             # Dates and Times
             if not ticket.first_weight_date:
@@ -149,11 +152,31 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                 ticket.second_weight_date = get_today_gregorian()
                 ticket.second_weight_time = timezone.localtime().time()
                 ticket.second_weight_operator = request.user
+                ShiftResolutionService.record_weighing_shift(ticket, is_second_weight=True, operator=request.user)
                 ticket.status = TicketStatus.COMPLETED
             else:
                 ticket.status = TicketStatus.WAITING_SECOND
 
             DailyPlatePolicy.save(ticket, user=request.user, assign_serial=True)
+
+            if ticket.first_weight_out_of_shift:
+                ShiftExceptionLog.objects.create(
+                    ticket=ticket,
+                    weighing_phase="FIRST",
+                    operator=request.user,
+                    timestamp=timezone.now(),
+                    reason="NO_ACTIVE_SHIFT",
+                    notes="توزین اول بدون شیفت فعال ثبت شد (API)."
+                )
+            if ticket.second_weight and ticket.second_weight_out_of_shift:
+                ShiftExceptionLog.objects.create(
+                    ticket=ticket,
+                    weighing_phase="SECOND",
+                    operator=request.user,
+                    timestamp=timezone.now(),
+                    reason="NO_ACTIVE_SHIFT",
+                    notes="توزین مستقیم دوم بدون شیفت فعال ثبت شد (API)."
+                )
 
             # Audit log
             log_audit(
@@ -330,6 +353,7 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             ticket.second_weight_date = w_date
             ticket.second_weight_time = w_time
             ticket.second_weight_operator = request.user
+            ShiftResolutionService.record_weighing_shift(ticket, is_second_weight=True, operator=request.user)
 
             if loss_pct is not None:
                 ticket.loss_percent = loss_pct
@@ -386,6 +410,16 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
 
             ticket.status = TicketStatus.COMPLETED
             DailyPlatePolicy.save(ticket, user=request.user)
+
+            if ticket.second_weight_out_of_shift:
+                ShiftExceptionLog.objects.create(
+                    ticket=ticket,
+                    weighing_phase="SECOND",
+                    operator=request.user,
+                    timestamp=timezone.now(),
+                    reason="NO_ACTIVE_SHIFT",
+                    notes="توزین دوم بدون شیفت فعال ثبت شد (API)."
+                )
 
             log_audit(
                 action=AuditAction.STATUS_CHANGE,

@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1" style="color: #0f172a;">
+            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>استثنائات توزین خارج از شیفت (دیده‌بانی سرپرست)
+        </h4>
+        <p class="text-muted small mb-0">قبوضی که به دلیل عدم وجود شیفت فعال، تاخیر اپراتور یا شرایط اضطراری بدون توقف باسکول ثبت گردیده‌اند</p>
+    </div>
+    <div>
+        <a href="{% url 'shifts:session_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-right me-1"></i>بازگشت به جلسات شیفت
+        </a>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-3">
+        <div class="d-flex gap-2">
+            <a href="?acknowledged=0" class="btn btn-sm {% if filter_ack == '0' %}btn-warning fw-bold{% else %}btn-outline-warning{% endif %}">
+                <i class="bi bi-hourglass-split me-1"></i>در انتظار بررسی سرپرست
+            </a>
+            <a href="?acknowledged=1" class="btn btn-sm {% if filter_ack == '1' %}btn-success fw-bold{% else %}btn-outline-success{% endif %}">
+                <i class="bi bi-check2-all me-1"></i>بررسی و تایید شده‌ها
+            </a>
+            <a href="?acknowledged=all" class="btn btn-sm {% if filter_ack == 'all' %}btn-secondary fw-bold{% else %}btn-outline-secondary{% endif %}">
+                همه موارد
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="industrial-card shadow-sm">
+    <div class="industrial-card-header bg-light d-flex justify-content-between align-items-center">
+        <span class="fw-bold text-dark">فهرست رخدادهای ثبت استثنای شیفت ({{ page_obj.paginator.count }} رخداد)</span>
+    </div>
+    <div class="p-0">
+        <div class="table-responsive">
+            <table class="table industrial-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>شماره قبض</th>
+                        <th>مرحله توزین</th>
+                        <th>اپراتور مجری</th>
+                        <th>زمان وقوع</th>
+                        <th>علت استثنا</th>
+                        <th>وضعیت بررسی</th>
+                        <th>توضیحات سرپرست</th>
+                        <th class="text-center">عملیات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exc in page_obj %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td class="fw-bold fs-6">
+                            <a href="{% url 'weighbridge:ticket_detail' exc.ticket.pk %}" class="text-decoration-none text-primary font-monospace">
+                                {{ exc.ticket.serial_number }}
+                            </a>
+                        </td>
+                        <td><span class="badge bg-light text-dark border">{{ exc.get_weighing_phase_display }}</span></td>
+                        <td>{{ exc.operator.get_full_name|default:exc.operator.username|default:"ناشناس" }}</td>
+                        <td class="font-monospace">{{ exc.timestamp|date:"Y/m/d H:i:s" }}</td>
+                        <td><span class="badge bg-warning-subtle text-dark">{{ exc.reason }}</span></td>
+                        <td>
+                            {% if exc.acknowledged_by %}
+                            <span class="badge bg-success">
+                                <i class="bi bi-check-circle me-1"></i>بررسی شده توسط {{ exc.acknowledged_by.username }}
+                            </span>
+                            <div class="font-monospace text-muted small mt-1">{{ exc.acknowledged_at|date:"Y/m/d H:i" }}</div>
+                            {% else %}
+                            <span class="badge bg-danger">در انتظار بررسی</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ exc.acknowledgement_note|default:"-" }}</td>
+                        <td class="text-center">
+                            {% if not exc.acknowledged_by %}
+                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#ackModal{{ exc.pk }}">
+                                <i class="bi bi-check2 me-1"></i>بررسی و تایید
+                            </button>
+
+                            <!-- Modal -->
+                            <div class="modal fade" id="ackModal{{ exc.pk }}" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content text-start">
+                                        <form method="post" action="{% url 'shifts:exception_acknowledge' exc.pk %}">
+                                            {% csrf_token %}
+                                            <div class="modal-header">
+                                                <h5 class="modal-title fw-bold">بررسی استثنای قبض {{ exc.ticket.serial_number }}</h5>
+                                                <button type="button" class="btn-close ms-0 me-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body text-end">
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold">توضیحات و ادله بررسی سرپرست:</label>
+                                                    <textarea name="acknowledgement_note" class="form-control" rows="3" placeholder="ملاحظات بررسی در خصوص علت عدم وجود شیفت فعال..." required></textarea>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">انصراف</button>
+                                                <button type="submit" class="btn btn-success fw-bold">ثبت تاییدیه سرپرست</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% else %}
+                            <span class="text-muted small"><i class="bi bi-check2-all text-success"></i> تایید شد</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4 text-muted">
+                            <i class="bi bi-shield-check fs-2 d-block mb-2 text-success"></i>
+                            هیچ استثنایی در این بخش ثبت نشده است.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if page_obj.has_other_pages %}
+<div class="d-flex justify-content-center mt-4">
+    <nav>
+        <ul class="pagination pagination-sm">
+            {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&acknowledged={{ filter_ack }}">قبلی</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&acknowledged={{ filter_ack }}">بعدی</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+</div>
+{% endif %}
+{% endblock %}

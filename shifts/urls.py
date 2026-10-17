@@ -1,0 +1,31 @@
+from django.urls import path
+from shifts import views
+
+app_name = "shifts"
+
+urlpatterns = [
+    # WorkShift Schedule Management
+    path("schedules/", views.shift_list, name="shift_list"),
+    path("schedules/create/", views.shift_create, name="shift_create"),
+    path("schedules/<int:pk>/edit/", views.shift_edit, name="shift_edit"),
+    path("schedules/<int:pk>/toggle/", views.shift_toggle, name="shift_toggle"),
+
+    # ShiftSession Lifecycle
+    path("sessions/", views.session_list, name="session_list"),
+    path("sessions/open/", views.session_open, name="session_open"),
+    path("sessions/<int:pk>/", views.session_detail, name="session_detail"),
+    path("sessions/<int:pk>/close/", views.session_close, name="session_close"),
+
+    # Attendance & Assignment
+    path("sessions/<int:session_pk>/assign/", views.operator_assign, name="operator_assign"),
+    path("sessions/<int:pk>/check-in/", views.operator_check_in, name="operator_check_in"),
+    path("assignments/<int:pk>/check-out/", views.operator_check_out, name="operator_check_out"),
+    path("assignments/<int:assignment_pk>/substitute/", views.operator_substitute, name="operator_substitute"),
+
+    # Supervisor Exceptions
+    path("exceptions/", views.exception_list, name="exception_list"),
+    path("exceptions/<int:pk>/acknowledge/", views.exception_acknowledge, name="exception_acknowledge"),
+
+    # Status API
+    path("api/current-status/", views.current_shift_status, name="current_shift_status"),
+]

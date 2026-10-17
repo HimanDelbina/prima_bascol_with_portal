@@ -95,6 +95,7 @@ INSTALLED_APPS = [
     'dashboard.apps.DashboardConfig',
     'management.apps.ManagementConfig',
     'monitoring.apps.MonitoringConfig',
+    'shifts.apps.ShiftsConfig',
     'api.apps.ApiConfig',
 ]
 
