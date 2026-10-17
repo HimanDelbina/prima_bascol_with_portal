@@ -229,6 +229,13 @@ class ShiftOperatorAssignment(models.Model):
         verbose_name = "تخصیص اپراتور به شیفت"
         verbose_name_plural = "تخصیص‌های اپراتوری شیفت"
         ordering = ["-session__operational_date", "role", "operator__username"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["operator"],
+                condition=Q(status=ShiftAssignmentStatus.CHECKED_IN),
+                name="unique_active_checkin_per_operator"
+            )
+        ]
 
     def __str__(self):
         return f"{self.operator.get_full_name() or self.operator.username} ({self.get_role_display()}) - {self.session}"
@@ -284,6 +291,14 @@ class ShiftExceptionLog(models.Model):
     Records weighings performed outside active shifts, ensuring 100% operational continuity
     without ever blocking the physical scale, while providing full visibility to supervisors.
     """
+    class ReasonChoices(models.TextChoices):
+        NO_ACTIVE_SHIFT = "NO_ACTIVE_SHIFT", "عدم وجود جلسه شیفت فعال در کارخانه"
+        OPERATOR_NOT_CHECKED_IN = "OPERATOR_NOT_CHECKED_IN", "عدم ثبت حضور (Check-in) اپراتور در شیفت"
+        OPERATOR_HAS_NO_ACTIVE_ASSIGNMENT = "OPERATOR_HAS_NO_ACTIVE_ASSIGNMENT", "عدم تخصیص اپراتور به شیفت فعال جاری"
+        AMBIGUOUS_SHIFT_ASSIGNMENT = "AMBIGUOUS_SHIFT_ASSIGNMENT", "ابهام و تداخل در تخصیص شیفت (چندین جلسه همزمان)"
+        SESSION_TIME_INVALID = "SESSION_TIME_INVALID", "توزین خارج از بازه زمانی مجاز شیفت"
+        RESOLUTION_ERROR = "RESOLUTION_ERROR", "خطای غیرمنتظره در ارزیابی سیستمی شیفت"
+
     PHASE_CHOICES = [
         ("FIRST", "توزین اول"),
         ("SECOND", "توزین دوم"),
@@ -292,8 +307,7 @@ class ShiftExceptionLog(models.Model):
 
     ticket = models.ForeignKey(
         "weighbridge.WeighTicket", on_delete=models.CASCADE,
-        related_name="shift_exceptions", verbose_name="قبض توزین",
-        db_constraint=False
+        related_name="shift_exceptions", verbose_name="قبض توزین"
     )
     weighing_phase = models.CharField(max_length=20, choices=PHASE_CHOICES, verbose_name="مرحله توزین")
     operator = models.ForeignKey(
@@ -301,7 +315,7 @@ class ShiftExceptionLog(models.Model):
         related_name="shift_exceptions", verbose_name="اپراتور مجری"
     )
     timestamp = models.DateTimeField(default=timezone.now, verbose_name="زمان وقوع")
-    reason = models.CharField(max_length=255, default="NO_ACTIVE_SHIFT", verbose_name="علت استثنا")
+    reason = models.CharField(max_length=255, choices=ReasonChoices.choices, default=ReasonChoices.NO_ACTIVE_SHIFT, verbose_name="علت استثنا")
     notes = models.TextField(blank=True, verbose_name="توضیحات و جزییات")
     acknowledged_by = models.ForeignKey(
         User, null=True, blank=True, on_delete=models.SET_NULL,
@@ -314,6 +328,12 @@ class ShiftExceptionLog(models.Model):
         verbose_name = "ثبت استثنای شیفت"
         verbose_name_plural = "استثنائات توزین خارج از شیفت"
         ordering = ["-timestamp"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ticket", "weighing_phase"],
+                name="unique_ticket_weighing_phase_exception"
+            )
+        ]
 
     def __str__(self):
         return f"استثنای شیفت - قبض {self.ticket.serial_number} ({self.get_weighing_phase_display()}) در {format_jalali_datetime(self.timestamp)}"

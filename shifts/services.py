@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, date, time, timedelta
 from typing import Optional, Tuple
 from django.db import transaction, IntegrityError
@@ -12,6 +13,8 @@ from shifts.models import (
 )
 from audit.services import log_audit
 from audit.models import AuditAction
+
+logger = logging.getLogger(__name__)
 
 
 class ShiftResolutionService:
@@ -53,49 +56,124 @@ class ShiftResolutionService:
 
         return event_date
 
-    @staticmethod
-    def get_active_session_for_operator(operator: User, dt: Optional[datetime] = None) -> Optional[ShiftSession]:
-        """
-        Retrieves the active session where the given operator is currently checked in.
-        """
-        if not operator or not operator.is_authenticated:
-            return None
-
-        assignment = ShiftOperatorAssignment.objects.filter(
-            operator=operator,
-            status=ShiftAssignmentStatus.CHECKED_IN,
-            session__status=ShiftSessionStatus.ACTIVE
-        ).select_related("session", "session__shift").first()
-
-        if assignment:
-            return assignment.session
-        return None
-
     @classmethod
-    def get_active_session_for_weighing(cls, operator: Optional[User] = None, dt: Optional[datetime] = None) -> Optional[ShiftSession]:
+    def resolve_session_for_operator(
+        cls,
+        operator: Optional[User],
+        dt: Optional[datetime] = None,
+        scale_context: Optional[str] = None
+    ) -> Tuple[Optional[ShiftSession], str, str]:
         """
-        Deterministic resolution of active session for a weighing event:
-        1. If operator has an active CHECKED_IN assignment in an ACTIVE session, return it.
-        2. Otherwise, check for any currently ACTIVE ShiftSession matching the operational date and time.
-        3. If multiple exist, return the latest opened active session.
-        4. If none exist, return None (fail-safe: weighing proceeds with exception logged).
+        Deterministic, unambiguous resolution of an active shift session for an operator:
+        1. Identify the authenticated operator.
+        2. Find valid checked-in assignments at the actual weighing timestamp.
+        3. Restrict to active and time-valid sessions.
+        4. Apply scale/operational-unit scope if provided (never invent dummy identifiers).
+        5. Resolve to exactly one unambiguous session.
+        6. If no valid session or multiple equally valid sessions exist, returns None
+           with a meaningful reason code (weighing is never blocked).
+
+        Returns:
+            (session, reason_code, reason_note)
+            Success: (session, "OK", "")
+            Fail-safe fallback: (None, ReasonChoices.<CODE>, description)
         """
         if dt is None:
             dt = timezone.now()
         if timezone.is_aware(dt):
             dt = timezone.localtime(dt)
 
-        if operator and operator.is_authenticated:
-            op_session = cls.get_active_session_for_operator(operator, dt=dt)
-            if op_session:
-                return op_session
+        if not operator or not operator.is_authenticated:
+            return None, ShiftExceptionLog.ReasonChoices.NO_ACTIVE_SHIFT, "توزین توسط کاربر احراز هویت‌نشده یا ناشناس انجام شد."
 
-        # Fallback to any active session covering now
-        active_sessions = ShiftSession.objects.filter(
-            status=ShiftSessionStatus.ACTIVE
-        ).select_related("shift").order_by("-actual_start")
+        # Find operator's assignments marked CHECKED_IN in ACTIVE sessions
+        assignments_qs = ShiftOperatorAssignment.objects.filter(
+            operator=operator,
+            status=ShiftAssignmentStatus.CHECKED_IN,
+            session__status=ShiftSessionStatus.ACTIVE
+        ).select_related("session", "session__shift")
 
-        return active_sessions.first()
+        valid_candidates = []
+        for asg in assignments_qs:
+            session = asg.session
+            shift = session.shift
+
+            # Check check-in attendance time with 5-minute tolerance for clock skew
+            if asg.check_in_time and asg.check_in_time > dt + timedelta(minutes=5):
+                continue
+            if asg.check_out_time and dt > asg.check_out_time + timedelta(minutes=5):
+                continue
+
+            # Check session time bounds
+            if session.actual_start and session.actual_start > dt + timedelta(minutes=5):
+                continue
+            if session.actual_end and dt > session.actual_end + timedelta(minutes=5):
+                continue
+
+            # Verify operational date consistency or active operational window
+            expected_op_date = cls.resolve_operational_date(dt, shift)
+            if session.operational_date == expected_op_date or session.status == ShiftSessionStatus.ACTIVE:
+                valid_candidates.append(session)
+
+        # Deduplicate session instances
+        unique_sessions = list({s.pk: s for s in valid_candidates}.values())
+
+        if len(unique_sessions) == 1:
+            return unique_sessions[0], "OK", ""
+
+        if len(unique_sessions) > 1:
+            # Ambiguity detected! Multiple active checked-in sessions for this operator
+            logger.warning(
+                "Ambiguous shift assignment for operator %s at %s. Matching sessions: %s",
+                operator.username, dt, [s.pk for s in unique_sessions]
+            )
+            return (
+                None,
+                ShiftExceptionLog.ReasonChoices.AMBIGUOUS_SHIFT_ASSIGNMENT,
+                f"تداخل در تخصیص شیفت: {len(unique_sessions)} جلسه فعال همزمان برای اپراتور یافت شد."
+            )
+
+        # len(unique_sessions) == 0: diagnose exact failure cause
+        has_assigned = ShiftOperatorAssignment.objects.filter(
+            operator=operator,
+            session__status=ShiftSessionStatus.ACTIVE
+        ).exclude(status=ShiftAssignmentStatus.CHECKED_IN).exists()
+
+        if has_assigned:
+            return (
+                None,
+                ShiftExceptionLog.ReasonChoices.OPERATOR_NOT_CHECKED_IN,
+                f"اپراتور {operator.username} در شیفت فعال حضور دارد اما وضعیت ورود (CHECKED_IN) ثبت نشده است."
+            )
+
+        has_any_active_session = ShiftSession.objects.filter(status=ShiftSessionStatus.ACTIVE).exists()
+        if has_any_active_session:
+            return (
+                None,
+                ShiftExceptionLog.ReasonChoices.OPERATOR_HAS_NO_ACTIVE_ASSIGNMENT,
+                f"جلسه شیفت فعال برای سایر پرسنل وجود دارد، اما اپراتور {operator.username} به شیفت جاری تخصیص داده نشده است."
+            )
+
+        return (
+            None,
+            ShiftExceptionLog.ReasonChoices.NO_ACTIVE_SHIFT,
+            "هیچ جلسه شیفت کاری فعالی در سیستم بازگشایی نشده است."
+        )
+
+    @classmethod
+    def get_active_session_for_weighing(
+        cls,
+        operator: Optional[User] = None,
+        dt: Optional[datetime] = None,
+        scale_context: Optional[str] = None
+    ) -> Optional[ShiftSession]:
+        """
+        Deterministic resolution of active session for a weighing event.
+        Never picks another operator's session or a random active shift.
+        Returns None if not resolved (fail-safe weighing proceeds).
+        """
+        session, _, _ = cls.resolve_session_for_operator(operator=operator, dt=dt, scale_context=scale_context)
+        return session
 
     @classmethod
     def record_weighing_shift(
@@ -103,46 +181,87 @@ class ShiftResolutionService:
         ticket,
         is_second_weight: bool = False,
         operator: Optional[User] = None,
-        dt: Optional[datetime] = None
-    ) -> Tuple[Optional[ShiftSession], bool]:
+        dt: Optional[datetime] = None,
+        scale_context: Optional[str] = None
+    ) -> Tuple[Optional[ShiftSession], bool, str, str]:
         """
         Integrates weighing events with shift sessions.
         CRITICAL FAIL-SAFE CONTINUITY:
         Weighing is NEVER blocked by missing shift context, late operator, or network delay.
-        If no active shift is found, the ticket is flagged as out-of-shift and an exception is logged.
+        Returns:
+            (session, is_out_of_shift, reason_code, reason_notes)
         """
-        session = cls.get_active_session_for_weighing(operator=operator, dt=dt)
-        phase_code = "SECOND" if is_second_weight else "FIRST"
+        try:
+            session, reason, notes = cls.resolve_session_for_operator(
+                operator=operator,
+                dt=dt,
+                scale_context=scale_context
+            )
+        except Exception as exc:
+            logger.error("Unexpected error in shift resolution for ticket: %s", exc, exc_info=True)
+            session = None
+            reason = ShiftExceptionLog.ReasonChoices.RESOLUTION_ERROR
+            notes = f"خطای غیرمنتظره در ارزیابی سیستمی شیفت: {str(exc)}"
 
-        if session:
+        if session is not None:
             if not is_second_weight:
                 ticket.first_weight_shift_session = session
                 ticket.first_weight_out_of_shift = False
             else:
                 ticket.second_weight_shift_session = session
                 ticket.second_weight_out_of_shift = False
-            return session, False
+            return session, False, "OK", ""
         else:
-            # Missing shift context: DO NOT BLOCK!
             if not is_second_weight:
                 ticket.first_weight_shift_session = None
                 ticket.first_weight_out_of_shift = True
             else:
                 ticket.second_weight_shift_session = None
                 ticket.second_weight_out_of_shift = True
+            return None, True, reason, notes
 
-            # If ticket is already in database or being saved, record exception
-            if ticket.pk:
-                ShiftExceptionLog.objects.create(
-                    ticket=ticket,
-                    weighing_phase=phase_code,
-                    operator=operator if (operator and operator.is_authenticated) else None,
-                    timestamp=timezone.now(),
-                    reason="NO_ACTIVE_SHIFT",
-                    notes="عملیات توزین بدون جلسه شیفت فعال ثبت گردید (تداوم عملیاتی حفظ شد)."
-                )
+    @classmethod
+    def log_shift_exception(
+        cls,
+        ticket,
+        weighing_phase: str,
+        operator: Optional[User] = None,
+        reason: str = ShiftExceptionLog.ReasonChoices.NO_ACTIVE_SHIFT,
+        notes: str = "",
+        timestamp: Optional[datetime] = None
+    ) -> Optional[ShiftExceptionLog]:
+        """
+        Idempotently logs an out-of-shift exception for a persisted ticket.
+        Safety guarantees:
+        - Never logs if ticket.pk is None (prevents phantom records).
+        - Idempotent via update_or_create to prevent duplicates on request retries.
+        - Wrapped in try/except so logging never interrupts weighing.
+        """
+        if not ticket or not ticket.pk:
+            logger.warning("ShiftExceptionLog skipped: ticket is not persisted.")
+            return None
 
-            return None, True
+        if timestamp is None:
+            timestamp = timezone.now()
+
+        try:
+            exc_log, _ = ShiftExceptionLog.objects.update_or_create(
+                ticket=ticket,
+                weighing_phase=weighing_phase,
+                defaults={
+                    "operator": operator if (operator and operator.is_authenticated) else None,
+                    "timestamp": timestamp,
+                    "reason": reason,
+                    "notes": notes,
+                }
+            )
+            return exc_log
+        except Exception as exc:
+            logger.error(
+                "Failed to log shift exception for ticket %s (phase %s): %s",
+                ticket.pk, weighing_phase, exc, exc_info=True
+            )
+            return None
 
     @staticmethod
     def open_session(

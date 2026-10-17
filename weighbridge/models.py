@@ -159,7 +159,6 @@ class WeighTicket(BaseModel):
         blank=True,
         related_name="first_weight_tickets",
         verbose_name="جلسه شیفت وزن اول",
-        db_constraint=False,
     )
     first_weight_out_of_shift = models.BooleanField(
         default=False,
@@ -188,7 +187,6 @@ class WeighTicket(BaseModel):
         blank=True,
         related_name="second_weight_tickets",
         verbose_name="جلسه شیفت وزن دوم",
-        db_constraint=False,
     )
     second_weight_out_of_shift = models.BooleanField(
         default=False,

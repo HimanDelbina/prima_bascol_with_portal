@@ -61,11 +61,15 @@ def ticket_create(request):
                 ticket.first_weight_time = timezone.localtime().time()
 
             ticket.first_weight_operator = request.user
-            ShiftResolutionService.record_weighing_shift(ticket, is_second_weight=False, operator=request.user)
+            _, is_w1_out, w1_reason, w1_notes = ShiftResolutionService.record_weighing_shift(
+                ticket, is_second_weight=False, operator=request.user
+            )
 
             # Check if second weight is also provided (direct complete mode)
             w2_raw = form.cleaned_data.get("second_weight")
             has_w2 = w2_raw is not None and str(w2_raw).strip() != "" and Decimal(str(w2_raw)) > 0
+            w2_reason = ""
+            w2_notes = ""
             
             if has_w2:
                 ticket.second_weight = Decimal(str(w2_raw))
@@ -83,7 +87,9 @@ def ticket_create(request):
                     ticket.second_weight_time = timezone.localtime().time()
                 
                 ticket.second_weight_operator = request.user
-                ShiftResolutionService.record_weighing_shift(ticket, is_second_weight=True, operator=request.user)
+                _, is_w2_out, w2_reason, w2_notes = ShiftResolutionService.record_weighing_shift(
+                    ticket, is_second_weight=True, operator=request.user
+                )
                 ticket.status = TicketStatus.COMPLETED
             else:
                 ticket.second_weight = None
@@ -163,24 +169,22 @@ def ticket_create(request):
                     "sales_op_ids": sales_op_ids,
                 })
 
-            # Record shift exception if out of shift
+            # Record shift exception idempotently if out of shift
             if ticket.first_weight_out_of_shift:
-                ShiftExceptionLog.objects.create(
+                ShiftResolutionService.log_shift_exception(
                     ticket=ticket,
                     weighing_phase="FIRST",
                     operator=request.user,
-                    timestamp=timezone.now(),
-                    reason="NO_ACTIVE_SHIFT",
-                    notes="توزین اول بدون شیفت فعال ثبت شد (تداوم عملیاتی حفظ گردید)."
+                    reason=w1_reason,
+                    notes=w1_notes or "توزین اول بدون شیفت فعال ثبت شد (تداوم عملیاتی حفظ گردید)."
                 )
             if has_w2 and ticket.second_weight_out_of_shift:
-                ShiftExceptionLog.objects.create(
+                ShiftResolutionService.log_shift_exception(
                     ticket=ticket,
                     weighing_phase="SECOND",
                     operator=request.user,
-                    timestamp=timezone.now(),
-                    reason="NO_ACTIVE_SHIFT",
-                    notes="توزین مستقیم دوم بدون شیفت فعال ثبت شد (تداوم عملیاتی حفظ گردید)."
+                    reason=w2_reason,
+                    notes=w2_notes or "توزین مستقیم دوم بدون شیفت فعال ثبت شد (تداوم عملیاتی حفظ گردید)."
                 )
 
             # Audit Log
@@ -361,7 +365,9 @@ def ticket_second_weight(request, pk):
                 ticket.second_weight_time = timezone.localtime().time()
 
             ticket.second_weight_operator = request.user
-            ShiftResolutionService.record_weighing_shift(ticket, is_second_weight=True, operator=request.user)
+            _, is_w2_out, w2_reason, w2_notes = ShiftResolutionService.record_weighing_shift(
+                ticket, is_second_weight=True, operator=request.user
+            )
 
             # Calculate Gross, Tare, Net, Loss, Final
             calc_results = TicketCalculationService.calculate_ticket(
@@ -405,15 +411,12 @@ def ticket_second_weight(request, pk):
                 ticket.status = TicketStatus.WAITING_SECOND
                 ticket.save()
                 if ticket.second_weight_out_of_shift:
-                    ShiftExceptionLog.objects.get_or_create(
+                    ShiftResolutionService.log_shift_exception(
                         ticket=ticket,
                         weighing_phase="SECOND",
-                        defaults={
-                            "operator": request.user,
-                            "timestamp": timezone.now(),
-                            "reason": "NO_ACTIVE_SHIFT",
-                            "notes": "توزین دوم بدون شیفت فعال ثبت شد (تداوم عملیاتی حفظ گردید)."
-                        }
+                        operator=request.user,
+                        reason=w2_reason,
+                        notes=w2_notes or "توزین دوم بدون شیفت فعال ثبت شد (تداوم عملیاتی حفظ گردید)."
                     )
                 AnomalyDetectionEngine.run_for_ticket(ticket)
 
@@ -437,15 +440,12 @@ def ticket_second_weight(request, pk):
             ticket.status = TicketStatus.COMPLETED
             ticket.save()
             if ticket.second_weight_out_of_shift:
-                ShiftExceptionLog.objects.get_or_create(
+                ShiftResolutionService.log_shift_exception(
                     ticket=ticket,
                     weighing_phase="SECOND",
-                    defaults={
-                        "operator": request.user,
-                        "timestamp": timezone.now(),
-                        "reason": "NO_ACTIVE_SHIFT",
-                        "notes": "توزین دوم بدون شیفت فعال ثبت شد (تداوم عملیاتی حفظ گردید)."
-                    }
+                    operator=request.user,
+                    reason=w2_reason,
+                    notes=w2_notes or "توزین دوم بدون شیفت فعال ثبت شد (تداوم عملیاتی حفظ گردید)."
                 )
 
             # Update vehicle empty weight in masterdata if not previously set
