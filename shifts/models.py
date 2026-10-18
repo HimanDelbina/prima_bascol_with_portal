@@ -475,6 +475,26 @@ class ShiftHandover(models.Model):
             if self.status in [ShiftHandoverStatus.ACCEPTED, ShiftHandoverStatus.DISPUTED]:
                 raise ValidationError("اپراتور تحویل‌دهنده و تحویل‌گیرنده نمی‌توانند یکسان باشند (تفکیک وظایف الزامی است).")
 
+        if self.pk:
+            orig = ShiftHandover.objects.filter(pk=self.pk).values("status").first()
+            if orig and orig["status"] in [
+                ShiftHandoverStatus.ACCEPTED,
+                ShiftHandoverStatus.SUPERVISOR_RESOLVED,
+                ShiftHandoverStatus.CANCELLED
+            ]:
+                raise ValidationError("سوابق تحویل شیفت نهایی‌شده غیرقابل ویرایش است.")
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.status != ShiftHandoverStatus.DRAFT:
+            raise ValidationError(
+                f"حذف اسناد تحویل شیفت ثبت‌شده (وضعیت: {self.get_status_display()}) به دلیل لزوم حفظ ردپای ممیزی مسدود است."
+            )
+        super().delete(*args, **kwargs)
+
     @property
     def is_finalized(self):
         return self.status in [
@@ -558,4 +578,11 @@ class ShiftHandoverItem(models.Model):
 
     def __str__(self):
         return f"{self.get_category_display()}: {self.item_title} ({self.handover})"
+
+    def delete(self, *args, **kwargs):
+        if self.handover.status != ShiftHandoverStatus.DRAFT:
+            raise ValidationError(
+                "اقلام اسنپ‌شات تحویل شیفت ثبت‌شده تغییرناپذیر بوده و قابل حذف نمی‌باشند."
+            )
+        super().delete(*args, **kwargs)
 

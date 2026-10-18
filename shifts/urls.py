@@ -34,6 +34,7 @@ urlpatterns = [
     path("handovers/<int:pk>/accept/", views.handover_accept, name="handover_accept"),
     path("handovers/<int:pk>/dispute/", views.handover_dispute, name="handover_dispute"),
     path("handovers/<int:pk>/resolve/", views.handover_resolve, name="handover_resolve"),
+    path("handovers/<int:pk>/substitute-operator/", views.handover_substitute_operator, name="handover_substitute_operator"),
     path("handovers/<int:pk>/cancel/", views.handover_cancel, name="handover_cancel"),
 
     # Status API

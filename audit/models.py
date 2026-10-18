@@ -23,6 +23,7 @@ class AuditAction(models.TextChoices):
     SHIFT_HANDOVER_ACCEPT = "shift_handover_accept", "پذیرش تحویل شیفت"
     SHIFT_HANDOVER_DISPUTE = "shift_handover_dispute", "ثبت اختلاف تحویل شیفت"
     SHIFT_HANDOVER_RESOLVE = "shift_handover_resolve", "حل‌وفصل اختلاف تحویل شیفت"
+    SHIFT_SUBSTITUTION = "shift_substitution", "تعویض اضطراری اپراتور"
 
 class AuditLog(models.Model):
     user = models.ForeignKey(

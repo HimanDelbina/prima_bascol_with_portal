@@ -24,6 +24,8 @@ from shifts.models import (
 )
 from shifts.services import ShiftResolutionService
 from shifts.handover_service import ShiftHandoverService
+from django.contrib.admin.sites import AdminSite
+from shifts.admin import ShiftHandoverAdmin, ShiftHandoverItemInline
 
 
 class ShiftHandoverServiceTests(TestCase):
@@ -77,6 +79,20 @@ class ShiftHandoverServiceTests(TestCase):
         cls.viewer_profile = cls.viewer_user.profile
         cls.viewer_profile.role = RoleChoices.VIEWER
         cls.viewer_profile.save()
+
+        cls.op_other = User.objects.create_user(
+            username="op_other_ho", password="Password123!", email="other@test.com",
+            first_name="اپراتور", last_name="متفرقه"
+        )
+        cls.op_other.profile.role = RoleChoices.WEIGHBRIDGE_OPERATOR
+        cls.op_other.profile.save()
+
+        cls.sup_outgoing = User.objects.create_user(
+            username="sup_out_ho", password="Password123!", email="supout@test.com",
+            first_name="سرپرست", last_name="تحویل‌دهنده"
+        )
+        cls.sup_outgoing.profile.role = RoleChoices.WEIGHBRIDGE_MANAGER
+        cls.sup_outgoing.profile.save()
 
         # Masterdata
         cls.product = Product.objects.create(name="شمش فولادی 150", standard_tolerance_kg=Decimal("150.00"))
@@ -545,6 +561,333 @@ class ShiftHandoverServiceTests(TestCase):
         self.assertIsNotNone(new_ticket.pk)
         self.assertEqual(new_ticket.first_weight, Decimal("21000.00"))
 
+    def test_16_submitted_and_finalized_handover_deletion_blocked_at_orm_level(self):
+        """
+        AUDIT SAFETY:
+        Direct call to ShiftHandover.delete() raises ValidationError for SUBMITTED,
+        ACCEPTED, SUPERVISOR_RESOLVED, and CANCELLED states.
+        Only DRAFT can be deleted.
+        """
+        draft = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session_out,
+            operator=self.op_outgoing
+        )
+        draft_pk = draft.pk
+        draft.delete()
+        self.assertFalse(ShiftHandover.objects.filter(pk=draft_pk).exists())
+
+        submitted = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session_out,
+            operator=self.op_outgoing,
+            incoming_operator=self.op_incoming
+        )
+        ShiftHandoverService.submit_handover(submitted, self.op_outgoing)
+        with self.assertRaises(ValidationError) as ctx:
+            submitted.delete()
+        self.assertIn("مسدود است", str(ctx.exception))
+
+        accepted = ShiftHandoverService.accept_handover(submitted, self.op_incoming)
+        with self.assertRaises(ValidationError) as ctx:
+            accepted.delete()
+        self.assertIn("مسدود است", str(ctx.exception))
+
+    def test_17_snapshot_item_deletion_blocked_for_non_draft_handover(self):
+        """
+        AUDIT INTEGRITY:
+        Direct deletion of ShiftHandoverItem raises ValidationError if parent handover
+        status is not DRAFT.
+        """
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session_out,
+            operator=self.op_outgoing,
+            incoming_operator=self.op_incoming
+        )
+        ShiftHandoverService.submit_handover(handover, self.op_outgoing)
+        item = handover.items.first()
+        self.assertIsNotNone(item)
+        with self.assertRaises(ValidationError) as ctx:
+            item.delete()
+        self.assertIn("تغییرناپذیر", str(ctx.exception))
+
+    def test_18_finalized_handover_mutation_blocked_by_clean(self):
+        """
+        IMMUTABILITY:
+        Modifying an already finalized handover (ACCEPTED, CANCELLED, SUPERVISOR_RESOLVED)
+        triggers ValidationError during clean()/save().
+        """
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session_out,
+            operator=self.op_outgoing,
+            incoming_operator=self.op_incoming
+        )
+        ShiftHandoverService.submit_handover(handover, self.op_outgoing)
+        accepted = ShiftHandoverService.accept_handover(handover, self.op_incoming)
+
+        accepted.outgoing_notes = "دستکاری پس از پذیرش نهایی"
+        with self.assertRaises(ValidationError) as ctx:
+            accepted.save()
+        self.assertIn("غیرقابل ویرایش", str(ctx.exception))
+
+    def test_19_designated_incoming_operator_enforcement(self):
+        """
+        AUTHORIZATION INTEGRITY:
+        When handover designates an incoming operator (op_in), an unrelated operator (op_other)
+        cannot accept or dispute the handover.
+        """
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session_out,
+            operator=self.op_outgoing,
+            incoming_operator=self.op_incoming
+        )
+        ShiftHandoverService.submit_handover(handover, self.op_outgoing)
+
+        with self.assertRaises(PermissionDenied) as ctx:
+            ShiftHandoverService.accept_handover(handover, self.op_other)
+        self.assertIn("تنها اپراتور تحویل‌گیرنده تعیین‌شده", str(ctx.exception))
+
+        with self.assertRaises(PermissionDenied) as ctx:
+            ShiftHandoverService.dispute_handover(handover, self.op_other, dispute_reason="عدم تطابق اداری")
+        self.assertIn("تنها اپراتور تحویل‌گیرنده تعیین‌شده", str(ctx.exception))
+
+    def test_20_incoming_session_assignment_enforcement(self):
+        """
+        SESSION ASSIGNMENT INTEGRITY:
+        When incoming_session is set and has active operator assignments,
+        an unassigned operator cannot accept the handover.
+        """
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session_out,
+            operator=self.op_outgoing,
+            incoming_session=self.session_in
+        )
+        ShiftHandoverService.submit_handover(handover, self.op_outgoing)
+
+        with self.assertRaises(ValidationError) as ctx:
+            ShiftHandoverService.accept_handover(handover, self.op_other)
+        self.assertIn("تخصیص داده نشده است", str(ctx.exception))
+
+    def test_21_superuser_cannot_bypass_designated_operator(self):
+        """
+        SEPARATION OF DUTIES:
+        Superuser cannot silently accept a handover designated for another operator
+        through ordinary acceptance without supervisor resolution workflow.
+        """
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session_out,
+            operator=self.op_outgoing,
+            incoming_operator=self.op_incoming
+        )
+        ShiftHandoverService.submit_handover(handover, self.op_outgoing)
+
+        with self.assertRaises(PermissionDenied):
+            ShiftHandoverService.accept_handover(handover, self.admin_user)
+
+    def test_22_outgoing_supervisor_self_resolution_blocked(self):
+        """
+        SEPARATION OF DUTIES:
+        A supervisor who opened/operated the outgoing shift session CANNOT resolve
+        or approve their own handover dispute.
+        """
+        session_sup = ShiftSession.objects.create(
+            shift=self.morning_shift,
+            operational_date=date(2026, 10, 26),
+            status=ShiftSessionStatus.ACTIVE,
+            actual_start=timezone.now(),
+            opened_by=self.sup_outgoing
+        )
+        ShiftResolutionService.check_in_operator(session_sup, self.sup_outgoing, ShiftOperatorRole.PRIMARY)
+
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=session_sup,
+            operator=self.sup_outgoing,
+            incoming_operator=self.op_incoming
+        )
+        ShiftHandoverService.submit_handover(handover, self.sup_outgoing)
+        ShiftHandoverService.dispute_handover(handover, self.op_incoming, dispute_reason="اختلاف ثبتی")
+
+        with self.assertRaises(ValidationError) as ctx:
+            ShiftHandoverService.resolve_dispute(
+                handover=handover,
+                supervisor=self.sup_outgoing,
+                resolution_notes="خودتاییدی سرپرست"
+            )
+        self.assertIn("اصل تفکیک وظایف", str(ctx.exception))
+
+        resolved = ShiftHandoverService.resolve_dispute(
+            handover=handover,
+            supervisor=self.supervisor_user,
+            resolution_notes="بررسی شد و تایید گردید.",
+            action="RESOLVE",
+            responsible_operator=self.op_incoming
+        )
+        self.assertEqual(resolved.status, ShiftHandoverStatus.SUPERVISOR_RESOLVED)
+
+    def test_23_supervisor_substitution_workflow(self):
+        """
+        SUPERVISOR EMERGENCY SUBSTITUTION:
+        Supervisor can replace the designated incoming operator with audit tracking.
+        Outgoing operator cannot perform substitution.
+        """
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session_out,
+            operator=self.op_outgoing,
+            incoming_operator=self.op_incoming
+        )
+        ShiftHandoverService.submit_handover(handover, self.op_outgoing)
+
+        with self.assertRaises(PermissionDenied):
+            ShiftHandoverService.substitute_incoming_operator(
+                handover=handover,
+                supervisor=self.op_outgoing,
+                new_incoming_operator=self.op_other,
+                reason="تلاش غیرمجاز تحویل‌دهنده"
+            )
+
+        with self.assertRaises(ValidationError):
+            ShiftHandoverService.substitute_incoming_operator(
+                handover=handover,
+                supervisor=self.supervisor_user,
+                new_incoming_operator=self.op_outgoing,
+                reason="تعویض نامعتبر"
+            )
+
+        subbed = ShiftHandoverService.substitute_incoming_operator(
+            handover=handover,
+            supervisor=self.supervisor_user,
+            new_incoming_operator=self.op_other,
+            reason="جایگزینی اضطراری به دلیل مرخصی استعلاجی اپراتور اول"
+        )
+        self.assertEqual(subbed.incoming_operator, self.op_other)
+
+        accepted = ShiftHandoverService.accept_handover(subbed, self.op_other)
+        self.assertEqual(accepted.status, ShiftHandoverStatus.ACCEPTED)
+
+        audit = AuditLog.objects.filter(
+            action=AuditAction.SHIFT_SUBSTITUTION,
+            record_id=handover.pk
+        ).first()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit.user, self.supervisor_user)
+
+    def test_24_multi_ticket_yard_truck_aggregation_no_duplicate_collision(self):
+        """
+        AGGREGATION & COLLISION RESILIENCE:
+        Multiple open tickets for the same physical vehicle in yard do not collide
+        on unique constraint (handover, category, item_identifier).
+        yard_vehicles_count counts unique vehicles (2); waiting_second_count counts tickets (3).
+        """
+        ticket_dup = WeighTicket.objects.create(
+            serial_number="HO-TKT-DUP-001",
+            license_plate_display=self.ticket_yard1.license_plate_display,
+            product=self.product,
+            party=self.party,
+            operation_type=self.op_type,
+            vehicle_type=self.v_type,
+            weight_mode=WeightMode.FULL_FIRST,
+            status=TicketStatus.WAITING_SECOND,
+            first_weight=Decimal("19000.00"),
+            first_weight_date=date(2026, 10, 25),
+            first_weight_time=time(11, 45),
+            first_weight_operator=self.op_outgoing,
+            first_weight_shift_session=self.session_out
+        )
+
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session_out,
+            operator=self.op_outgoing
+        )
+        ShiftHandoverService.capture_operational_snapshot(handover, self.op_outgoing)
+        handover.refresh_from_db()
+
+        self.assertEqual(handover.yard_vehicles_count, 2)
+        self.assertEqual(handover.waiting_second_count, 3)
+
+        yard_item = handover.items.filter(
+            category=ShiftHandoverItemCategory.YARD_VEHICLE,
+            item_identifier=self.ticket_yard1.license_plate_display
+        ).first()
+        self.assertIsNotNone(yard_item)
+        self.assertEqual(yard_item.details["ticket_count"], 2)
+        self.assertIn("HO-TKT-001", yard_item.details["ticket_serials"])
+        self.assertIn("HO-TKT-DUP-001", yard_item.details["ticket_serials"])
+
+        # Delete draft handover first (clears protected ShiftHandoverItem foreign keys)
+        handover.delete()
+        ticket_dup.delete()
+
+    def test_25_live_operational_delta_non_destructive(self):
+        """
+        SNAPSHOT STABILITY & LIVE PROGRESSION:
+        Live delta reflects current state changes without altering frozen snapshot records.
+        """
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session_out,
+            operator=self.op_outgoing,
+            incoming_operator=self.op_incoming
+        )
+        ShiftHandoverService.submit_handover(handover, self.op_outgoing)
+        handover.refresh_from_db()
+        orig_yard_count = handover.yard_vehicles_count
+        orig_waiting_count = handover.waiting_second_count
+
+        self.ticket_yard1.status = TicketStatus.COMPLETED
+        self.ticket_yard1.second_weight = Decimal("8500.00")
+        self.ticket_yard1.net_weight = Decimal("10000.00")
+        self.ticket_yard1.save()
+
+        new_ticket = WeighTicket.objects.create(
+            serial_number="HO-TKT-NEW-01",
+            license_plate_display="55 س 555 - ایران 55",
+            product=self.product,
+            party=self.party,
+            operation_type=self.op_type,
+            vehicle_type=self.v_type,
+            weight_mode=WeightMode.FULL_FIRST,
+            status=TicketStatus.WAITING_SECOND,
+            first_weight=Decimal("20000.00"),
+            first_weight_date=date(2026, 10, 25),
+            first_weight_time=time(12, 0),
+            first_weight_operator=self.op_incoming
+        )
+
+        delta = ShiftHandoverService.get_live_operational_delta(handover)
+        self.assertTrue(delta["has_changes"])
+        self.assertEqual(delta["completed_since_snapshot_count"], 1)
+        self.assertIn(self.ticket_yard1, delta["completed_tickets"])
+        self.assertEqual(delta["new_yard_arrivals_count"], 1)
+        self.assertIn(new_ticket, delta["new_yard_tickets"])
+
+        handover.refresh_from_db()
+        self.assertEqual(handover.yard_vehicles_count, orig_yard_count)
+        self.assertEqual(handover.waiting_second_count, orig_waiting_count)
+
+        self.ticket_yard1.status = TicketStatus.WAITING_SECOND
+        self.ticket_yard1.second_weight = None
+        self.ticket_yard1.net_weight = Decimal("0.00")
+        self.ticket_yard1.save()
+        new_ticket.delete()
+
+    def test_26_cancel_handover_dispute_restriction(self):
+        """
+        WORKFLOW GOVERNANCE:
+        An outgoing operator CANNOT cancel a DISPUTED handover (cannot bury discrepancy).
+        Only a supervisor can cancel or resolve a disputed handover.
+        """
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session_out,
+            operator=self.op_outgoing,
+            incoming_operator=self.op_incoming
+        )
+        ShiftHandoverService.submit_handover(handover, self.op_outgoing)
+        ShiftHandoverService.dispute_handover(handover, self.op_incoming, dispute_reason="اختلاف جدی")
+
+        with self.assertRaises(PermissionDenied):
+            ShiftHandoverService.cancel_handover(handover, self.op_outgoing, reason="لغو خودسرانه")
+
+        cancelled = ShiftHandoverService.cancel_handover(handover, self.supervisor_user, reason="لغو رسمی توسط سرپرست")
+        self.assertEqual(cancelled.status, ShiftHandoverStatus.CANCELLED)
+
+
 
 class ShiftHandoverViewsTests(TestCase):
     """
@@ -692,3 +1035,133 @@ class ShiftHandoverViewsTests(TestCase):
         handover.refresh_from_db()
         self.assertEqual(handover.status, ShiftHandoverStatus.SUPERVISOR_RESOLVED)
         self.assertEqual(handover.supervisor, self.supervisor)
+
+    def test_supervisor_substitute_operator_view(self):
+        """Supervisor can substitute incoming operator via view; non-supervisor cannot."""
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session,
+            operator=self.op_out,
+            incoming_operator=self.op_in
+        )
+        ShiftHandoverService.submit_handover(handover, self.op_out)
+
+        sub_url = reverse("shifts:handover_substitute_operator", kwargs={"pk": handover.pk})
+
+        # Outgoing operator cannot substitute
+        self.client.force_login(self.op_out)
+        resp = self.client.post(sub_url, data={
+            "new_incoming_operator": self.admin_user.pk,
+            "substitution_reason": "تلاش غیرمجاز اپراتور"
+        })
+        handover.refresh_from_db()
+        self.assertEqual(handover.incoming_operator, self.op_in)
+
+        # Supervisor can substitute
+        self.client.force_login(self.supervisor)
+        resp = self.client.post(sub_url, data={
+            "new_incoming_operator": self.admin_user.pk,
+            "substitution_reason": "جایگزینی رسمی به دستور سرپرست"
+        })
+        handover.refresh_from_db()
+        self.assertEqual(handover.incoming_operator, self.admin_user)
+
+    def test_outgoing_supervisor_cannot_resolve_via_view(self):
+        """Supervisor who is also outgoing operator cannot resolve dispute via view."""
+        sup_session = ShiftSession.objects.create(
+            shift=self.shift,
+            operational_date=date(2026, 10, 26),
+            status=ShiftSessionStatus.ACTIVE,
+            actual_start=timezone.now(),
+            opened_by=self.supervisor
+        )
+        ShiftResolutionService.check_in_operator(sup_session, self.supervisor, ShiftOperatorRole.PRIMARY)
+
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=sup_session,
+            operator=self.supervisor,
+            incoming_operator=self.op_in
+        )
+        ShiftHandoverService.submit_handover(handover, self.supervisor)
+        ShiftHandoverService.dispute_handover(handover, self.op_in, dispute_reason="عدم تطابق")
+
+        self.client.force_login(self.supervisor)
+        resolve_url = reverse("shifts:handover_resolve", kwargs={"pk": handover.pk})
+        resp = self.client.post(resolve_url, data={
+            "action": "RESOLVE",
+            "resolution_notes": "تایید پرونده خودم"
+        })
+        handover.refresh_from_db()
+        self.assertEqual(handover.status, ShiftHandoverStatus.DISPUTED)
+
+    def test_live_delta_rendered_in_detail_view(self):
+        """View renders live progression delta section and respects incoming operator."""
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session,
+            operator=self.op_out,
+            incoming_operator=self.op_in
+        )
+        ShiftHandoverService.submit_handover(handover, self.op_out)
+
+        self.client.force_login(self.op_in)
+        url = reverse("shifts:handover_detail", kwargs={"pk": handover.pk})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context["can_accept_or_dispute"])
+        self.assertFalse(resp.context["is_outgoing"])
+        self.assertIn("delta", resp.context)
+
+
+class MockAdminRequest:
+    def __init__(self, user):
+        self.user = user
+
+
+class ShiftHandoverAdminSecurityTests(TestCase):
+    """
+    Verifies Django admin protections for ShiftHandover immutability.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin_user = User.objects.create_superuser(
+            username="admin_sec", password="Password123!", email="sec@test.com"
+        )
+        cls.shift = WorkShift.objects.create(
+            name="شیفت ادمین", code="ADM-SHF",
+            start_time=time(8, 0), end_time=time(16, 0), is_active=True
+        )
+        cls.session = ShiftSession.objects.create(
+            shift=cls.shift, operational_date=date(2026, 10, 25),
+            status=ShiftSessionStatus.ACTIVE, actual_start=timezone.now(),
+            opened_by=cls.admin_user
+        )
+        cls.handover = ShiftHandover.objects.create(
+            outgoing_session=cls.session,
+            outgoing_operator=cls.admin_user,
+            status=ShiftHandoverStatus.SUBMITTED
+        )
+
+    def test_admin_has_no_delete_permission(self):
+        site = AdminSite()
+        admin = ShiftHandoverAdmin(ShiftHandover, site)
+        req = MockAdminRequest(self.admin_user)
+        self.assertFalse(admin.has_delete_permission(req, self.handover))
+        self.assertFalse(admin.has_delete_permission(req, None))
+
+    def test_admin_makes_all_fields_readonly_when_submitted(self):
+        site = AdminSite()
+        admin = ShiftHandoverAdmin(ShiftHandover, site)
+        req = MockAdminRequest(self.admin_user)
+        readonly = admin.get_readonly_fields(req, self.handover)
+        self.assertIn("outgoing_session", readonly)
+        self.assertIn("status", readonly)
+        self.assertIn("yard_vehicles_count", readonly)
+
+    def test_inline_item_permissions_disabled(self):
+        site = AdminSite()
+        inline = ShiftHandoverItemInline(ShiftHandoverItem, site)
+        req = MockAdminRequest(self.admin_user)
+        self.assertFalse(inline.has_add_permission(req, self.handover))
+        self.assertFalse(inline.has_change_permission(req, self.handover))
+        self.assertFalse(inline.has_delete_permission(req, self.handover))
+

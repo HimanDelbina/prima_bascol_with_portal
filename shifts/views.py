@@ -18,7 +18,8 @@ from shifts.models import (
 from shifts.forms import (
     WorkShiftForm, ShiftSessionOpenForm, ShiftSessionCloseForm,
     ShiftOperatorAssignmentForm, ShiftSubstitutionForm, ShiftExceptionAcknowledgeForm,
-    ShiftHandoverInitiateForm, ShiftHandoverAcceptForm, ShiftHandoverDisputeForm, ShiftHandoverResolveForm
+    ShiftHandoverInitiateForm, ShiftHandoverAcceptForm, ShiftHandoverDisputeForm, ShiftHandoverResolveForm,
+    ShiftHandoverSubstituteForm
 )
 from shifts.services import ShiftResolutionService
 from shifts.handover_service import ShiftHandoverService
@@ -650,12 +651,35 @@ def handover_detail(request, pk):
 
     is_supervisor = request.user.is_superuser or (hasattr(request.user, "profile") and request.user.profile.can_manage_shifts)
     is_outgoing = (request.user == handover.outgoing_operator)
-    is_incoming = (request.user == handover.incoming_operator) or (handover.incoming_operator is None and not is_outgoing)
+
+    # Check incoming operator eligibility
+    can_accept_or_dispute = False
+    if request.user.is_authenticated and not is_outgoing:
+        has_operate = hasattr(request.user, "profile") and request.user.profile.can_operate_shift
+        if has_operate:
+            if handover.incoming_operator:
+                can_accept_or_dispute = (request.user == handover.incoming_operator)
+            else:
+                can_accept_or_dispute = True
+
+            # If incoming session is specified and has assignments, operator must be assigned
+            if can_accept_or_dispute and handover.incoming_session and handover.incoming_session.assignments.exists():
+                can_accept_or_dispute = handover.incoming_session.assignments.filter(
+                    operator=request.user,
+                    status__in=[ShiftAssignmentStatus.ASSIGNED, ShiftAssignmentStatus.CHECKED_IN]
+                ).exists()
+
+    can_resolve = is_supervisor and not is_outgoing and (handover.status in [ShiftHandoverStatus.DISPUTED, ShiftHandoverStatus.SUBMITTED])
+    can_substitute = is_supervisor and not is_outgoing and not handover.is_finalized
+
+    # Calculate non-destructive live operational delta vs snapshot
+    delta = ShiftHandoverService.get_live_operational_delta(handover)
 
     # Forms for actions
     accept_form = ShiftHandoverAcceptForm()
     dispute_form = ShiftHandoverDisputeForm()
-    resolve_form = ShiftHandoverResolveForm()
+    resolve_form = ShiftHandoverResolveForm(outgoing_operator=handover.outgoing_operator)
+    substitute_form = ShiftHandoverSubstituteForm(outgoing_operator=handover.outgoing_operator)
 
     return render(request, "shifts/handover_detail.html", {
         "handover": handover,
@@ -666,10 +690,14 @@ def handover_detail(request, pk):
         "exception_items": exception_items,
         "is_supervisor": is_supervisor,
         "is_outgoing": is_outgoing,
-        "is_incoming": is_incoming,
+        "can_accept_or_dispute": can_accept_or_dispute,
+        "can_resolve": can_resolve,
+        "can_substitute": can_substitute,
+        "delta": delta,
         "accept_form": accept_form,
         "dispute_form": dispute_form,
         "resolve_form": resolve_form,
+        "substitute_form": substitute_form,
         "title": f"جزئیات تحویل شیفت #{handover.pk}",
     })
 
@@ -745,21 +773,27 @@ def handover_resolve(request, pk):
     """Supervisor intervenes to resolve or cancel a disputed handover."""
     handover = get_object_or_404(ShiftHandover, pk=pk)
 
-    if not (request.user.is_superuser or request.user.profile.can_manage_shifts):
+    if not (request.user.is_superuser or (hasattr(request.user, "profile") and request.user.profile.can_manage_shifts)):
         messages.error(request, "تنها سرپرست یا مدیر سیستم مجاز به حل‌وفصل مغایرت‌های تحویل شیفت است.")
         return redirect("shifts:handover_detail", pk=handover.pk)
 
+    if request.user == handover.outgoing_operator:
+        messages.error(request, "سرپرستی که خود اپراتور تحویل‌دهنده این شیفت بوده است، مجاز به حل‌وفصل پرونده خود نمی‌باشد (اصل تفکیک وظایف).")
+        return redirect("shifts:handover_detail", pk=handover.pk)
+
     if request.method == "POST":
-        form = ShiftHandoverResolveForm(request.POST)
+        form = ShiftHandoverResolveForm(request.POST, outgoing_operator=handover.outgoing_operator)
         if form.is_valid():
             action = form.cleaned_data.get("action")
             resolution_notes = form.cleaned_data.get("resolution_notes")
+            responsible_operator = form.cleaned_data.get("responsible_operator")
             try:
                 ShiftHandoverService.resolve_dispute(
                     handover=handover,
                     supervisor=request.user,
                     resolution_notes=resolution_notes,
-                    action=action
+                    action=action,
+                    responsible_operator=responsible_operator
                 )
                 action_text = "حل‌وفصل و تایید" if action == "RESOLVE" else "لغو"
                 messages.success(request, f"تصمیم سرپرست مبنی بر {action_text} تحویل شیفت #{handover.pk} با موفقیت ثبت شد.")
@@ -767,13 +801,46 @@ def handover_resolve(request, pk):
             except (ValidationError, PermissionDenied) as exc:
                 form.add_error(None, exc)
     else:
-        form = ShiftHandoverResolveForm()
+        form = ShiftHandoverResolveForm(outgoing_operator=handover.outgoing_operator)
 
     return render(request, "shifts/handover_resolve.html", {
         "form": form,
         "handover": handover,
         "title": f"تصمیم‌گیری سرپرست در خصوص تحویل شیفت #{handover.pk}",
     })
+
+
+@login_required
+@require_POST
+def handover_substitute_operator(request, pk):
+    """Supervisor substitutes or sets the incoming operator on an active handover."""
+    handover = get_object_or_404(ShiftHandover, pk=pk)
+    if not (request.user.is_superuser or (hasattr(request.user, "profile") and request.user.profile.can_manage_shifts)):
+        messages.error(request, "تنها سرپرست یا مدیر سیستم مجاز به تغییر اپراتور تحویل‌گیرنده است.")
+        return redirect("shifts:handover_detail", pk=handover.pk)
+
+    if request.user == handover.outgoing_operator:
+        messages.error(request, "اپراتور تحویل‌دهنده مجاز به مداخله سرپرستی در تعویض تحویل‌گیرنده نمی‌باشد.")
+        return redirect("shifts:handover_detail", pk=handover.pk)
+
+    form = ShiftHandoverSubstituteForm(request.POST, outgoing_operator=handover.outgoing_operator)
+    if form.is_valid():
+        new_op = form.cleaned_data["new_incoming_operator"]
+        reason = form.cleaned_data["substitution_reason"]
+        try:
+            ShiftHandoverService.substitute_incoming_operator(
+                handover=handover,
+                supervisor=request.user,
+                new_incoming_operator=new_op,
+                reason=reason
+            )
+            messages.success(request, f"اپراتور تحویل‌گیرنده با موفقیت به «{new_op.get_full_name() or new_op.username}» تغییر یافت.")
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, f"خطا در تعویض اپراتور: {exc}")
+    else:
+        messages.error(request, "داده‌های فرم جایگزینی اپراتور نامعتبر است.")
+
+    return redirect("shifts:handover_detail", pk=handover.pk)
 
 
 @login_required

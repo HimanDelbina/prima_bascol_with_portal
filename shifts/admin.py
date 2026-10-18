@@ -1,7 +1,7 @@
 from django.contrib import admin
 from shifts.models import (
     WorkShift, ShiftSession, ShiftOperatorAssignment, ShiftExceptionLog,
-    ShiftHandover, ShiftHandoverItem
+    ShiftHandover, ShiftHandoverItem, ShiftHandoverStatus
 )
 
 
@@ -19,6 +19,12 @@ class ShiftHandoverItemInline(admin.TabularInline):
     readonly_fields = ["category", "item_identifier", "item_title", "source_status", "source_timestamp", "created_at"]
 
     def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         return False
 
 
@@ -44,9 +50,13 @@ class ShiftHandoverAdmin(admin.ModelAdmin):
     inlines = [ShiftHandoverItemInline]
 
     def has_delete_permission(self, request, obj=None):
-        if obj and obj.is_finalized:
-            return False
-        return super().has_delete_permission(request, obj)
+        # Shift handover records constitute formal operational evidence and cannot be deleted via Admin
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.status != ShiftHandoverStatus.DRAFT:
+            return [f.name for f in obj._meta.fields]
+        return self.readonly_fields
 
 
 @admin.register(WorkShift)

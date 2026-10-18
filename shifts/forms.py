@@ -304,6 +304,12 @@ class ShiftHandoverResolveForm(forms.Form):
         choices=ACTION_CHOICES,
         widget=forms.RadioSelect(attrs={"class": "form-check-input"})
     )
+    responsible_operator = forms.ModelChoiceField(
+        queryset=User.objects.none(),
+        label="اپراتور مسئول نهایی (اختیاری)",
+        required=False,
+        widget=forms.Select(attrs={"class": "form-select"})
+    )
     resolution_notes = forms.CharField(
         label="دستورات، بررسی و ملاحظات سرپرست",
         required=True,
@@ -313,3 +319,46 @@ class ShiftHandoverResolveForm(forms.Form):
             "placeholder": "دستورات مدیریتی، راستی‌آزمایی فیزیکی محوطه و تعیین تکلیف نهایی تحویل شیفت..."
         })
     )
+
+    def __init__(self, *args, outgoing_operator=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs = User.objects.filter(
+            is_active=True,
+            profile__role__in=[
+                "super_admin", "system_admin", "weighbridge_manager",
+                "weighbridge_operator", "factory_manager"
+            ]
+        )
+        if outgoing_operator:
+            qs = qs.exclude(pk=outgoing_operator.pk)
+        self.fields["responsible_operator"].queryset = qs.select_related("profile").order_by("first_name", "username")
+
+
+class ShiftHandoverSubstituteForm(forms.Form):
+    new_incoming_operator = forms.ModelChoiceField(
+        queryset=User.objects.none(),
+        label="اپراتور جایگزین تحویل‌گیرنده",
+        widget=forms.Select(attrs={"class": "form-select"})
+    )
+    substitution_reason = forms.CharField(
+        label="دلیل و ادله جایگزینی اضطراری",
+        min_length=5,
+        widget=forms.Textarea(attrs={
+            "class": "form-control", "rows": 3,
+            "placeholder": "دلایل عدم حضور یا جایگزینی اپراتور (حداقل ۵ کاراکتر)..."
+        })
+    )
+
+    def __init__(self, *args, outgoing_operator=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs = User.objects.filter(
+            is_active=True,
+            profile__role__in=[
+                "super_admin", "system_admin", "weighbridge_manager",
+                "weighbridge_operator", "factory_manager"
+            ]
+        )
+        if outgoing_operator:
+            qs = qs.exclude(pk=outgoing_operator.pk)
+        self.fields["new_incoming_operator"].queryset = qs.select_related("profile").order_by("first_name", "username")
+

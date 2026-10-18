@@ -148,33 +148,46 @@ class ShiftHandoverService:
 
             items_to_create = []
 
-            # Populate Yard Vehicle Items
-            for ticket in yard_tickets:
+            # Group yard tickets by physical vehicle
+            unique_vehicles: Dict[str, List[WeighTicket]] = {}
+            for t in yard_tickets:
+                plate_key = (t.license_plate_display or t.serial_number).strip()
+                if plate_key not in unique_vehicles:
+                    unique_vehicles[plate_key] = []
+                unique_vehicles[plate_key].append(t)
+
+            # 1. Populate unique Yard Vehicle Items
+            for plate_key, v_tickets in unique_vehicles.items():
+                primary_ticket = v_tickets[0]
+                ticket_serials = [t.serial_number for t in v_tickets]
                 items_to_create.append(
                     ShiftHandoverItem(
                         handover=locked_handover,
                         category=ShiftHandoverItemCategory.YARD_VEHICLE,
-                        ticket=ticket,
-                        item_identifier=ticket.license_plate_display or ticket.serial_number,
-                        item_title=f"خودرو {ticket.license_plate_display} (قبض {ticket.serial_number})",
-                        source_status=ticket.status,
-                        source_timestamp=ticket.created_at,
+                        ticket=primary_ticket,
+                        item_identifier=plate_key,
+                        item_title=f"خودرو {plate_key} ({len(v_tickets)} قبض)",
+                        source_status=primary_ticket.status,
+                        source_timestamp=primary_ticket.created_at,
                         details={
-                            "serial_number": ticket.serial_number,
-                            "plate": ticket.license_plate_display,
-                            "first_weight": float(ticket.first_weight) if ticket.first_weight else None,
-                            "first_weight_time": str(ticket.first_weight_time) if ticket.first_weight_time else None,
-                            "first_weight_date": str(ticket.first_weight_date) if ticket.first_weight_date else None,
-                            "first_weight_operator": ticket.first_weight_operator.username if ticket.first_weight_operator else None,
-                            "product_name": ticket.product.name if ticket.product else None,
-                            "party_name": ticket.party.name if ticket.party else None,
-                            "driver_name": ticket.driver.full_name if ticket.driver else None,
-                            "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
+                            "plate": plate_key,
+                            "serial_number": primary_ticket.serial_number,
+                            "ticket_serials": ticket_serials,
+                            "ticket_count": len(v_tickets),
+                            "primary_serial": primary_ticket.serial_number,
+                            "first_weight": float(primary_ticket.first_weight) if primary_ticket.first_weight else None,
+                            "first_weight_time": str(primary_ticket.first_weight_time) if primary_ticket.first_weight_time else None,
+                            "first_weight_date": str(primary_ticket.first_weight_date) if primary_ticket.first_weight_date else None,
+                            "first_weight_operator": primary_ticket.first_weight_operator.username if primary_ticket.first_weight_operator else None,
+                            "product_name": primary_ticket.product.name if primary_ticket.product else None,
+                            "party_name": primary_ticket.party.name if primary_ticket.party else None,
+                            "driver_name": primary_ticket.driver.full_name if primary_ticket.driver else None,
+                            "created_at": primary_ticket.created_at.isoformat() if primary_ticket.created_at else None,
                         }
                     )
                 )
 
-            # Populate Waiting Second Weight Items
+            # 2. Populate Waiting Second Weight Items (one per operational ticket)
             for ticket in yard_tickets:
                 items_to_create.append(
                     ShiftHandoverItem(
@@ -267,7 +280,7 @@ class ShiftHandoverService:
             ShiftHandoverItem.objects.bulk_create(items_to_create)
 
             # Update handover metrics
-            locked_handover.yard_vehicles_count = len(yard_tickets)
+            locked_handover.yard_vehicles_count = len(unique_vehicles)
             locked_handover.waiting_second_count = len(yard_tickets)
             locked_handover.pending_discrepancies_count = len(pending_approvals)
             locked_handover.overdue_waiting_count = len(overdue_alerts)
@@ -373,9 +386,16 @@ class ShiftHandoverService:
         """
         Incoming operator formally accepts operational responsibility.
         CRITICAL SEPARATION OF DUTIES:
-        Outgoing operator CANNOT accept their own handover (No self-approval).
+        - Outgoing operator CANNOT accept their own handover (No self-approval).
+        - User must be authenticated and have shift operation role.
+        - Superusers cannot impersonate the incoming operator through ordinary acceptance.
+        - Actor must be the designated incoming operator if one was specified.
+        - Actor must be authorized/assigned to the incoming session if specified.
         Transitions SUBMITTED/DISPUTED -> ACCEPTED.
         """
+        if not operator or not operator.is_authenticated:
+            raise PermissionDenied("کاربر احراز هویت نشده است.")
+
         with transaction.atomic():
             locked = ShiftHandover.objects.select_for_update().get(pk=handover.pk)
 
@@ -387,9 +407,27 @@ class ShiftHandoverService:
             if operator == locked.outgoing_operator:
                 raise ValidationError("اپراتور تحویل‌دهنده نمی‌تواند تحویل شیفت خود را تأیید و پذیرش نماید (اصل تفکیک وظایف).")
 
-            # Check incoming operator permissions
-            if not (operator.is_superuser or (hasattr(operator, "profile") and operator.profile.can_operate_shift)):
+            # Check incoming operator role (superuser cannot bypass operator capability)
+            if not (hasattr(operator, "profile") and operator.profile.can_operate_shift):
                 raise PermissionDenied("کاربر مجوز اپراتوری برای پذیرش تحویل شیفت را ندارد.")
+
+            # Designated operator check: An unrelated operator cannot accept someone else's handover
+            if locked.incoming_operator and operator != locked.incoming_operator:
+                raise PermissionDenied(
+                    f"تنها اپراتور تحویل‌گیرنده تعیین‌شده ({locked.incoming_operator.get_full_name() or locked.incoming_operator.username}) مجاز به پذیرش این تحویل شیفت می‌باشد."
+                )
+
+            # Incoming session assignment check
+            target_session = incoming_session or locked.incoming_session
+            if target_session and target_session.assignments.exists():
+                is_assigned = target_session.assignments.filter(
+                    operator=operator,
+                    status__in=[ShiftAssignmentStatus.ASSIGNED, ShiftAssignmentStatus.CHECKED_IN]
+                ).exists()
+                if not is_assigned:
+                    raise ValidationError(
+                        f"اپراتور {operator.username} به جلسه شیفت تحویل‌گیرنده «{target_session}» تخصیص داده نشده است."
+                    )
 
             old_status = locked.status
             locked.status = ShiftHandoverStatus.ACCEPTED
@@ -439,6 +477,9 @@ class ShiftHandoverService:
         Outgoing operator CANNOT dispute their own handover.
         Transitions SUBMITTED -> DISPUTED.
         """
+        if not operator or not operator.is_authenticated:
+            raise PermissionDenied("کاربر احراز هویت نشده است.")
+
         dispute_reason = str(dispute_reason).strip()
         if len(dispute_reason) < 5:
             raise ValidationError("ثبت علت دقیق مغایرت یا اختلاف الزامی است (حداقل ۵ کاراکتر).")
@@ -451,6 +492,27 @@ class ShiftHandoverService:
 
             if operator == locked.outgoing_operator:
                 raise ValidationError("اپراتور تحویل‌دهنده نمی‌تواند تحویل شیفت خود را رد یا مغایرت‌دار کند.")
+
+            if not (hasattr(operator, "profile") and operator.profile.can_operate_shift):
+                raise PermissionDenied("کاربر مجوز اپراتوری برای ثبت مغایرت تحویل شیفت را ندارد.")
+
+            # Designated operator check
+            if locked.incoming_operator and operator != locked.incoming_operator:
+                raise PermissionDenied(
+                    f"تنها اپراتور تحویل‌گیرنده تعیین‌شده ({locked.incoming_operator.get_full_name() or locked.incoming_operator.username}) مجاز به ثبت مغایرت در این تحویل شیفت می‌باشد."
+                )
+
+            # Incoming session assignment check
+            target_session = incoming_session or locked.incoming_session
+            if target_session and target_session.assignments.exists():
+                is_assigned = target_session.assignments.filter(
+                    operator=operator,
+                    status__in=[ShiftAssignmentStatus.ASSIGNED, ShiftAssignmentStatus.CHECKED_IN]
+                ).exists()
+                if not is_assigned:
+                    raise ValidationError(
+                        f"اپراتور {operator.username} به جلسه شیفت تحویل‌گیرنده «{target_session}» تخصیص داده نشده است."
+                    )
 
             old_status = locked.status
             locked.status = ShiftHandoverStatus.DISPUTED
@@ -491,7 +553,8 @@ class ShiftHandoverService:
         handover: ShiftHandover,
         supervisor: User,
         resolution_notes: str,
-        action: str = "RESOLVE"
+        action: str = "RESOLVE",
+        responsible_operator: Optional[User] = None
     ) -> ShiftHandover:
         """
         Supervisor intervenes to resolve a disputed handover (or in emergency operator absence).
@@ -499,7 +562,11 @@ class ShiftHandoverService:
         Action:
             "RESOLVE" -> SUPERVISOR_RESOLVED
             "CANCEL"  -> CANCELLED
+        Preserves original incoming operator dispute reason and timestamp.
         """
+        if not supervisor or not supervisor.is_authenticated:
+            raise PermissionDenied("کاربر احراز هویت نشده است.")
+
         if not (supervisor.is_superuser or (hasattr(supervisor, "profile") and supervisor.profile.can_manage_shifts)):
             raise PermissionDenied("تنها سرپرست یا مدیر سیستم مجاز به حل‌وفصل و تصمیم‌گیری در خصوص اختلافات تحویل شیفت است.")
 
@@ -513,10 +580,25 @@ class ShiftHandoverService:
             if locked.status not in [ShiftHandoverStatus.DISPUTED, ShiftHandoverStatus.SUBMITTED]:
                 raise ValidationError(f"تحویل شیفت در وضعیت «{locked.get_status_display()}» قابل مداخله سرپرست نیست.")
 
+            # CRITICAL SEPARATION OF DUTIES: Supervisor cannot be the outgoing operator
+            if supervisor == locked.outgoing_operator:
+                raise ValidationError("سرپرستی که خود اپراتور تحویل‌دهنده این شیفت بوده است، مجاز به حل‌وفصل و تایید اختلاف پرونده خود نمی‌باشد (اصل تفکیک وظایف).")
+
             old_status = locked.status
             if action.upper() == "RESOLVE":
                 locked.status = ShiftHandoverStatus.SUPERVISOR_RESOLVED
                 audit_action = AuditAction.SHIFT_HANDOVER_RESOLVE
+
+                # Responsible operator verification
+                if responsible_operator:
+                    if responsible_operator == locked.outgoing_operator:
+                        raise ValidationError("اپراتور تحویل‌دهنده نمی‌تواند به عنوان اپراتور مسئول نهایی تعیین شود.")
+                    if not (hasattr(responsible_operator, "profile") and responsible_operator.profile.can_operate_shift):
+                        raise ValidationError(f"کاربر {responsible_operator.username} فاقد مجوز اپراتوری شیفت است.")
+                    locked.incoming_operator = responsible_operator
+                elif not locked.incoming_operator:
+                    raise ValidationError("تعیین اپراتور مسئول نهایی شیفت جهت حل‌وفصل و تایید الزامی است.")
+
             elif action.upper() == "CANCEL":
                 locked.status = ShiftHandoverStatus.CANCELLED
                 audit_action = AuditAction.CANCEL
@@ -540,6 +622,7 @@ class ShiftHandoverService:
                 new_values={
                     "status": locked.status,
                     "supervisor": supervisor.username,
+                    "incoming_operator": locked.incoming_operator.username if locked.incoming_operator else None,
                     "resolved_at": locked.supervisor_resolved_at.isoformat(),
                     "notes": resolution_notes
                 },
@@ -550,6 +633,68 @@ class ShiftHandoverService:
             return locked
 
     @classmethod
+    def substitute_incoming_operator(
+        cls,
+        handover: ShiftHandover,
+        supervisor: User,
+        new_incoming_operator: User,
+        reason: str
+    ) -> ShiftHandover:
+        """
+        Documented exceptional workflow for supervisor substitution of the incoming operator
+        (e.g., when the originally designated operator is absent or replaced).
+        """
+        if not supervisor or not supervisor.is_authenticated:
+            raise PermissionDenied("کاربر احراز هویت نشده است.")
+
+        if not (supervisor.is_superuser or (hasattr(supervisor, "profile") and supervisor.profile.can_manage_shifts)):
+            raise PermissionDenied("تنها سرپرست یا مدیر سیستم مجاز به تغییر یا تعویض اضطراری اپراتور تحویل‌گیرنده است.")
+
+        reason = str(reason).strip()
+        if len(reason) < 5:
+            raise ValidationError("ثبت علت تعویض اپراتور تحویل‌گیرنده الزامی است (حداقل ۵ کاراکتر).")
+
+        with transaction.atomic():
+            locked = ShiftHandover.objects.select_for_update().get(pk=handover.pk)
+
+            if locked.is_finalized:
+                raise ValidationError(f"امکان تغییر اپراتور برای تحویل نهایی‌شده (وضعیت: {locked.get_status_display()}) وجود ندارد.")
+
+            if supervisor == locked.outgoing_operator:
+                raise ValidationError("اپراتور تحویل‌دهنده مجاز به مداخله سرپرستی در تعویض تحویل‌گیرنده نمی‌باشد.")
+
+            if new_incoming_operator == locked.outgoing_operator:
+                raise ValidationError("اپراتور جدید تحویل‌گیرنده نمی‌تواند با اپراتور تحویل‌دهنده یکسان باشد (اصل تفکیک وظایف).")
+
+            if not (hasattr(new_incoming_operator, "profile") and new_incoming_operator.profile.can_operate_shift):
+                raise ValidationError(f"کاربر {new_incoming_operator.username} مجوز اپراتوری شیفت را ندارد.")
+
+            old_operator_name = locked.incoming_operator.username if locked.incoming_operator else "تعیین‌نشده"
+            locked.incoming_operator = new_incoming_operator
+            locked.save()
+
+            log_audit(
+                action=AuditAction.SHIFT_SUBSTITUTION,
+                model_name="ShiftHandover",
+                record_id=locked.pk,
+                record_repr=f"تعویض اپراتور تحویل‌گیرنده در تحویل شیفت #{locked.pk}",
+                user=supervisor,
+                reason=reason,
+                old_values={"incoming_operator": old_operator_name},
+                new_values={
+                    "incoming_operator": new_incoming_operator.username,
+                    "substituted_by": supervisor.username
+                },
+                source="Web"
+            )
+
+            logger.info(
+                "Shift handover #%s incoming operator substituted by supervisor %s from %s to %s",
+                locked.pk, supervisor.username, old_operator_name, new_incoming_operator.username
+            )
+            return locked
+
+    @classmethod
     def cancel_handover(
         cls,
         handover: ShiftHandover,
@@ -557,8 +702,12 @@ class ShiftHandoverService:
         reason: str = ""
     ) -> ShiftHandover:
         """
-        Cancels a draft or submitted handover. Permitted by outgoing operator or supervisor.
+        Cancels a draft or submitted handover.
+        If DISPUTED, only a supervisor can cancel or resolve it.
         """
+        if not user or not user.is_authenticated:
+            raise PermissionDenied("کاربر احراز هویت نشده است.")
+
         with transaction.atomic():
             locked = ShiftHandover.objects.select_for_update().get(pk=handover.pk)
 
@@ -566,8 +715,15 @@ class ShiftHandoverService:
                 raise ValidationError(f"امکان لغو تحویل شیفت نهایی‌شده (وضعیت: {locked.get_status_display()}) وجود ندارد.")
 
             is_supervisor = user.is_superuser or (hasattr(user, "profile") and user.profile.can_manage_shifts)
-            if not is_supervisor and user != locked.outgoing_operator:
-                raise PermissionDenied("تنها اپراتور تحویل‌دهنده یا سرپرست مجاز به لغو فرآیند تحویل می‌باشند.")
+
+            if locked.status == ShiftHandoverStatus.DISPUTED:
+                if not is_supervisor:
+                    raise PermissionDenied("تحویل شیفت دارای اختلاف تنها توسط سرپرست قابل لغو یا تعیین‌تکلیف می‌باشد.")
+                if user == locked.outgoing_operator:
+                    raise ValidationError("اپراتور تحویل‌دهنده مجاز به لغو پرونده اختلافی خود نیست.")
+            else:
+                if not is_supervisor and user != locked.outgoing_operator:
+                    raise PermissionDenied("تنها اپراتور تحویل‌دهنده یا سرپرست مجاز به لغو فرآیند تحویل می‌باشند.")
 
             old_status = locked.status
             locked.status = ShiftHandoverStatus.CANCELLED
@@ -589,3 +745,96 @@ class ShiftHandoverService:
 
             logger.info("Shift handover #%s cancelled by %s", locked.pk, user.username)
             return locked
+
+    @classmethod
+    def get_live_operational_delta(cls, handover: ShiftHandover) -> Dict[str, Any]:
+        """
+        Calculates the differences between the snapshot captured at handover submission
+        and the current live operational state of the weighbridge.
+        Crucially:
+        - NEVER mutates or overwrites the frozen snapshot records.
+        - Classifies completed tickets as routine operational progression, NOT fraud.
+        - Detects newly arrived vehicles in the yard after submission.
+        - Detects resolved or newly requested discrepancy approvals.
+        """
+        if handover.status == ShiftHandoverStatus.DRAFT:
+            return {"has_changes": False}
+
+        snapshot_ticket_ids = set(
+            handover.items.filter(
+                category=ShiftHandoverItemCategory.WAITING_SECOND,
+                ticket__isnull=False
+            ).values_list("ticket_id", flat=True)
+        )
+
+        # 1. Snapshot tickets that completed second weighing since submission
+        completed_since_submission = list(
+            WeighTicket.objects.filter(
+                id__in=snapshot_ticket_ids,
+                status=TicketStatus.COMPLETED
+            ).select_related("product", "party").order_by("-updated_at")
+        )
+
+        # 2. Snapshot tickets still waiting in yard
+        still_waiting_tickets = list(
+            WeighTicket.objects.filter(
+                id__in=snapshot_ticket_ids,
+                status=TicketStatus.WAITING_SECOND
+            ).select_related("product", "party").order_by("created_at")
+        )
+
+        # 3. Newly arrived vehicles in yard since handover submission
+        new_yard_arrivals = list(
+            WeighTicket.objects.filter(
+                status=TicketStatus.WAITING_SECOND
+            ).exclude(
+                id__in=snapshot_ticket_ids
+            ).select_related("product", "party").order_by("created_at")
+        )
+
+        # 4. Approvals delta
+        snapshot_approval_ids = set(
+            handover.items.filter(
+                category=ShiftHandoverItemCategory.PENDING_APPROVAL,
+                discrepancy_approval__isnull=False
+            ).values_list("discrepancy_approval_id", flat=True)
+        )
+
+        resolved_approvals = list(
+            DiscrepancyApproval.objects.filter(
+                id__in=snapshot_approval_ids
+            ).exclude(
+                status=ApprovalStatus.PENDING
+            ).select_related("ticket", "reviewed_by").order_by("-reviewed_at")
+        )
+
+        new_pending_approvals = list(
+            DiscrepancyApproval.objects.filter(
+                status=ApprovalStatus.PENDING
+            ).exclude(
+                id__in=snapshot_approval_ids
+            ).select_related("ticket", "requested_by").order_by("created_at")
+        )
+
+        has_changes = bool(
+            completed_since_submission or new_yard_arrivals or
+            resolved_approvals or new_pending_approvals
+        )
+
+        return {
+            "has_changes": has_changes,
+            "completed_since_submission": completed_since_submission,
+            "completed_tickets": completed_since_submission,
+            "completed_count": len(completed_since_submission),
+            "completed_since_snapshot_count": len(completed_since_submission),
+            "still_waiting_tickets": still_waiting_tickets,
+            "still_waiting_count": len(still_waiting_tickets),
+            "new_yard_arrivals": new_yard_arrivals,
+            "new_yard_tickets": new_yard_arrivals,
+            "new_arrivals_count": len(new_yard_arrivals),
+            "new_yard_arrivals_count": len(new_yard_arrivals),
+            "resolved_approvals": resolved_approvals,
+            "resolved_approvals_count": len(resolved_approvals),
+            "new_pending_approvals": new_pending_approvals,
+            "new_pending_count": len(new_pending_approvals),
+        }
