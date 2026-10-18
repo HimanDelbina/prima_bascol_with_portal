@@ -24,6 +24,8 @@ from shifts.forms import (
 from shifts.services import ShiftResolutionService
 from shifts.handover_service import ShiftHandoverService
 from shifts.dashboard_service import ShiftDashboardService
+from shifts.export_service import ShiftExportService
+from core.middleware import extract_client_ip
 from audit.services import log_audit
 from audit.models import AuditAction
 
@@ -880,3 +882,57 @@ def shift_dashboard(request):
 
     context["title"] = "داشبورد مدیریت شیفت، عملکرد اپراتورها و تحویل"
     return render(request, "shifts/dashboard.html", context)
+
+
+# ---------------------------------------------------------
+# Phase 4.3.3: Official Excel & PDF Export Views
+# ---------------------------------------------------------
+
+@login_required
+def shift_dashboard_export_excel(request):
+    """
+    Export 4-sheet Persian RTL Excel workbook of shift performance,
+    operator metrics, and shift tickets.
+    """
+    has_access, is_supervisor = ShiftDashboardService.check_user_dashboard_access(request.user)
+    if not has_access:
+        raise PermissionDenied("شما مجوز دسترسی به خروجی اکسل عملکرد شیفت را ندارید.")
+
+    client_ip = extract_client_ip(request)
+    return ShiftExportService.export_shift_performance_excel(
+        user=request.user,
+        params=request.GET,
+        client_ip=client_ip
+    )
+
+
+@login_required
+def shift_dashboard_export_pdf(request):
+    """
+    Export executive management summary PDF (A4 Landscape) of shift operations.
+    """
+    has_access, is_supervisor = ShiftDashboardService.check_user_dashboard_access(request.user)
+    if not has_access:
+        raise PermissionDenied("شما مجوز دریافت گزارش PDF عملکرد شیفت را ندارید.")
+
+    client_ip = extract_client_ip(request)
+    return ShiftExportService.export_management_summary_pdf(
+        user=request.user,
+        params=request.GET,
+        client_ip=client_ip
+    )
+
+
+@login_required
+def shift_handover_export_pdf(request, pk):
+    """
+    Export official printable A4 Portrait PDF of a formal shift handover
+    with checklist, frozen snapshot items, and signature blocks.
+    """
+    client_ip = extract_client_ip(request)
+    return ShiftExportService.export_formal_handover_pdf(
+        user=request.user,
+        handover_id=pk,
+        client_ip=client_ip
+    )
+

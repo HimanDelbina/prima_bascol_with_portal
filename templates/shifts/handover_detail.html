@@ -31,6 +31,9 @@
         </p>
     </div>
     <div class="d-flex gap-2">
+        <a href="{% url 'shifts:handover_export_pdf' handover.pk %}" class="btn btn-outline-danger" target="_blank" title="دانلود برگه رسمی تحویل و تحول شیفت (PDF)">
+            <i class="bi bi-file-earmark-pdf-fill me-1"></i>برگه رسمی تحویل (PDF)
+        </a>
         <a href="{% url 'shifts:session_detail' handover.outgoing_session.pk %}" class="btn btn-outline-secondary">
             <i class="bi bi-clock-history me-1"></i>جلسه شیفت
         </a>

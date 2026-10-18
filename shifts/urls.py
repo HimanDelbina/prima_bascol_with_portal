@@ -6,6 +6,8 @@ app_name = "shifts"
 urlpatterns = [
     # Phase 4.3.2: Shift Management & Performance Dashboard
     path("dashboard/", views.shift_dashboard, name="dashboard"),
+    path("dashboard/export/excel/", views.shift_dashboard_export_excel, name="dashboard_export_excel"),
+    path("dashboard/export/pdf/", views.shift_dashboard_export_pdf, name="dashboard_export_pdf"),
 
     # WorkShift Schedule Management
     path("schedules/", views.shift_list, name="shift_list"),
@@ -33,6 +35,7 @@ urlpatterns = [
     path("handovers/", views.handover_list, name="handover_list"),
     path("handovers/initiate/<int:session_pk>/", views.handover_initiate, name="handover_initiate"),
     path("handovers/<int:pk>/", views.handover_detail, name="handover_detail"),
+    path("handovers/<int:pk>/export/pdf/", views.shift_handover_export_pdf, name="handover_export_pdf"),
     path("handovers/<int:pk>/submit/", views.handover_submit, name="handover_submit"),
     path("handovers/<int:pk>/accept/", views.handover_accept, name="handover_accept"),
     path("handovers/<int:pk>/dispute/", views.handover_dispute, name="handover_dispute"),

@@ -57,6 +57,12 @@
             </p>
         </div>
         <div class="d-flex gap-2">
+            <a href="{% url 'shifts:dashboard_export_excel' %}?{{ request.GET.urlencode }}" class="btn btn-outline-success" title="دانلود کارنامه چندصفحه‌ای اکسل">
+                <i class="bi bi-file-earmark-excel-fill me-1"></i>خروجی اکسل
+            </a>
+            <a href="{% url 'shifts:dashboard_export_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-outline-danger" target="_blank" title="دانلود گزارش مدیریتی A4 افقی">
+                <i class="bi bi-file-earmark-pdf-fill me-1"></i>گزارش مدیریتی (PDF)
+            </a>
             <a href="{% url 'shifts:session_list' %}" class="btn btn-outline-secondary">
                 <i class="bi bi-calendar2-week me-1"></i>جلسات شیفت
             </a>

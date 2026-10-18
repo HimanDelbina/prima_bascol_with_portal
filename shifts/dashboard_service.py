@@ -286,8 +286,8 @@ class ShiftDashboardService:
                 # Security: Expose dispute reason & supervisor notes only to supervisors/managers
                 "dispute_reason": h.dispute_reason if is_supervisor else "",
                 "supervisor_notes": (
-                    f"تصمیم سرپرست ({h.supervisor.username}): {h.supervisor_decision}"
-                    if (is_supervisor and h.supervisor and h.supervisor_decision)
+                    f"تصمیم سرپرست ({h.supervisor.username}): {h.supervisor_resolution_notes}"
+                    if (is_supervisor and h.supervisor and h.supervisor_resolution_notes)
                     else ""
                 ),
             })
