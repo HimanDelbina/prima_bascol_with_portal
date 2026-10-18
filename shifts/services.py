@@ -176,6 +176,15 @@ class ShiftResolutionService:
         return session
 
     @classmethod
+    def is_shift_management_enabled(cls) -> bool:
+        """
+        Determines whether automated shift attribution and exception logging are enabled.
+        Configurable via django.conf.settings.ENABLE_SHIFT_MANAGEMENT (default: True).
+        """
+        from django.conf import settings
+        return getattr(settings, "ENABLE_SHIFT_MANAGEMENT", True)
+
+    @classmethod
     def record_weighing_shift(
         cls,
         ticket,
@@ -191,12 +200,25 @@ class ShiftResolutionService:
         Returns:
             (session, is_out_of_shift, reason_code, reason_notes)
         """
+        if not cls.is_shift_management_enabled():
+            logger.info("Shift management is disabled via ENABLE_SHIFT_MANAGEMENT feature flag.")
+            if not is_second_weight:
+                ticket.first_weight_shift_session = None
+                ticket.first_weight_out_of_shift = False
+            else:
+                ticket.second_weight_shift_session = None
+                ticket.second_weight_out_of_shift = False
+            return None, False, "SHIFT_MANAGEMENT_DISABLED", "سیستم مدیریت شیفت در تنظیمات سامانه غیرفعال است."
+
         try:
-            session, reason, notes = cls.resolve_session_for_operator(
-                operator=operator,
-                dt=dt,
-                scale_context=scale_context
-            )
+            # Use atomic savepoint so any unexpected DatabaseError in shift queries
+            # does not abort the outer ticket transaction in PostgreSQL.
+            with transaction.atomic(savepoint=True):
+                session, reason, notes = cls.resolve_session_for_operator(
+                    operator=operator,
+                    dt=dt,
+                    scale_context=scale_context
+                )
         except Exception as exc:
             logger.error("Unexpected error in shift resolution for ticket: %s", exc, exc_info=True)
             session = None
@@ -233,33 +255,53 @@ class ShiftResolutionService:
         """
         Idempotently logs an out-of-shift exception for a persisted ticket.
         Safety guarantees:
-        - Never logs if ticket.pk is None (prevents phantom records).
-        - Idempotent via update_or_create to prevent duplicates on request retries.
-        - Wrapped in try/except so logging never interrupts weighing.
+        - Never logs if ticket or ticket.pk is None (prevents phantom records).
+        - Skips if shift management feature flag is disabled.
+        - Preserves initial exception evidence (reason, operator, event timestamp).
+          Retries return existing record without overwriting original evidence.
+        - Idempotent and concurrency-safe via get_or_create under an atomic savepoint.
+        - Wrapped in transaction savepoint so logging failure never interrupts weighing.
         """
         if not ticket or not ticket.pk:
             logger.warning("ShiftExceptionLog skipped: ticket is not persisted.")
+            return None
+
+        if not cls.is_shift_management_enabled():
+            logger.info("Shift exception logging skipped: shift management feature is disabled.")
             return None
 
         if timestamp is None:
             timestamp = timezone.now()
 
         try:
-            exc_log, _ = ShiftExceptionLog.objects.update_or_create(
-                ticket=ticket,
-                weighing_phase=weighing_phase,
-                defaults={
-                    "operator": operator if (operator and operator.is_authenticated) else None,
-                    "timestamp": timestamp,
-                    "reason": reason,
-                    "notes": notes,
-                }
-            )
-            return exc_log
+            with transaction.atomic(savepoint=True):
+                exc_log, created = ShiftExceptionLog.objects.get_or_create(
+                    ticket=ticket,
+                    weighing_phase=weighing_phase,
+                    defaults={
+                        "operator": operator if (operator and operator.is_authenticated) else None,
+                        "timestamp": timestamp,
+                        "reason": reason,
+                        "notes": notes,
+                    }
+                )
+                if not created:
+                    logger.info(
+                        "ShiftExceptionLog already exists for ticket %s (phase %s). "
+                        "Original evidence preserved (initial reason: %s, timestamp: %s).",
+                        getattr(ticket, "serial_number", ticket.pk),
+                        weighing_phase,
+                        exc_log.reason,
+                        exc_log.timestamp
+                    )
+                return exc_log
         except Exception as exc:
             logger.error(
                 "Failed to log shift exception for ticket %s (phase %s): %s",
-                ticket.pk, weighing_phase, exc, exc_info=True
+                getattr(ticket, "serial_number", ticket.pk),
+                weighing_phase,
+                exc,
+                exc_info=True
             )
             return None
 

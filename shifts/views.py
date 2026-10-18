@@ -19,6 +19,8 @@ from shifts.forms import (
     ShiftOperatorAssignmentForm, ShiftSubstitutionForm, ShiftExceptionAcknowledgeForm
 )
 from shifts.services import ShiftResolutionService
+from audit.services import log_audit
+from audit.models import AuditAction
 
 
 # ---------------------------------------------------------
@@ -139,6 +141,7 @@ def session_list(request):
         "date_filter": date_filter,
         "statuses": ShiftSessionStatus.choices,
         "title": "مدیریت و پایش جلسات شیفت کاری",
+        "is_shift_management_enabled": ShiftResolutionService.is_shift_management_enabled(),
     })
 
 
@@ -376,6 +379,7 @@ def exception_list(request):
         "page_obj": page_obj,
         "filter_ack": filter_ack,
         "title": "استثنائات توزین خارج از شیفت (دیده‌بانی سرپرست)",
+        "is_shift_management_enabled": ShiftResolutionService.is_shift_management_enabled(),
     })
 
 
@@ -391,6 +395,23 @@ def exception_acknowledge(request, pk):
     if form.is_valid():
         note = form.cleaned_data["acknowledgement_note"]
         exc.acknowledge(user=request.user, note=note)
+        # Log administrative action to immutable audit trail
+        log_audit(
+            user=request.user,
+            action=AuditAction.DISCREPANCY_APPROVAL,
+            model_name="ShiftExceptionLog",
+            record_id=str(exc.pk),
+            record_repr=f"استثنای شیفت - قبض {exc.ticket.serial_number} ({exc.get_weighing_phase_display()})",
+            old_values={"is_acknowledged": False},
+            new_values={
+                "is_acknowledged": True,
+                "acknowledged_by": request.user.username,
+                "acknowledged_at": str(exc.acknowledged_at),
+                "acknowledgement_note": note
+            },
+            reason=note,
+            source="Web"
+        )
         messages.success(request, f"استثنای قبض شماره {exc.ticket.serial_number} بررسی و تایید شد.")
     else:
         messages.error(request, "ثبت توضیحات بررسی الزامی است.")
@@ -405,6 +426,13 @@ def exception_acknowledge(request, pk):
 @login_required
 def current_shift_status(request):
     """JSON API returning current active shift and checked-in operators."""
+    if not ShiftResolutionService.is_shift_management_enabled():
+        return JsonResponse({
+            "is_enabled": False,
+            "has_active_shift": False,
+            "message": "سیستم مدیریت خودکار شیفت در تنظیمات سامانه غیرفعال است (ENABLE_SHIFT_MANAGEMENT = False)."
+        })
+
     active_session = ShiftResolutionService.get_active_session_for_weighing(operator=request.user)
     if active_session:
         checked_in_ops = list(
@@ -412,6 +440,7 @@ def current_shift_status(request):
             .values_list("operator__username", flat=True)
         )
         return JsonResponse({
+            "is_enabled": True,
             "has_active_shift": True,
             "shift_id": active_session.shift.id,
             "shift_name": active_session.shift.name,
@@ -422,6 +451,7 @@ def current_shift_status(request):
             "checked_in_operators": checked_in_ops,
         })
     return JsonResponse({
+        "is_enabled": True,
         "has_active_shift": False,
         "message": "هیچ شیفت فعالی در حال حاضر ثبت نشده است."
     })

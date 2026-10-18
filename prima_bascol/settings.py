@@ -404,3 +404,9 @@ LOGGING = {
     },
 }
 
+# ==========================================
+# Feature Flags
+# ==========================================
+# Controls automatic shift attribution and out-of-shift exception logging
+ENABLE_SHIFT_MANAGEMENT = os.environ.get('ENABLE_SHIFT_MANAGEMENT', 'True').lower() in ('true', '1', 'yes')
+

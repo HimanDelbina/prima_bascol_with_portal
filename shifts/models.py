@@ -306,8 +306,9 @@ class ShiftExceptionLog(models.Model):
     ]
 
     ticket = models.ForeignKey(
-        "weighbridge.WeighTicket", on_delete=models.CASCADE,
-        related_name="shift_exceptions", verbose_name="قبض توزین"
+        "weighbridge.WeighTicket", on_delete=models.PROTECT,
+        related_name="shift_exceptions", verbose_name="قبض توزین",
+        help_text="حفظ سوابق استثنا؛ حذف فیزیکی قبض مرتبط به دلیل وجود شواهد ممیزی مسدود است."
     )
     weighing_phase = models.CharField(max_length=20, choices=PHASE_CHOICES, verbose_name="مرحله توزین")
     operator = models.ForeignKey(

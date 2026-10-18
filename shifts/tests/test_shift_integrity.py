@@ -1,13 +1,15 @@
 from datetime import datetime, date, time, timedelta
 from decimal import Decimal
 import pytz
-from django.test import TestCase, TransactionTestCase, Client
+import threading
+from django.test import TestCase, TransactionTestCase, Client, override_settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, DatabaseError, transaction, connection
 from django.utils import timezone
 from django.urls import reverse
 from unittest.mock import patch
+from audit.models import AuditLog, AuditAction
 
 from accounts.models import UserProfile, RoleChoices
 from masterdata.models import (
@@ -99,10 +101,10 @@ class ShiftDatabaseIntegrityTests(TestCase):
         self.assertIsNone(ticket.first_weight_shift_session)
         self.assertEqual(ticket.serial_number, "INT-TEST-002")
 
-    def test_orphan_prevention_on_ticket_deletion(self):
+    def test_ticket_deletion_is_protected_when_shift_exception_exists(self):
         """
-        Deleting a WeighTicket must cascade (on_delete=CASCADE) to delete its ShiftExceptionLogs,
-        leaving zero orphan records in the database.
+        Deleting a WeighTicket that has shift exception evidence MUST be prohibited
+        by models.ProtectedError (and PostgreSQL RESTRICT) to preserve audit evidence.
         """
         ticket = WeighTicket.objects.create(
             serial_number="INT-TEST-003",
@@ -119,8 +121,13 @@ class ShiftDatabaseIntegrityTests(TestCase):
         )
         self.assertEqual(ShiftExceptionLog.objects.filter(ticket=ticket).count(), 1)
 
-        ticket.delete()
-        self.assertEqual(ShiftExceptionLog.objects.filter(ticket_id=ticket.pk).count(), 0)
+        from django.db.models import ProtectedError
+        with self.assertRaises(ProtectedError):
+            ticket.delete()
+
+        # Verify evidence remains intact in the database
+        self.assertTrue(WeighTicket.objects.filter(pk=ticket.pk).exists())
+        self.assertTrue(ShiftExceptionLog.objects.filter(ticket=ticket).exists())
 
     def test_concurrent_operator_checkin_unique_constraint_at_db_level(self):
         """
@@ -228,10 +235,11 @@ class ShiftDatabaseIntegrityTests(TestCase):
         self.assertEqual(exc.reason, ShiftExceptionLog.ReasonChoices.NO_ACTIVE_SHIFT)
         self.assertEqual(exc.ticket, ticket)
 
-    def test_idempotent_exception_logging_prevents_duplicate_logs_on_retry(self):
+    def test_idempotent_exception_logging_preserves_initial_evidence_on_retry(self):
         """
-        Database UniqueConstraint(ticket, weighing_phase) combined with
-        ShiftResolutionService.log_shift_exception guarantees idempotency on retries.
+        ShiftResolutionService.log_shift_exception preserves initial evidence
+        (reason, notes, timestamp, operator) on retry and never silently overwrites it.
+        Distinct weighing phases (FIRST vs SECOND) remain distinguishable.
         """
         ticket = WeighTicket.objects.create(
             serial_number="INT-TEST-004",
@@ -241,27 +249,46 @@ class ShiftDatabaseIntegrityTests(TestCase):
             first_weight_out_of_shift=True
         )
 
-        # Call log_shift_exception 3 times
+        # Initial call
         log1 = ShiftResolutionService.log_shift_exception(
             ticket=ticket,
             weighing_phase="FIRST",
             operator=self.operator,
             reason=ShiftExceptionLog.ReasonChoices.NO_ACTIVE_SHIFT,
-            notes="Attempt 1"
+            notes="Initial failure event"
         )
+        self.assertIsNotNone(log1)
+        initial_timestamp = log1.timestamp
+
+        # Retry with different reason/notes (e.g. re-evaluation or duplicate request)
         log2 = ShiftResolutionService.log_shift_exception(
             ticket=ticket,
             weighing_phase="FIRST",
             operator=self.operator,
             reason=ShiftExceptionLog.ReasonChoices.OPERATOR_NOT_CHECKED_IN,
-            notes="Attempt 2 updated"
+            notes="Attempted overwrite on retry"
         )
 
         self.assertEqual(log1.pk, log2.pk)
         self.assertEqual(ShiftExceptionLog.objects.filter(ticket=ticket, weighing_phase="FIRST").count(), 1)
+        
+        # Verify original evidence was NOT overwritten
         log2.refresh_from_db()
-        self.assertEqual(log2.reason, ShiftExceptionLog.ReasonChoices.OPERATOR_NOT_CHECKED_IN)
-        self.assertEqual(log2.notes, "Attempt 2 updated")
+        self.assertEqual(log2.reason, ShiftExceptionLog.ReasonChoices.NO_ACTIVE_SHIFT)
+        self.assertEqual(log2.notes, "Initial failure event")
+        self.assertEqual(log2.timestamp, initial_timestamp)
+
+        # Distinct weighing phase (SECOND) creates a separate, distinguishable log
+        log_sec = ShiftResolutionService.log_shift_exception(
+            ticket=ticket,
+            weighing_phase="SECOND",
+            operator=self.operator,
+            reason=ShiftExceptionLog.ReasonChoices.SESSION_TIME_INVALID,
+            notes="Second weight after shift"
+        )
+        self.assertIsNotNone(log_sec)
+        self.assertNotEqual(log1.pk, log_sec.pk)
+        self.assertEqual(ShiftExceptionLog.objects.filter(ticket=ticket).count(), 2)
 
         # Direct insert violates DB unique constraint
         with self.assertRaises(IntegrityError):
@@ -472,3 +499,233 @@ class ShiftDeterministicResolutionTests(TestCase):
 
         self.assertEqual(ShiftExceptionLog.objects.count(), initial_log_count)
         self.assertFalse(WeighTicket.objects.filter(serial_number="ROLLBACK-001").exists())
+
+    def test_database_error_inside_savepoint_does_not_abort_ticket_transaction(self):
+        """
+        When shift resolution query suffers a DatabaseError (e.g. lock timeout, dead transaction),
+        the internal savepoint in record_weighing_shift cleanly isolates the failure.
+        The outer ticket transaction remains healthy and the ticket saves successfully.
+        """
+        ticket = WeighTicket(
+            serial_number="SAVEPOINT-001",
+            license_plate_display="34 س 345 - ایران 34",
+            first_weight=Decimal("19500.00"),
+            vehicle_type=self.v_type,
+            first_weight_operator=self.op1
+        )
+
+        with transaction.atomic():
+            with patch.object(ShiftResolutionService, "resolve_session_for_operator", side_effect=DatabaseError("simulated postgres lock timeout")):
+                session, is_out, reason, notes = ShiftResolutionService.record_weighing_shift(
+                    ticket, is_second_weight=False, operator=self.op1
+                )
+                self.assertIsNone(session)
+                self.assertTrue(is_out)
+                self.assertEqual(reason, ShiftExceptionLog.ReasonChoices.RESOLUTION_ERROR)
+
+            # Outer transaction MUST NOT be aborted: ticket save succeeds cleanly
+            ticket.save()
+
+        saved_ticket = WeighTicket.objects.get(serial_number="SAVEPOINT-001")
+        self.assertTrue(saved_ticket.first_weight_out_of_shift)
+        self.assertIsNone(saved_ticket.first_weight_shift_session)
+
+    @override_settings(ENABLE_SHIFT_MANAGEMENT=False)
+    def test_shift_feature_disabled_preserves_workshifts_sessions_and_assignments(self):
+        """
+        Disabling shift management via feature flag (ENABLE_SHIFT_MANAGEMENT=False):
+        - Does NOT deactivate WorkShift definitions
+        - Does NOT close active ShiftSessions
+        - Does NOT rewrite operator assignments
+        - Weighing proceeds normally with is_out_of_shift=False
+        - ShiftExceptionLog creation is skipped
+        - Re-enabling the flag immediately restores active shift resolution without data mutation
+        """
+        now = timezone.now()
+        today = now.date()
+        session1 = ShiftSession.objects.create(
+            shift=self.shift_morn, operational_date=today,
+            status=ShiftSessionStatus.ACTIVE, actual_start=now
+        )
+        asg1 = ShiftOperatorAssignment.objects.create(
+            session=session1, operator=self.op1,
+            status=ShiftAssignmentStatus.CHECKED_IN, check_in_time=now
+        )
+
+        # Session and assignment exist and are active
+        self.assertEqual(session1.status, ShiftSessionStatus.ACTIVE)
+        self.assertTrue(self.shift_morn.is_active)
+        self.assertEqual(asg1.status, ShiftAssignmentStatus.CHECKED_IN)
+
+        ticket = WeighTicket(
+            serial_number="FLAG-001",
+            license_plate_display="12 س 123 - ایران 12",
+            first_weight=Decimal("16000.00"),
+            vehicle_type=self.v_type,
+            first_weight_operator=self.op1
+        )
+
+        session, is_out, reason, notes = ShiftResolutionService.record_weighing_shift(
+            ticket, is_second_weight=False, operator=self.op1, dt=now
+        )
+        self.assertIsNone(session)
+        self.assertFalse(is_out)  # Not flagged as out-of-shift when feature is disabled
+        self.assertEqual(reason, "SHIFT_MANAGEMENT_DISABLED")
+
+        ticket.save()
+        self.assertFalse(ticket.first_weight_out_of_shift)
+        self.assertIsNone(ticket.first_weight_shift_session)
+
+        # Logging exception is safely skipped
+        exc = ShiftResolutionService.log_shift_exception(
+            ticket=ticket,
+            weighing_phase="FIRST",
+            operator=self.op1
+        )
+        self.assertIsNone(exc)
+
+        # Verify underlying structures are untouched
+        session1.refresh_from_db()
+        self.shift_morn.refresh_from_db()
+        asg1.refresh_from_db()
+        self.assertEqual(session1.status, ShiftSessionStatus.ACTIVE)
+        self.assertTrue(self.shift_morn.is_active)
+        self.assertEqual(asg1.status, ShiftAssignmentStatus.CHECKED_IN)
+
+        # Re-enabling feature immediately restores active shift resolution
+        with override_settings(ENABLE_SHIFT_MANAGEMENT=True):
+            ticket2 = WeighTicket(
+                serial_number="FLAG-002",
+                license_plate_display="12 س 124 - ایران 12",
+                first_weight=Decimal("17000.00"),
+                vehicle_type=self.v_type,
+                first_weight_operator=self.op1
+            )
+            session2, is_out2, _, _ = ShiftResolutionService.record_weighing_shift(
+                ticket2, is_second_weight=False, operator=self.op1, dt=now
+            )
+            self.assertEqual(session2, session1)
+            self.assertFalse(is_out2)
+            ticket2.save()
+            self.assertEqual(ticket2.first_weight_shift_session, session1)
+
+    def test_administrative_acknowledgment_preserves_evidence_and_records_audit(self):
+        """
+        Administrative acknowledgment marks supervisor review in ShiftExceptionLog
+        and records an entry in AuditLog, while leaving initial exception evidence completely intact.
+        """
+        ticket = WeighTicket.objects.create(
+            serial_number="ACK-TEST-001",
+            license_plate_display="88 س 888 - ایران 88",
+            first_weight=Decimal("18000.00"),
+            vehicle_type=self.v_type,
+            first_weight_out_of_shift=True
+        )
+        initial_time = timezone.now() - timedelta(hours=2)
+        exc = ShiftExceptionLog.objects.create(
+            ticket=ticket,
+            weighing_phase="FIRST",
+            operator=self.op1,
+            timestamp=initial_time,
+            reason=ShiftExceptionLog.ReasonChoices.NO_ACTIVE_SHIFT,
+            notes="Initial scale reading outside shift"
+        )
+
+        supervisor = User.objects.create_user(username="ack_supervisor", password="password123")
+        supervisor.profile.role = RoleChoices.WEIGHBRIDGE_MANAGER
+        supervisor.profile.save()
+
+        client = Client()
+        client.force_login(supervisor)
+        ack_url = reverse("shifts:exception_acknowledge", kwargs={"pk": exc.pk})
+        response = client.post(ack_url, {"acknowledgement_note": "بررسی شد: تاخیر در بازگشایی به دلیل تعمیر فیوز برق."})
+        self.assertEqual(response.status_code, 302)
+
+        exc.refresh_from_db()
+        # Verify initial evidence was NOT mutated
+        self.assertEqual(exc.ticket, ticket)
+        self.assertEqual(exc.weighing_phase, "FIRST")
+        self.assertEqual(exc.operator, self.op1)
+        self.assertEqual(exc.timestamp, initial_time)
+        self.assertEqual(exc.reason, ShiftExceptionLog.ReasonChoices.NO_ACTIVE_SHIFT)
+        self.assertEqual(exc.notes, "Initial scale reading outside shift")
+
+        # Verify acknowledgment fields are recorded
+        self.assertEqual(exc.acknowledged_by, supervisor)
+        self.assertIsNotNone(exc.acknowledged_at)
+        self.assertEqual(exc.acknowledgement_note, "بررسی شد: تاخیر در بازگشایی به دلیل تعمیر فیوز برق.")
+
+        # Verify formal AuditLog record
+        audit = AuditLog.objects.filter(
+            model_name="ShiftExceptionLog",
+            record_id=str(exc.pk),
+            action=AuditAction.DISCREPANCY_APPROVAL
+        ).first()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit.user, supervisor)
+        self.assertIn("بررسی شد", audit.reason)
+
+
+class ShiftConcurrencyAndHardeningTests(TransactionTestCase):
+    """
+    Multi-threaded PostgreSQL concurrency tests for exception logging and check-ins.
+    """
+    def setUp(self):
+        self.shift = WorkShift.objects.create(
+            name="شیفت همزمانی",
+            code="CONC-SHIFT-T",
+            start_time=time(8, 0),
+            end_time=time(16, 0)
+        )
+        self.session = ShiftSession.objects.create(
+            shift=self.shift,
+            operational_date=date(2026, 10, 27),
+            status=ShiftSessionStatus.ACTIVE
+        )
+        self.op = User.objects.create_user(username="conc_op_t", password="password123")
+        self.v_type = VehicleType.objects.create(name="تریلی همزمانی تستی", code="TR-CONC-T")
+        self.ticket = WeighTicket.objects.create(
+            serial_number="CONC-TICK-999",
+            license_plate_display="99 س 999 - ایران 99",
+            first_weight=Decimal("15000.00"),
+            vehicle_type=self.v_type,
+            first_weight_operator=self.op,
+            first_weight_out_of_shift=True
+        )
+
+    def test_concurrent_exception_logging_threads_safe(self):
+        """
+        Simultaneous threads calling ShiftResolutionService.log_shift_exception
+        for the same ticket and phase must never crash or create duplicate records.
+        Exactly 1 ShiftExceptionLog record must exist.
+        """
+        results = []
+        errors = []
+
+        def worker(idx):
+            try:
+                res = ShiftResolutionService.log_shift_exception(
+                    ticket=self.ticket,
+                    weighing_phase="FIRST",
+                    operator=self.op,
+                    reason=ShiftExceptionLog.ReasonChoices.NO_ACTIVE_SHIFT,
+                    notes=f"Concurrent thread attempt {idx}"
+                )
+                results.append(res)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(len(errors), 0, f"Thread errors encountered: {errors}")
+        self.assertEqual(len(results), 5)
+        # Exactly one unique record preserved in database
+        self.assertEqual(
+            ShiftExceptionLog.objects.filter(ticket=self.ticket, weighing_phase="FIRST").count(),
+            1
+        )
+
