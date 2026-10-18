@@ -115,6 +115,11 @@ class ShiftHandoverService:
         with transaction.atomic():
             locked_handover = ShiftHandover.objects.select_for_update().get(pk=handover.pk)
 
+            if locked_handover.status != ShiftHandoverStatus.DRAFT:
+                raise ValidationError(
+                    f"اسنپ‌شات تحویل شیفت در وضعیت «{locked_handover.get_status_display()}» تغییرناپذیر بوده و قابل بازنویسی مجدد نیست."
+                )
+
             # Clear previous draft items if re-capturing
             locked_handover.items.all().delete()
 

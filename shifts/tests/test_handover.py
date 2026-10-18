@@ -292,6 +292,23 @@ class ShiftHandoverServiceTests(TestCase):
         submitted.refresh_from_db()
         self.assertEqual(submitted.yard_vehicles_count, 2)
 
+    def test_04b_recapture_blocked_on_submitted_handover(self):
+        """
+        IMMUTABILITY INTEGRITY:
+        Attempting to call capture_operational_snapshot on a SUBMITTED or finalized handover
+        raises ValidationError, preventing overwrite of frozen snapshot items.
+        """
+        handover = ShiftHandoverService.initiate_handover(
+            outgoing_session=self.session_out,
+            operator=self.op_outgoing,
+            incoming_operator=self.op_incoming
+        )
+        submitted = ShiftHandoverService.submit_handover(handover, self.op_outgoing)
+
+        with self.assertRaises(ValidationError) as ctx:
+            ShiftHandoverService.capture_operational_snapshot(submitted, self.op_outgoing)
+        self.assertIn("تغییرناپذیر", str(ctx.exception))
+
     def test_05_submit_handover_transitions_and_audit(self):
         """Submit transitions DRAFT -> SUBMITTED and registers SHIFT_HANDOVER_SUBMIT audit record."""
         handover = ShiftHandoverService.initiate_handover(
