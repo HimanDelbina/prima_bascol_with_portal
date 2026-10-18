@@ -4,6 +4,9 @@ from shifts import views
 app_name = "shifts"
 
 urlpatterns = [
+    # Phase 4.3.2: Shift Management & Performance Dashboard
+    path("dashboard/", views.shift_dashboard, name="dashboard"),
+
     # WorkShift Schedule Management
     path("schedules/", views.shift_list, name="shift_list"),
     path("schedules/create/", views.shift_create, name="shift_create"),

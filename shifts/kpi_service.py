@@ -366,8 +366,11 @@ class ShiftKPIService:
             "completed_final_ton": completed_final_ton,
             "completed_loss_kg": completed_loss_kg,
             "completed_loss_ton": completed_loss_ton,
+            "inbound_net_kg": inbound_net_kg,
             "inbound_net_ton": inbound_net_ton,
+            "outbound_net_kg": outbound_net_kg,
             "outbound_net_ton": outbound_net_ton,
+            "internal_net_kg": internal_net_kg,
             "internal_net_ton": internal_net_ton,
 
             # Turnaround
@@ -422,6 +425,7 @@ class ShiftKPIService:
                     "second_weights": 0,
                     "solo_completed": 0,
                     "completed_net_kg": Decimal("0.00"),
+                    "shift_exceptions_count": 0,
                 }
             
             # Attendance interval evaluation
@@ -463,6 +467,7 @@ class ShiftKPIService:
                     "second_weights": 0,
                     "solo_completed": 0,
                     "completed_net_kg": Decimal("0.00"),
+                    "shift_exceptions_count": 0,
                 }
             operators_dict[uid]["first_weights"] += r["count"]
 
@@ -490,6 +495,7 @@ class ShiftKPIService:
                     "second_weights": 0,
                     "solo_completed": 0,
                     "completed_net_kg": Decimal("0.00"),
+                    "shift_exceptions_count": 0,
                 }
             operators_dict[uid]["second_weights"] += r["count"]
 
@@ -513,6 +519,17 @@ class ShiftKPIService:
             uid = r["second_weight_operator__id"]
             if uid in operators_dict:
                 operators_dict[uid]["completed_net_kg"] = r["total_net"] or Decimal("0.00")
+
+        # Query exceptions in this session per operator
+        session_exceptions_counts = ShiftExceptionLog.objects.filter(
+            Q(ticket__first_weight_shift_session=session) | Q(ticket__second_weight_shift_session=session),
+            operator__isnull=False
+        ).values("operator__id").annotate(count=Count("id"))
+
+        for r in session_exceptions_counts:
+            uid = r["operator__id"]
+            if uid in operators_dict:
+                operators_dict[uid]["shift_exceptions_count"] = r["count"]
 
         # Compile final operator records
         results = []
@@ -542,10 +559,102 @@ class ShiftKPIService:
                 "completed_net_kg": d["completed_net_kg"],
                 "completed_net_ton": cls.kg_to_ton(d["completed_net_kg"]),
                 "tasks_per_hour": tasks_per_hour,
+                "shift_exceptions_count": d.get("shift_exceptions_count", 0),
+                "raw_intervals": d["raw_intervals"],
             })
 
         results.sort(key=lambda x: (x["total_tasks"], x["completed_net_kg"]), reverse=True)
         return results
+
+    @classmethod
+    def calculate_period_operator_metrics(
+        cls,
+        sessions_kpi_list: List[Dict[str, Any]],
+        start_date: date,
+        end_date: date,
+        operator_id: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Aggregates operator performance metrics across a reporting period.
+        Accurately clips all attendance intervals to [start_date 00:00:00, end_date 23:59:59]
+        in the local timezone and merges them to avoid double counting across sessions.
+        """
+        tz = timezone.get_current_timezone()
+        period_start = timezone.make_aware(datetime.combine(start_date, time.min), tz)
+        period_end = timezone.make_aware(datetime.combine(end_date, time.max), tz)
+
+        operators_map: Dict[int, Dict[str, Any]] = {}
+
+        for session_kpi in sessions_kpi_list:
+            for op in session_kpi.get("operators", []):
+                uid = op["operator_id"]
+                if operator_id and uid != operator_id:
+                    continue
+
+                if uid not in operators_map:
+                    operators_map[uid] = {
+                        "operator_id": uid,
+                        "username": op["username"],
+                        "full_name": op["full_name"],
+                        "role": op["role"],
+                        "first_weights": 0,
+                        "second_weights": 0,
+                        "total_tasks": 0,
+                        "solo_completed": 0,
+                        "completed_net_kg": Decimal("0.00"),
+                        "shift_exceptions_count": 0,
+                        "raw_clipped_intervals": [],
+                    }
+
+                entry = operators_map[uid]
+                entry["first_weights"] += op["first_weights"]
+                entry["second_weights"] += op["second_weights"]
+                entry["total_tasks"] += op["total_tasks"]
+                entry["solo_completed"] += op["solo_completed"]
+                entry["completed_net_kg"] += op["completed_net_kg"]
+                entry["shift_exceptions_count"] += op.get("shift_exceptions_count", 0)
+
+                # Clip attendance intervals to period boundary
+                for s, e in op.get("raw_intervals", []):
+                    s_aware = s if timezone.is_aware(s) else timezone.make_aware(s, tz)
+                    e_aware = e if timezone.is_aware(e) else timezone.make_aware(e, tz)
+
+                    clip_s = max(s_aware, period_start)
+                    clip_e = min(e_aware, period_end)
+                    if clip_e > clip_s:
+                        entry["raw_clipped_intervals"].append((clip_s, clip_e))
+
+        # Finalize metrics with interval union
+        final_list = []
+        for uid, data in operators_map.items():
+            merged_iv = cls.merge_attendance_intervals(data["raw_clipped_intervals"])
+            total_seconds = sum((iv[1] - iv[0]).total_seconds() for iv in merged_iv)
+            attendance_hours = round(Decimal(str(total_seconds)) / Decimal("3600.0"), 2)
+
+            total_tasks = data["total_tasks"]
+            if attendance_hours > Decimal("0.00"):
+                tasks_per_hour = round(float(Decimal(str(total_tasks)) / attendance_hours), 1)
+            else:
+                tasks_per_hour = 0.0
+
+            final_list.append({
+                "operator_id": uid,
+                "username": data["username"],
+                "full_name": data["full_name"],
+                "role": data["role"],
+                "first_weights": data["first_weights"],
+                "second_weights": data["second_weights"],
+                "total_tasks": total_tasks,
+                "solo_completed": data["solo_completed"],
+                "completed_net_kg": data["completed_net_kg"],
+                "completed_net_ton": cls.kg_to_ton(data["completed_net_kg"]),
+                "attendance_hours": attendance_hours,
+                "tasks_per_hour": tasks_per_hour,
+                "shift_exceptions_count": data["shift_exceptions_count"],
+            })
+
+        final_list.sort(key=lambda x: (x["total_tasks"], x["completed_net_kg"]), reverse=True)
+        return final_list
 
     @classmethod
     def calculate_period_shift_kpis(
@@ -562,6 +671,11 @@ class ShiftKPIService:
         """
         if end_date is None:
             end_date = start_date
+
+        if start_date > end_date:
+            raise ValidationError("تاریخ شروع نمی‌تواند پس از تاریخ پایان باشد.")
+        if (end_date - start_date).days > 31:
+            raise ValidationError("حداکثر بازه زمانی قابل گزارش‌گیری ۳۱ روز می‌باشد.")
 
         sessions_qs = ShiftSession.objects.filter(
             operational_date__range=[start_date, end_date]
@@ -589,10 +703,14 @@ class ShiftKPIService:
 
         total_completed_net_kg = sum(s["completed_net_kg"] for s in sessions_kpi_list)
         total_completed_net_ton = cls.kg_to_ton(total_completed_net_kg)
-        total_completed_gross_ton = sum(s["completed_gross_ton"] for s in sessions_kpi_list)
-        total_completed_tare_ton = sum(s["completed_tare_ton"] for s in sessions_kpi_list)
-        total_inbound_net_ton = sum(s["inbound_net_ton"] for s in sessions_kpi_list)
-        total_outbound_net_ton = sum(s["outbound_net_ton"] for s in sessions_kpi_list)
+        total_completed_gross_kg = sum(s["completed_gross_kg"] for s in sessions_kpi_list)
+        total_completed_gross_ton = cls.kg_to_ton(total_completed_gross_kg)
+        total_completed_tare_kg = sum(s["completed_tare_kg"] for s in sessions_kpi_list)
+        total_completed_tare_ton = cls.kg_to_ton(total_completed_tare_kg)
+        total_inbound_net_kg = sum(s.get("inbound_net_kg", Decimal("0.00")) for s in sessions_kpi_list)
+        total_inbound_net_ton = cls.kg_to_ton(total_inbound_net_kg)
+        total_outbound_net_kg = sum(s.get("outbound_net_kg", Decimal("0.00")) for s in sessions_kpi_list)
+        total_outbound_net_ton = cls.kg_to_ton(total_outbound_net_kg)
 
         # Unattributed / Legacy tickets within this date range (Calendar date comparison)
         unattributed_first_qs = WeighTicket.objects.filter(
@@ -621,6 +739,14 @@ class ShiftKPIService:
         # Handover statistics in period
         handover_kpis = cls.calculate_handover_kpis(start_date=start_date, end_date=end_date)
 
+        # Aggregated operator statistics across the period with clipped attendance
+        period_operators = cls.calculate_period_operator_metrics(
+            sessions_kpi_list=sessions_kpi_list,
+            start_date=start_date,
+            end_date=end_date,
+            operator_id=operator_id,
+        )
+
         return {
             "period": {
                 "start_date": start_date,
@@ -639,12 +765,17 @@ class ShiftKPIService:
                 "solo_completed_count": total_solo_completed,
                 "completed_net_kg": total_completed_net_kg,
                 "completed_net_ton": total_completed_net_ton,
+                "completed_gross_kg": total_completed_gross_kg,
                 "completed_gross_ton": total_completed_gross_ton,
+                "completed_tare_kg": total_completed_tare_kg,
                 "completed_tare_ton": total_completed_tare_ton,
+                "inbound_net_kg": total_inbound_net_kg,
                 "inbound_net_ton": total_inbound_net_ton,
+                "outbound_net_kg": total_outbound_net_kg,
                 "outbound_net_ton": total_outbound_net_ton,
             },
             "sessions": sessions_kpi_list,
+            "operators": period_operators,
             "unattributed_legacy": unattributed_data,
             "handovers": handover_kpis,
         }
@@ -687,7 +818,7 @@ class ShiftKPIService:
             Q(status=ShiftHandoverStatus.DISPUTED) |
             Q(status=ShiftHandoverStatus.SUPERVISOR_RESOLVED) |
             Q(disputed_at__isnull=False)
-        ).count()
+        ).distinct().count()
 
         if submitted_count > 0:
             dispute_rate_pct = round((historically_disputed_count / submitted_count) * 100.0, 1)

@@ -1,0 +1,744 @@
+{% extends 'base.html' %}
+{% load bascol_tags %}
+
+{% block title %}داشبورد پایش عملکرد شیفت و اپراتورها{% endblock %}
+
+{% block extra_css %}
+<style>
+    .kpi-card {
+        border-radius: 10px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08) !important;
+    }
+    .metric-value {
+        font-size: 1.85rem;
+        font-weight: 700;
+        line-height: 1.1;
+        letter-spacing: -0.5px;
+    }
+    .metric-unit {
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    .badge-night {
+        background-color: #6366f1;
+        color: #fff;
+    }
+    .table-fixed-header thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+
+    <!-- Page Header & Action Bar -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <h3 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-speedometer2 text-primary me-2"></i>داشبورد عملکرد شیفت و اپراتورها
+                </h3>
+                {% if not shift_management_enabled %}
+                <span class="badge bg-warning text-dark fs-6">ماژول شیفت غیرفعال</span>
+                {% else %}
+                <span class="badge bg-success fs-6"><i class="bi bi-check-circle-fill me-1"></i>فعال و در حال ارزیابی</span>
+                {% endif %}
+            </div>
+            <p class="text-muted small mb-0">
+                پایش جامع شاخص‌های کلیدی عملکرد (KPIs)، وضعیت حضور و فعالیت اپراتورها، و فرآیند تحویل شیفت
+                <span class="text-primary fw-bold mx-1">({{ filters.start_date_jalali }}{% if filters.start_date_jalali != filters.end_date_jalali %} الی {{ filters.end_date_jalali }}{% endif %})</span>
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'shifts:session_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-calendar2-week me-1"></i>جلسات شیفت
+            </a>
+            <a href="{% url 'shifts:handover_list' %}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left-right me-1"></i>کارتابل تحویل
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter Panel -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+            <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="bi bi-funnel-fill text-primary"></i>
+                <span>فیلترهای گزارش‌گیری و بازه زمانی</span>
+            </div>
+            <div class="text-muted small">
+                <i class="bi bi-info-circle me-1"></i>حداکثر بازه مجاز: ۳۱ روز
+            </div>
+        </div>
+        <div class="card-body p-3">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-2 col-sm-6">
+                    <label class="form-label fw-bold small text-muted">از تاریخ عملیاتی (شمسی):</label>
+                    <input type="text" name="start_date" class="form-control pdate-picker" value="{{ filters.start_date_jalali }}" placeholder="1405/07/01" required>
+                </div>
+                <div class="col-md-2 col-sm-6">
+                    <label class="form-label fw-bold small text-muted">تا تاریخ عملیاتی (شمسی):</label>
+                    <input type="text" name="end_date" class="form-control pdate-picker" value="{{ filters.end_date_jalali }}" placeholder="1405/07/30" required>
+                </div>
+                <div class="col-md-2 col-sm-6">
+                    <label class="form-label fw-bold small text-muted">الگوی شیفت:</label>
+                    <select name="shift" class="form-select">
+                        <option value="">همه شیفت‌ها</option>
+                        {% for s in available_shifts %}
+                        <option value="{{ s.pk }}" {% if filters.shift_id == s.pk %}selected{% endif %}>{{ s.name }} ({{ s.code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 col-sm-6">
+                    <label class="form-label fw-bold small text-muted">اپراتور:</label>
+                    <select name="operator" class="form-select" {% if not is_supervisor %}disabled{% endif %}>
+                        {% if is_supervisor %}
+                        <option value="">همه اپراتورها</option>
+                        {% endif %}
+                        {% for op in available_operators %}
+                        <option value="{{ op.pk }}" {% if filters.operator_id == op.pk %}selected{% endif %}>
+                            {{ op.get_full_name|default:op.username }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if not is_supervisor %}
+                    <input type="hidden" name="operator" value="{{ request.user.pk }}">
+                    <div class="form-text text-primary small" style="font-size: 0.72rem;">نمایش اختصاصی عملکرد شما</div>
+                    {% endif %}
+                </div>
+                <div class="col-md-2 col-sm-6">
+                    <label class="form-label fw-bold small text-muted">وضعیت تحویل شیفت:</label>
+                    <select name="handover_status" class="form-select">
+                        <option value="">همه وضعیت‌ها</option>
+                        {% for code, label in handover_status_choices %}
+                        <option value="{{ code }}" {% if filters.handover_status == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 col-sm-6 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary fw-bold shadow-sm w-100">
+                        <i class="bi bi-filter me-1"></i>اعمال فیلتر
+                    </button>
+                    <a href="{% url 'shifts:dashboard' %}" class="btn btn-outline-secondary" title="بازنشانی به امروز">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+        <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+        <div><strong>خطا در اعتبارسنجی:</strong> {{ error }}</div>
+    </div>
+    {% endif %}
+
+    <!-- ========================================================= -->
+    <!-- SECTION A: KPI Summary Cards                              -->
+    <!-- ========================================================= -->
+    <div class="row g-3 mb-4">
+        <!-- 1. First Weighings -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card kpi-card shadow-sm border-0 bg-white p-3 h-100">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted fw-bold small">توزین مرحله اول</span>
+                    <span class="badge bg-primary-subtle text-primary p-2 rounded-circle">
+                        <i class="bi bi-1-circle fs-5"></i>
+                    </span>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <div class="metric-value text-dark">{{ summary.first_weighings_count|default:0|floatformat:0 }}</div>
+                    <span class="metric-unit text-muted">قبض</span>
+                </div>
+                <div class="text-muted small mt-2">
+                    <i class="bi bi-truck text-primary me-1"></i>خودروهای در انتظار وزن دوم در محوطه
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Second Weighings & Completed -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card kpi-card shadow-sm border-0 bg-white p-3 h-100">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted fw-bold small">قبوض نهایی و تکمیل‌شده</span>
+                    <span class="badge bg-success-subtle text-success p-2 rounded-circle">
+                        <i class="bi bi-check2-circle fs-5"></i>
+                    </span>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <div class="metric-value text-success">{{ summary.completed_tickets_count|default:0|floatformat:0 }}</div>
+                    <span class="metric-unit text-muted">قبض معتبر</span>
+                </div>
+                <div class="text-muted small mt-2 d-flex justify-content-between">
+                    <span>وزن دوم: <strong>{{ summary.second_weighings_count }}</strong></span>
+                    <span>مستقیم: <strong>{{ summary.direct_weighings_count }}</strong></span>
+                    {% if summary.cancelled_after_second_weight_count > 0 %}
+                    <span class="text-danger">ابطالی: <strong>{{ summary.cancelled_after_second_weight_count }}</strong></span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Current Effective Net Tonnage -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card kpi-card shadow-sm border-0 bg-white p-3 h-100">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted fw-bold small">خالص تناژ جاری معتبر</span>
+                    <span class="badge bg-info-subtle text-info p-2 rounded-circle">
+                        <i class="bi bi-box-seam fs-5"></i>
+                    </span>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <div class="metric-value text-dark">{{ summary.completed_net_ton|default:"0.00" }}</div>
+                    <span class="metric-unit text-muted">تُن خالص</span>
+                </div>
+                <div class="text-muted small mt-2 d-flex justify-content-between">
+                    <span>ورودی: <strong>{{ summary.inbound_net_ton }}</strong></span>
+                    <span>خروجی: <strong>{{ summary.outbound_net_ton }}</strong></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Turnaround Time -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card kpi-card shadow-sm border-0 bg-white p-3 h-100">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted fw-bold small">زمان چرخه در محوطه (Turnaround)</span>
+                    <span class="badge bg-warning-subtle text-warning p-2 rounded-circle">
+                        <i class="bi bi-stopwatch fs-5"></i>
+                    </span>
+                </div>
+                <div class="d-flex align-items-baseline gap-3">
+                    <div>
+                        <span class="text-muted small d-block">میانگین:</span>
+                        <span class="fs-4 fw-bold text-dark">{{ summary.turnaround.avg_minutes|default:0 }}</span>
+                        <span class="metric-unit text-muted">دقیقه</span>
+                    </div>
+                    <div class="border-start ps-3">
+                        <span class="text-muted small d-block">میانه (Median):</span>
+                        <span class="fs-4 fw-bold text-primary">{{ summary.turnaround.median_minutes|default:0 }}</span>
+                        <span class="metric-unit text-muted">دقیقه</span>
+                    </div>
+                </div>
+                <div class="text-muted small mt-2">
+                    صدک ۹۰: <strong>{{ summary.turnaround.p90_minutes|default:0 }}</strong> |
+                    صدک ۹۵: <strong>{{ summary.turnaround.p95_minutes|default:0 }}</strong> د
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Secondary Indicator Strip -->
+    <div class="row g-3 mb-4">
+        <!-- Physical Vehicles vs Tickets -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 bg-light">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small">خودروهای فیزیکی یکتا</div>
+                        <div class="fs-5 fw-bold text-dark">{{ summary.distinct_vehicles_completed }} پلاک مستقل</div>
+                    </div>
+                    <i class="bi bi-truck-front fs-3 text-secondary"></i>
+                </div>
+                <div class="text-muted small mt-1" style="font-size: 0.75rem;">
+                    تفکیک دقیق تردد فیزیکی ناوگان از تعداد صدور قبوض
+                </div>
+            </div>
+        </div>
+
+        <!-- Out-of-shift & Exceptions -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 bg-light">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small">رخدادهای خارج از شیفت</div>
+                        <div class="fs-5 fw-bold {% if summary.out_of_shift_events_count > 0 %}text-danger{% else %}text-success{% endif %}">
+                            {{ summary.out_of_shift_events_count }} رخداد
+                        </div>
+                    </div>
+                    <i class="bi bi-shield-exclamation fs-3 {% if summary.out_of_shift_events_count > 0 %}text-danger{% else %}text-success{% endif %}"></i>
+                </div>
+                <div class="text-muted small mt-1" style="font-size: 0.75rem;">
+                    توزین‌های انجام‌شده خارج از شیفت مقرر و ثبت استثنا
+                </div>
+            </div>
+        </div>
+
+        <!-- Handover Disputes -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 bg-light">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small">تحویل‌های مورد اختلاف</div>
+                        <div class="fs-5 fw-bold {% if handover_kpis.historically_disputed_count > 0 %}text-warning{% else %}text-success{% endif %}">
+                            {{ handover_kpis.historically_disputed_count|default:0 }} مورد
+                        </div>
+                    </div>
+                    <i class="bi bi-exclamation-octagon fs-3 text-warning"></i>
+                </div>
+                <div class="text-muted small mt-1" style="font-size: 0.75rem;">
+                    نرخ اختلاف: <strong>{{ handover_kpis.dispute_rate_pct|default:"0.0" }}٪</strong> از {{ handover_kpis.submitted_count|default:0 }} تحویل ارسالی
+                </div>
+            </div>
+        </div>
+
+        <!-- Checklist Compliance -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 bg-light">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small">رعایت چک‌لیست تحویل</div>
+                        <div class="fs-5 fw-bold text-success">{{ handover_kpis.checklist_compliance_pct|default:"0.0" }}٪</div>
+                    </div>
+                    <i class="bi bi-clipboard2-check fs-3 text-success"></i>
+                </div>
+                <div class="text-muted small mt-1" style="font-size: 0.75rem;">
+                    تایید صفر باسکول، کاغذ پرینتر، و نظافت میز کار
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- SECTION B: Shift Comparison Table                         -->
+    <!-- ========================================================= -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+            <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="bi bi-table text-primary"></i>
+                <span>جدول مقایسه‌ای جلسات و شیفت‌های کاری ({{ total_sessions_count }} جلسه)</span>
+            </div>
+            <span class="badge bg-light text-muted border">تاریخ عملیاتی بر اساس آغاز شیفت</span>
+        </div>
+        <div class="card-body p-0">
+            {% if sessions %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 text-center">
+                    <thead class="table-light small text-muted">
+                        <tr>
+                            <th class="text-start pe-3">نام شیفت / کد</th>
+                            <th>تاریخ عملیاتی</th>
+                            <th>ساعات مقرر</th>
+                            <th>اپراتورهای مسئول</th>
+                            <th>وزن اول</th>
+                            <th>وزن دوم</th>
+                            <th>قبوض معتبر</th>
+                            <th>تناژ خالص (تُن)</th>
+                            <th>میانگین چرخه</th>
+                            <th>وضعیت تحویل</th>
+                            <th>عملیات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in sessions %}
+                        <tr>
+                            <td class="text-start pe-3">
+                                <a href="{% url 'shifts:session_detail' s.session_id %}" class="fw-bold text-dark text-decoration-none">
+                                    {{ s.shift_name }}
+                                </a>
+                                {% if s.is_overnight %}
+                                <span class="badge badge-night ms-1" style="font-size: 0.65rem;" title="شیفت شبانه با عبور از نیمه‌شب">
+                                    <i class="bi bi-moon-stars-fill me-1"></i>شبانه
+                                </span>
+                                {% endif %}
+                                <div class="text-muted font-monospace small" style="font-size: 0.72rem;">#{{ s.session_id }} ({{ s.shift_code }})</div>
+                            </td>
+                            <td>
+                                <strong class="text-dark">{{ s.operational_date_jalali }}</strong>
+                                <div class="text-muted small" style="font-size: 0.7rem;">{{ s.operational_date }}</div>
+                            </td>
+                            <td class="small">
+                                {% if s.actual_start and s.actual_end %}
+                                <span class="badge bg-light text-dark border">
+                                    {{ s.actual_start|time:"H:i" }} الی {{ s.actual_end|time:"H:i" }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted">{{ s.actual_start|time:"H:i"|default:"در حال کار" }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if s.operators %}
+                                <div class="d-flex flex-wrap justify-content-center gap-1">
+                                    {% for op in s.operators %}
+                                    <span class="badge bg-light text-dark border small" style="font-size: 0.75rem;">
+                                        {{ op.full_name }}
+                                        {% if op.is_substitution %}
+                                        <i class="bi bi-arrow-repeat text-warning ms-1" title="جانشین"></i>
+                                        {% endif %}
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <span class="text-muted small">تعیین‌نشده</span>
+                                {% endif %}
+                            </td>
+                            <td class="fw-bold text-dark">{{ s.first_weighings_count }}</td>
+                            <td class="fw-bold text-dark">{{ s.second_weighings_count }}</td>
+                            <td>
+                                <span class="badge bg-success-subtle text-success fs-6 fw-bold">
+                                    {{ s.completed_tickets_count }}
+                                </span>
+                                {% if s.direct_weighings_count > 0 %}
+                                <div class="text-muted small" style="font-size: 0.7rem;">{{ s.direct_weighings_count }} مستقیم</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong class="text-primary">{{ s.completed_net_ton }}</strong>
+                                <div class="text-muted small" style="font-size: 0.7rem;">{{ s.completed_net_kg|floatformat:0 }} kg</div>
+                            </td>
+                            <td class="small">
+                                {{ s.turnaround.avg_minutes|default:"-" }} د
+                                {% if s.turnaround.median_minutes %}
+                                <span class="text-muted" style="font-size: 0.7rem;">(میانه: {{ s.turnaround.median_minutes }})</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if s.outgoing_handover.exists %}
+                                    {% if s.outgoing_handover.status == 'ACCEPTED' %}
+                                        {% if s.outgoing_handover.is_historically_disputed %}
+                                        <span class="badge bg-warning text-dark" title="پذیرفته‌شده پس از اختلاف قبلی">
+                                            <i class="bi bi-check-circle me-1"></i>پذیرفته (با سابقه اختلاف)
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle me-1"></i>پذیرفته‌شده
+                                        </span>
+                                        {% endif %}
+                                    {% elif s.outgoing_handover.status == 'SUPERVISOR_RESOLVED' %}
+                                    <span class="badge bg-info text-dark">
+                                        <i class="bi bi-shield-check me-1"></i>حل‌وفصل سرپرستی
+                                    </span>
+                                    {% elif s.outgoing_handover.status == 'DISPUTED' %}
+                                    <span class="badge bg-danger">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>دارای اختلاف
+                                    </span>
+                                    {% elif s.outgoing_handover.status == 'SUBMITTED' %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-clock me-1"></i>در انتظار پذیرش
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ s.outgoing_handover.status }}</span>
+                                    {% endif %}
+                                {% else %}
+                                <span class="text-muted small">بدون تحویل</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'shifts:session_detail' s.session_id %}" class="btn btn-sm btn-outline-primary" title="مشاهده جزئیات">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-inbox fs-1 text-secondary d-block mb-2"></i>
+                <div class="fw-bold">هیچ جلسه شیفتی در این بازه زمانی یافت نشد.</div>
+                <div class="small">می‌توانید با انتخاب بازه زمانی دیگر یا ایجاد شیفت جدید اقدام فرمایید.</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- SECTION C: Operator Activity & Productivity Table         -->
+    <!-- ========================================================= -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+            <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="bi bi-people-fill text-primary"></i>
+                <span>تحلیل فعالیت و شاخص‌های بهره‌وری اپراتورها</span>
+                {% if not is_supervisor %}
+                <span class="badge bg-primary-subtle text-primary ms-2 small">فقط آمار عملکرد شما</span>
+                {% endif %}
+            </div>
+            <div class="text-muted small">
+                <i class="bi bi-shield-check text-success me-1"></i>محاسبه ساعات با ادغام بازه‌های همپوشان (Interval Union)
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if operators %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 text-center">
+                    <thead class="table-light small text-muted">
+                        <tr>
+                            <th class="text-start pe-3">نام و نام خانوادگی اپراتور</th>
+                            <th>نقش</th>
+                            <th>توزین وزن اول</th>
+                            <th>توزین وزن دوم</th>
+                            <th>قبوض تک‌اپراتوری (Solo)</th>
+                            <th>مجموع تسک‌ها</th>
+                            <th>ساعات حضور معتبر</th>
+                            <th>بهره‌وری (تسک در ساعت)</th>
+                            <th>تناژ خالص ثبت‌شده (تُن)</th>
+                            <th>استثنائات شیفت</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for op in operators %}
+                        <tr {% if op.operator_id == request.user.id %}class="table-primary-subtle"{% endif %}>
+                            <td class="text-start pe-3">
+                                <div class="fw-bold text-dark">
+                                    {{ op.full_name }}
+                                    {% if op.operator_id == request.user.id %}
+                                    <span class="badge bg-primary text-white ms-1" style="font-size: 0.65rem;">شما</span>
+                                    {% endif %}
+                                </div>
+                                <div class="text-muted font-monospace small" style="font-size: 0.72rem;">@{{ op.username }}</div>
+                            </td>
+                            <td>
+                                {% if op.role == 'MAIN' %}
+                                <span class="badge bg-light text-dark border">اپراتور اصلی</span>
+                                {% elif op.role == 'SUBSTITUTE' %}
+                                <span class="badge bg-warning-subtle text-warning">جانشین</span>
+                                {% else %}
+                                <span class="badge bg-light text-secondary border">{{ op.role }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="fw-bold text-dark">{{ op.first_weights }}</td>
+                            <td class="fw-bold text-dark">{{ op.second_weights }}</td>
+                            <td class="text-muted">{{ op.solo_completed }}</td>
+                            <td>
+                                <span class="badge bg-secondary-subtle text-dark fw-bold fs-6">{{ op.total_tasks }}</span>
+                            </td>
+                            <td>
+                                <strong class="text-dark">{{ op.attendance_hours }}</strong>
+                                <span class="text-muted small">ساعت</span>
+                            </td>
+                            <td>
+                                <span class="fw-bold {% if op.tasks_per_hour >= 10 %}text-success{% elif op.tasks_per_hour >= 5 %}text-primary{% else %}text-muted{% endif %} fs-6">
+                                    {{ op.tasks_per_hour }}
+                                </span>
+                                <span class="text-muted small" style="font-size: 0.7rem;">تسک/ساعت</span>
+                            </td>
+                            <td>
+                                <strong class="text-primary">{{ op.completed_net_ton }}</strong>
+                                <span class="text-muted small" style="font-size: 0.7rem;">تُن</span>
+                            </td>
+                            <td>
+                                {% if op.shift_exceptions_count > 0 %}
+                                <span class="badge bg-danger-subtle text-danger fw-bold">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ op.shift_exceptions_count }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted small">۰</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4 text-muted">
+                <i class="bi bi-person-x fs-1 text-secondary d-block mb-1"></i>
+                <div>هیچ داده فعالیتی برای اپراتورها در این بازه زمانی یافت نشد.</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- SECTION D & E: Handover Overview & Yard Live Progression  -->
+    <!-- ========================================================= -->
+    <div class="row g-4 mb-4">
+        <!-- Section D: Handover Monitoring -->
+        <div class="col-lg-7">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+                    <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                        <i class="bi bi-arrow-left-right text-primary"></i>
+                        <span>فرآیند تحویل و تحول شیفت (Handover Monitoring)</span>
+                    </div>
+                    <a href="{% url 'shifts:handover_list' %}" class="small text-decoration-none text-primary">
+                        مشاهده همه <i class="bi bi-arrow-left"></i>
+                    </a>
+                </div>
+                <div class="card-body p-3">
+                    <!-- Status Count Badges -->
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <span class="badge bg-light text-dark border p-2">
+                            کل تحویل‌ها: <strong>{{ handover_kpis.total_handovers|default:0 }}</strong>
+                        </span>
+                        <span class="badge bg-success-subtle text-success p-2">
+                            پذیرفته‌شده: <strong>{{ handover_kpis.accepted_count|default:0 }}</strong>
+                        </span>
+                        <span class="badge bg-warning-subtle text-warning p-2">
+                            در انتظار: <strong>{{ handover_kpis.submitted_count|default:0 }}</strong>
+                        </span>
+                        <span class="badge bg-danger-subtle text-danger p-2">
+                            دارای اختلاف: <strong>{{ handover_kpis.historically_disputed_count|default:0 }}</strong>
+                        </span>
+                        <span class="badge bg-info-subtle text-info p-2">
+                            حل‌وفصل سرپرست: <strong>{{ handover_kpis.supervisor_resolved_count|default:0 }}</strong>
+                        </span>
+                        <span class="badge bg-secondary-subtle text-secondary p-2">
+                            میانگین تاخیر پذیرش: <strong>{{ handover_kpis.avg_acceptance_delay_minutes|default:0 }} د</strong>
+                        </span>
+                    </div>
+
+                    <!-- Recent Handover Records -->
+                    {% if handovers_list %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 text-center" style="font-size: 0.82rem;">
+                            <thead class="table-light text-muted">
+                                <tr>
+                                    <th class="text-start pe-2">شیفت</th>
+                                    <th>تحویل‌دهنده</th>
+                                    <th>تحویل‌گیرنده</th>
+                                    <th>زمان ارسال</th>
+                                    <th>وضعیت</th>
+                                    <th>اسنپ‌شات محوطه</th>
+                                    <th>اقدام</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for h in handovers_list|slice:":5" %}
+                                <tr>
+                                    <td class="text-start pe-2">
+                                        <a href="{% url 'shifts:handover_detail' h.id %}" class="fw-bold text-dark text-decoration-none">
+                                            #{{ h.id }} - {{ h.outgoing_shift_name }}
+                                        </a>
+                                        <div class="text-muted" style="font-size: 0.7rem;">{{ h.operational_date_jalali }}</div>
+                                    </td>
+                                    <td>{{ h.outgoing_operator_name }}</td>
+                                    <td>{{ h.incoming_operator_name }}</td>
+                                    <td>{{ h.submitted_at_jalali|default:"-" }}</td>
+                                    <td>
+                                        {% if h.status == 'ACCEPTED' %}
+                                        <span class="badge bg-success">پذیرفته‌شده</span>
+                                        {% elif h.status == 'SUPERVISOR_RESOLVED' %}
+                                        <span class="badge bg-info text-dark">حل‌وفصل سرپرست</span>
+                                        {% elif h.status == 'DISPUTED' %}
+                                        <span class="badge bg-danger">مورد اختلاف</span>
+                                        {% elif h.status == 'SUBMITTED' %}
+                                        <span class="badge bg-warning text-dark">در انتظار</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ h.status_display }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">
+                                            {{ h.yard_vehicles_count }} خودرو / {{ h.waiting_second_count }} قبض باز
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'shifts:handover_detail' h.id %}" class="btn btn-xs btn-outline-primary py-0 px-2">
+                                            جزئیات
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted small">
+                        هیچ رکورد تحویل شیفتی در این بازه زمانی ثبت نشده است.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Section E: Yard Progression & Snapshot Comparison -->
+        <div class="col-lg-5">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+                    <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                        <i class="bi bi-truck text-primary"></i>
+                        <span>وضعیت زنده محوطه کارخانه (Yard Progression)</span>
+                    </div>
+                    <span class="badge bg-primary-subtle text-primary small">زنده / بلادرنگ</span>
+                </div>
+                <div class="card-body p-3">
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <div class="border rounded p-3 text-center bg-light">
+                                <div class="text-muted small mb-1">قبوض باز در انتظار توزین دوم</div>
+                                <div class="fs-3 fw-bold text-warning">{{ yard.live_open_tickets_count }}</div>
+                                <div class="text-muted small" style="font-size: 0.72rem;">در حال حاضر در محوطه</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-3 text-center bg-light">
+                                <div class="text-muted small mb-1">خودروهای مستقل در محوطه</div>
+                                <div class="fs-3 fw-bold text-dark">{{ yard.live_distinct_vehicles_count }}</div>
+                                <div class="text-muted small" style="font-size: 0.72rem;">بر اساس پلاک‌های یکتا</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Snapshot comparison card -->
+                    <div class="card border bg-light-subtle p-3">
+                        <div class="fw-bold text-dark small mb-2 d-flex align-items-center gap-2">
+                            <i class="bi bi-camera-fill text-info"></i>
+                            <span>مقایسه با آخرین اسنپ‌شات تحویل شیفت</span>
+                        </div>
+                        {% if yard.has_snapshot %}
+                        <div class="d-flex justify-content-between align-items-center mb-1 small">
+                            <span class="text-muted">تحویل مرجع:</span>
+                            <a href="{% url 'shifts:handover_detail' yard.latest_handover_id %}" class="fw-bold text-decoration-none">
+                                تحویل شیفت #{{ yard.latest_handover_id }}
+                            </a>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-1 small">
+                            <span class="text-muted">تعداد خودرو در زمان تحویل:</span>
+                            <strong>{{ yard.latest_snapshot_yard_count }} خودرو</strong>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center small">
+                            <span class="text-muted">قبوض باز در زمان تحویل:</span>
+                            <strong>{{ yard.latest_snapshot_waiting_count }} قبض</strong>
+                        </div>
+                        {% else %}
+                        <div class="text-muted small">
+                            هیچ اسنپ‌شات تحویلی در بازه زمانی انتخابی ثبت نشده است.
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Quick Navigation -->
+                    <div class="mt-3 text-center">
+                        <a href="{% url 'weighbridge:trucks_in_yard' %}" class="btn btn-sm btn-outline-secondary w-100">
+                            <i class="bi bi-list-ul me-1"></i>مشاهده لیست کامل خودروهای داخل مجموعه
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legacy / Unattributed Notice -->
+    {% if unattributed_legacy.completed_tickets_count > 0 or unattributed_legacy.first_weighings_count > 0 %}
+    <div class="card border-warning shadow-sm mb-4 bg-warning-subtle">
+        <div class="card-body p-3 d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-3">
+                <i class="bi bi-exclamation-triangle-fill fs-3 text-warning"></i>
+                <div>
+                    <h6 class="fw-bold text-dark mb-0">قبوض ثبت‌شده موروثی یا خارج از ساختار شیفت (Unattributed Legacy)</h6>
+                    <div class="small text-muted">
+                        در بازه زمانی انتخابی، تعداد <strong>{{ unattributed_legacy.completed_tickets_count }}</strong> قبض تکمیل‌شده به تناژ <strong>{{ unattributed_legacy.completed_net_ton }} تُن</strong>
+                        و <strong>{{ unattributed_legacy.first_weighings_count }}</strong> وزن اول بدون جلسه شیفت ثبت شده‌اند (سوابق تاریخی یا زمان غیرفعال بودن ماژول).
+                    </div>
+                </div>
+            </div>
+            <a href="{% url 'weighbridge:ticket_list' %}?start_date={{ filters.start_date_jalali }}&end_date={{ filters.end_date_jalali }}" class="btn btn-sm btn-warning fw-bold text-dark text-nowrap">
+                مشاهده در قبوض
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

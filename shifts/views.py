@@ -23,6 +23,7 @@ from shifts.forms import (
 )
 from shifts.services import ShiftResolutionService
 from shifts.handover_service import ShiftHandoverService
+from shifts.dashboard_service import ShiftDashboardService
 from audit.services import log_audit
 from audit.models import AuditAction
 
@@ -856,3 +857,26 @@ def handover_cancel(request, pk):
         messages.error(request, f"خطا در لغو تحویل شیفت: {exc}")
 
     return redirect("shifts:handover_detail", pk=handover.pk)
+
+
+# ---------------------------------------------------------
+# Phase 4.3.2: Shift Management & Performance Dashboard
+# ---------------------------------------------------------
+
+@login_required
+def shift_dashboard(request):
+    """
+    Management & Operator Performance Dashboard (Phase 4.3.2).
+    Renders Persian RTL dashboard using ShiftKPIService as calculation source of truth.
+    """
+    has_access, is_supervisor = ShiftDashboardService.check_user_dashboard_access(request.user)
+    if not has_access:
+        messages.error(request, "شما مجوز دسترسی به داشبورد مدیریت شیفت را ندارید.")
+        return redirect("dashboard:index")
+
+    context = ShiftDashboardService.get_dashboard_data(request.user, request.GET)
+    if context.get("error"):
+        messages.error(request, context["error"])
+
+    context["title"] = "داشبورد مدیریت شیفت، عملکرد اپراتورها و تحویل"
+    return render(request, "shifts/dashboard.html", context)
