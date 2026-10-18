@@ -345,3 +345,217 @@ class ShiftExceptionLog(models.Model):
         self.acknowledged_at = timezone.now()
         self.acknowledgement_note = note
         self.save(update_fields=["acknowledged_by", "acknowledged_at", "acknowledgement_note"])
+
+
+# =========================================================
+# Phase 4.2: Formal Shift Handover & Accountability Models
+# =========================================================
+
+class ShiftHandoverStatus(models.TextChoices):
+    DRAFT = "DRAFT", "پیش‌نویس اولیه"
+    SUBMITTED = "SUBMITTED", "ارسال‌شده (در انتظار پذیرش تحویل‌گیرنده)"
+    ACCEPTED = "ACCEPTED", "پذیرفته‌شده و نهایی"
+    DISPUTED = "DISPUTED", "دارای مغایرت / اختلاف"
+    SUPERVISOR_RESOLVED = "SUPERVISOR_RESOLVED", "حل‌وفصل شده توسط سرپرست"
+    CANCELLED = "CANCELLED", "لغو شده"
+
+
+class ShiftHandoverItemCategory(models.TextChoices):
+    YARD_VEHICLE = "YARD_VEHICLE", "خودروی حاضر در محوطه"
+    WAITING_SECOND = "WAITING_SECOND", "قبض در انتظار وزن دوم"
+    PENDING_APPROVAL = "PENDING_APPROVAL", "مغایرت در انتظار تأیید سرپرست"
+    OVERDUE_ALERT = "OVERDUE_ALERT", "هشدار توقف طولانی در محوطه"
+    SHIFT_EXCEPTION = "SHIFT_EXCEPTION", "استثنای شیفت بررسی‌نشده"
+    EQUIPMENT_CHECK = "EQUIPMENT_CHECK", "چک‌لیست تجهیزات و ایستگاه کاری"
+    OPERATIONAL_NOTE = "OPERATIONAL_NOTE", "یادداشت عملیاتی"
+
+
+class ShiftHandover(models.Model):
+    """
+    Formal, auditable shift handover workflow recording the exact operational state
+    at the time responsibility is transferred between operators (Phase 4.2).
+    """
+    outgoing_session = models.ForeignKey(
+        ShiftSession,
+        on_delete=models.PROTECT,
+        related_name="outgoing_handovers",
+        verbose_name="جلسه شیفت تحویل‌دهنده"
+    )
+    incoming_session = models.ForeignKey(
+        ShiftSession,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="incoming_handovers",
+        verbose_name="جلسه شیفت تحویل‌گیرنده"
+    )
+    outgoing_operator = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="outgoing_shift_handovers",
+        verbose_name="اپراتور تحویل‌دهنده"
+    )
+    incoming_operator = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="incoming_shift_handovers",
+        verbose_name="اپراتور تحویل‌گیرنده"
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=ShiftHandoverStatus.choices,
+        default=ShiftHandoverStatus.DRAFT,
+        db_index=True,
+        verbose_name="وضعیت تحویل شیفت"
+    )
+
+    initiated_at = models.DateTimeField(default=timezone.now, verbose_name="زمان آغاز تحویل")
+    submitted_at = models.DateTimeField(null=True, blank=True, verbose_name="زمان ارسال تحویل‌دهنده")
+    accepted_at = models.DateTimeField(null=True, blank=True, verbose_name="زمان پذیرش تحویل‌گیرنده")
+    disputed_at = models.DateTimeField(null=True, blank=True, verbose_name="زمان ثبت اختلاف")
+
+    outgoing_notes = models.TextField(blank=True, verbose_name="یادداشت‌های اپراتور تحویل‌دهنده")
+    incoming_notes = models.TextField(blank=True, verbose_name="یادداشت‌های اپراتور تحویل‌گیرنده")
+    dispute_reason = models.TextField(blank=True, verbose_name="علت عدم تایید و اختلاف")
+
+    # Supervisor Intervention
+    supervisor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_shift_handovers",
+        verbose_name="سرپرست مداخله‌کننده"
+    )
+    supervisor_resolved_at = models.DateTimeField(null=True, blank=True, verbose_name="زمان مداخله سرپرست")
+    supervisor_resolution_notes = models.TextField(blank=True, verbose_name="دستورات و ملاحظات سرپرست")
+
+    # Equipment & Workstation Checklist Declarations
+    scale_zero_confirmed = models.BooleanField(default=False, verbose_name="تأیید صفر بودن باسکول")
+    printer_paper_confirmed = models.BooleanField(default=False, verbose_name="تأیید موجودی کاغذ پرینتر")
+    workstation_clean_confirmed = models.BooleanField(default=False, verbose_name="تأیید سلامت و پاکیزگی ایستگاه کاری")
+    physical_documents_confirmed = models.BooleanField(default=False, verbose_name="تأیید تبادل اسناد و قبوض فیزیکی")
+    checklist_notes = models.TextField(blank=True, verbose_name="توضیحات تکمیلی چک‌لیست")
+
+    # Operational Snapshot Metrics at Submission
+    snapshot_version = models.PositiveIntegerField(default=1, verbose_name="نسخه اسنپ‌شات")
+    yard_vehicles_count = models.PositiveIntegerField(default=0, verbose_name="تعداد خودروهای در محوطه")
+    waiting_second_count = models.PositiveIntegerField(default=0, verbose_name="تعداد قبوض در انتظار وزن دوم")
+    pending_discrepancies_count = models.PositiveIntegerField(default=0, verbose_name="تعداد مغایرت‌های در انتظار تایید")
+    overdue_waiting_count = models.PositiveIntegerField(default=0, verbose_name="تعداد خودروهای دارای تاخیر غیرمجاز")
+    unresolved_exceptions_count = models.PositiveIntegerField(default=0, verbose_name="تعداد استثنائات بدون بررسی شیفت")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ایجاد")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="تاریخ بروزرسانی")
+
+    class Meta:
+        verbose_name = "تحویل و تحول شیفت"
+        verbose_name_plural = "تحویل و تحول‌های شیفت"
+        ordering = ["-initiated_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["outgoing_session"],
+                condition=models.Q(status__in=[
+                    ShiftHandoverStatus.DRAFT,
+                    ShiftHandoverStatus.SUBMITTED,
+                    ShiftHandoverStatus.DISPUTED
+                ]),
+                name="unique_active_handover_per_outgoing_session"
+            )
+        ]
+
+    def __str__(self):
+        return f"تحویل شیفت #{self.pk} - {self.outgoing_session} ({self.get_status_display()})"
+
+    def clean(self):
+        super().clean()
+        if self.outgoing_operator and self.incoming_operator and self.outgoing_operator == self.incoming_operator:
+            if self.status in [ShiftHandoverStatus.ACCEPTED, ShiftHandoverStatus.DISPUTED]:
+                raise ValidationError("اپراتور تحویل‌دهنده و تحویل‌گیرنده نمی‌توانند یکسان باشند (تفکیک وظایف الزامی است).")
+
+    @property
+    def is_finalized(self):
+        return self.status in [
+            ShiftHandoverStatus.ACCEPTED,
+            ShiftHandoverStatus.SUPERVISOR_RESOLVED,
+            ShiftHandoverStatus.CANCELLED
+        ]
+
+    @property
+    def can_be_accepted(self):
+        return self.status in [ShiftHandoverStatus.SUBMITTED, ShiftHandoverStatus.DISPUTED]
+
+
+class ShiftHandoverItem(models.Model):
+    """
+    Granular, immutable snapshot record captured at the moment of shift handover submission.
+    Preserves historical operational state even if tickets later change weights, statuses, or revisions.
+    """
+    handover = models.ForeignKey(
+        ShiftHandover,
+        on_delete=models.CASCADE,
+        related_name="items",
+        verbose_name="تحویل شیفت مربوطه"
+    )
+    category = models.CharField(
+        max_length=40,
+        choices=ShiftHandoverItemCategory.choices,
+        db_index=True,
+        verbose_name="دسته‌بندی قلم اسنپ‌شات"
+    )
+    ticket = models.ForeignKey(
+        "weighbridge.WeighTicket",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="handover_items",
+        verbose_name="قبض مرتبط",
+        help_text="حفظ سوابق قلم تحویل؛ حذف فیزیکی قبض دارای سابقه اسنپ‌شات مسدود است."
+    )
+    discrepancy_approval = models.ForeignKey(
+        "monitoring.DiscrepancyApproval",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="handover_items",
+        verbose_name="مجوز مغایرت مرتبط"
+    )
+    monitoring_alert = models.ForeignKey(
+        "monitoring.MonitoringAlert",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="handover_items",
+        verbose_name="هشدار پایش مرتبط"
+    )
+    shift_exception = models.ForeignKey(
+        "shifts.ShiftExceptionLog",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="handover_items",
+        verbose_name="استثنای شیفت مرتبط"
+    )
+    item_identifier = models.CharField(max_length=100, db_index=True, verbose_name="شناسه مرجع")
+    item_title = models.CharField(max_length=255, verbose_name="عنوان قلم")
+    source_status = models.CharField(max_length=50, blank=True, verbose_name="وضعیت منبع هنگام ثبت")
+    source_timestamp = models.DateTimeField(null=True, blank=True, verbose_name="زمان منبع")
+    details = models.JSONField(default=dict, blank=True, verbose_name="جزییات کامل منبع در لحظه اسنپ‌شات")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="زمان ثبت")
+
+    class Meta:
+        verbose_name = "قلم اسنپ‌شات تحویل شیفت"
+        verbose_name_plural = "اقلام اسنپ‌شات تحویل شیفت"
+        ordering = ["category", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["handover", "category", "item_identifier"],
+                name="unique_item_per_handover_category_identifier"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.get_category_display()}: {self.item_title} ({self.handover})"
+

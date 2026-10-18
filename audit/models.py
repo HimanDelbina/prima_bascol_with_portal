@@ -19,6 +19,10 @@ class AuditAction(models.TextChoices):
     REVISION_WITHDRAW = "revision_withdraw", "انصراف از بازنگری"
     LOGIN = "login", "ورود به سامانه"
     LOGOUT = "logout", "خروج از سامانه"
+    SHIFT_HANDOVER_SUBMIT = "shift_handover_submit", "ارسال تحویل شیفت"
+    SHIFT_HANDOVER_ACCEPT = "shift_handover_accept", "پذیرش تحویل شیفت"
+    SHIFT_HANDOVER_DISPUTE = "shift_handover_dispute", "ثبت اختلاف تحویل شیفت"
+    SHIFT_HANDOVER_RESOLVE = "shift_handover_resolve", "حل‌وفصل اختلاف تحویل شیفت"
 
 class AuditLog(models.Model):
     user = models.ForeignKey(

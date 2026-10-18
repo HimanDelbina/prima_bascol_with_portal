@@ -96,6 +96,14 @@ class UserProfile(models.Model):
         return self.is_admin_or_manager
 
     @property
+    def can_initiate_handover(self):
+        return self.can_operate_shift
+
+    @property
+    def can_resolve_handover_dispute(self):
+        return self.can_manage_shifts
+
+    @property
     def can_edit_completed_ticket(self):
         return self.user.is_superuser or self.role in [
             RoleChoices.SUPER_ADMIN,

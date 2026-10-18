@@ -26,6 +26,16 @@ urlpatterns = [
     path("exceptions/", views.exception_list, name="exception_list"),
     path("exceptions/<int:pk>/acknowledge/", views.exception_acknowledge, name="exception_acknowledge"),
 
+    # Phase 4.2: Formal Shift Handover
+    path("handovers/", views.handover_list, name="handover_list"),
+    path("handovers/initiate/<int:session_pk>/", views.handover_initiate, name="handover_initiate"),
+    path("handovers/<int:pk>/", views.handover_detail, name="handover_detail"),
+    path("handovers/<int:pk>/submit/", views.handover_submit, name="handover_submit"),
+    path("handovers/<int:pk>/accept/", views.handover_accept, name="handover_accept"),
+    path("handovers/<int:pk>/dispute/", views.handover_dispute, name="handover_dispute"),
+    path("handovers/<int:pk>/resolve/", views.handover_resolve, name="handover_resolve"),
+    path("handovers/<int:pk>/cancel/", views.handover_cancel, name="handover_cancel"),
+
     # Status API
     path("api/current-status/", views.current_shift_status, name="current_shift_status"),
 ]

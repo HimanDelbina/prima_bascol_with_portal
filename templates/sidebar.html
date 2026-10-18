@@ -76,6 +76,13 @@
             </a>
         </li>
 
+        <li>
+            <a href="{% url 'shifts:handover_list' %}" class="sidebar-link {% if request.resolver_match.app_name == 'shifts' and 'handover' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="bi bi-arrow-left-right text-success"></i>
+                <span>تحویل و تحول شیفت</span>
+            </a>
+        </li>
+
         {% if user.is_superuser or user.profile.can_manage_shifts %}
         <li>
             <a href="{% url 'shifts:shift_list' %}" class="sidebar-link {% if request.resolver_match.app_name == 'shifts' and 'shift' in request.resolver_match.url_name %}active{% endif %}">

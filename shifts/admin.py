@@ -1,6 +1,7 @@
 from django.contrib import admin
 from shifts.models import (
-    WorkShift, ShiftSession, ShiftOperatorAssignment, ShiftExceptionLog
+    WorkShift, ShiftSession, ShiftOperatorAssignment, ShiftExceptionLog,
+    ShiftHandover, ShiftHandoverItem
 )
 
 
@@ -9,6 +10,43 @@ class ShiftOperatorAssignmentInline(admin.TabularInline):
     extra = 0
     fields = ["operator", "role", "status", "check_in_time", "check_out_time", "is_substitution"]
     readonly_fields = ["check_in_time", "check_out_time"]
+
+
+class ShiftHandoverItemInline(admin.TabularInline):
+    model = ShiftHandoverItem
+    extra = 0
+    fields = ["category", "item_identifier", "item_title", "source_status", "source_timestamp", "created_at"]
+    readonly_fields = ["category", "item_identifier", "item_title", "source_status", "source_timestamp", "created_at"]
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ShiftHandover)
+class ShiftHandoverAdmin(admin.ModelAdmin):
+    list_display = [
+        "id", "outgoing_session", "outgoing_operator", "incoming_operator",
+        "status", "initiated_at", "submitted_at", "accepted_at",
+        "yard_vehicles_count", "pending_discrepancies_count"
+    ]
+    list_filter = ["status", "outgoing_session__shift", "initiated_at"]
+    search_fields = [
+        "outgoing_operator__username", "incoming_operator__username",
+        "outgoing_notes", "incoming_notes", "dispute_reason"
+    ]
+    readonly_fields = [
+        "initiated_at", "submitted_at", "accepted_at", "disputed_at",
+        "supervisor_resolved_at", "snapshot_version",
+        "yard_vehicles_count", "waiting_second_count", "pending_discrepancies_count",
+        "overdue_waiting_count", "unresolved_exceptions_count",
+        "created_at", "updated_at"
+    ]
+    inlines = [ShiftHandoverItemInline]
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.is_finalized:
+            return False
+        return super().has_delete_permission(request, obj)
 
 
 @admin.register(WorkShift)

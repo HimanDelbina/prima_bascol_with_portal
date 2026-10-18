@@ -188,3 +188,128 @@ class ShiftExceptionAcknowledgeForm(forms.Form):
             "placeholder": "ملاحظات سرپرست در خصوص ثبت توزین خارج از شیفت..."
         })
     )
+
+
+# ---------------------------------------------------------
+# Phase 4.2 Shift Handover Forms
+# ---------------------------------------------------------
+
+class ShiftHandoverInitiateForm(forms.Form):
+    incoming_operator = forms.ModelChoiceField(
+        label="اپراتور تحویل‌گیرنده (پیشنهادی)",
+        queryset=User.objects.none(),
+        required=False,
+        widget=forms.Select(attrs={"class": "form-select"})
+    )
+    incoming_session = forms.ModelChoiceField(
+        label="جلسه شیفت بعدی (اختیاری)",
+        queryset=ShiftSession.objects.none(),
+        required=False,
+        widget=forms.Select(attrs={"class": "form-select"})
+    )
+    scale_zero_confirmed = forms.BooleanField(
+        label="تأیید صفر بودن باسکول و حسگرها (اعلام اپراتور)",
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"})
+    )
+    printer_paper_confirmed = forms.BooleanField(
+        label="تأیید موجودی کاغذ پرینتر و بارکدخوان (اعلام اپراتور)",
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"})
+    )
+    workstation_clean_confirmed = forms.BooleanField(
+        label="تأیید سلامت و پاکیزگی ایستگاه کاری و سیستم توزین",
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"})
+    )
+    physical_documents_confirmed = forms.BooleanField(
+        label="تأیید تبادل اسناد فیزیکی، قبوض چاپ‌شده و ژتون‌ها",
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"})
+    )
+    checklist_notes = forms.CharField(
+        label="توضیحات تکمیلی چک‌لیست اقلام و تجهیزات",
+        required=False,
+        widget=forms.Textarea(attrs={
+            "class": "form-control", "rows": 2,
+            "placeholder": "ملاحظات تجهیزاتی، وضعیت فیزیکی باسکول..."
+        })
+    )
+    outgoing_notes = forms.CharField(
+        label="یادداشت‌های عملیاتی اپراتور تحویل‌دهنده",
+        required=False,
+        widget=forms.Textarea(attrs={
+            "class": "form-control", "rows": 3,
+            "placeholder": "گزارش وضعیت شیفت، موارد نیازمند پیگیری، شرایط محوطه..."
+        })
+    )
+
+    def __init__(self, *args, current_operator=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs_users = User.objects.filter(
+            is_active=True,
+            profile__role__in=[
+                "super_admin", "system_admin", "weighbridge_manager",
+                "weighbridge_operator", "factory_manager"
+            ]
+        )
+        if current_operator:
+            qs_users = qs_users.exclude(pk=current_operator.pk)
+        self.fields["incoming_operator"].queryset = qs_users.select_related("profile").order_by("first_name", "username")
+
+        # Active or scheduled sessions for incoming session selection
+        self.fields["incoming_session"].queryset = ShiftSession.objects.filter(
+            status__in=["ACTIVE", "SCHEDULED"]
+        ).select_related("shift").order_by("-operational_date")
+
+
+class ShiftHandoverAcceptForm(forms.Form):
+    incoming_notes = forms.CharField(
+        label="یادداشت‌های تکمیلی اپراتور تحویل‌گیرنده",
+        required=False,
+        widget=forms.Textarea(attrs={
+            "class": "form-control", "rows": 3,
+            "placeholder": "ملاحظات پذیرش شیفت، تایید صحت اقلام محوطه و اسناد..."
+        })
+    )
+
+
+class ShiftHandoverDisputeForm(forms.Form):
+    dispute_reason = forms.CharField(
+        label="شرح کامل مغایرت یا اختلاف در تحویل شیفت",
+        required=True,
+        min_length=5,
+        widget=forms.Textarea(attrs={
+            "class": "form-control is-invalid", "rows": 4,
+            "placeholder": "دلایل موجه عدم پذیرش (مثال: عدم تطابق خودرو در محوطه، نقص اسناد، خرابی پرینتر)..."
+        })
+    )
+    incoming_notes = forms.CharField(
+        label="توضیحات تکمیلی",
+        required=False,
+        widget=forms.Textarea(attrs={
+            "class": "form-control", "rows": 2,
+            "placeholder": "سایر ملاحظات..."
+        })
+    )
+
+
+class ShiftHandoverResolveForm(forms.Form):
+    ACTION_CHOICES = [
+        ("RESOLVE", "حل اختلاف و تأیید نهایی تحویل شیفت (SUPERVISOR_RESOLVED)"),
+        ("CANCEL", "لغو فرآیند تحویل شیفت (CANCELLED)"),
+    ]
+    action = forms.ChoiceField(
+        label="تصمیم مدیریتی سرپرست",
+        choices=ACTION_CHOICES,
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"})
+    )
+    resolution_notes = forms.CharField(
+        label="دستورات، بررسی و ملاحظات سرپرست",
+        required=True,
+        min_length=5,
+        widget=forms.Textarea(attrs={
+            "class": "form-control", "rows": 4,
+            "placeholder": "دستورات مدیریتی، راستی‌آزمایی فیزیکی محوطه و تعیین تکلیف نهایی تحویل شیفت..."
+        })
+    )

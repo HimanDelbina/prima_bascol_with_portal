@@ -33,6 +33,16 @@
             <i class="bi bi-arrow-right me-1"></i>لیست جلسات
         </a>
         {% if session.status == 'ACTIVE' %}
+            {% if active_handover %}
+            <a href="{% url 'shifts:handover_detail' active_handover.pk %}" class="btn btn-warning fw-bold">
+                <i class="bi bi-arrow-left-right me-1"></i>تحویل شیفت در جریان (#{{ active_handover.pk }})
+            </a>
+            {% elif is_checked_in or can_manage %}
+            <a href="{% url 'shifts:handover_initiate' session.pk %}" class="btn btn-outline-primary fw-bold">
+                <i class="bi bi-arrow-left-right me-1"></i>تحویل رسمی شیفت
+            </a>
+            {% endif %}
+
             {% if not is_checked_in %}
             <a href="{% url 'shifts:operator_check_in' session.pk %}" class="btn btn-success fw-bold">
                 <i class="bi bi-person-check-fill me-1"></i>ثبت ورود من به شیفت
@@ -49,6 +59,12 @@
             </a>
             <a href="{% url 'shifts:session_close' session.pk %}" class="btn btn-danger fw-bold shadow-sm">
                 <i class="bi bi-stop-circle me-1"></i>بستن رسمی شیفت
+            </a>
+            {% endif %}
+        {% else %}
+            {% if last_handover %}
+            <a href="{% url 'shifts:handover_detail' last_handover.pk %}" class="btn btn-outline-info fw-bold">
+                <i class="bi bi-file-earmark-text me-1"></i>سند تحویل شیفت (#{{ last_handover.pk }})
             </a>
             {% endif %}
         {% endif %}
