@@ -737,7 +737,11 @@ class ShiftKPIService:
         }
 
         # Handover statistics in period
-        handover_kpis = cls.calculate_handover_kpis(start_date=start_date, end_date=end_date)
+        handover_kpis = cls.calculate_handover_kpis(
+            start_date=start_date,
+            end_date=end_date,
+            operator_id=operator_id,
+        )
 
         # Aggregated operator statistics across the period with clipped attendance
         period_operators = cls.calculate_period_operator_metrics(
@@ -785,10 +789,12 @@ class ShiftKPIService:
         cls,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        operator_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Authoritative statistics on formal shift handovers and supervisor interventions.
         Accurately counts historically disputed handovers (even if resolved later).
+        Optionally scopes to a specific operator (outgoing or incoming).
         """
         qs = ShiftHandover.objects.all()
         if start_date and end_date:
@@ -797,6 +803,9 @@ class ShiftKPIService:
             qs = qs.filter(outgoing_session__operational_date__gte=start_date)
         elif end_date:
             qs = qs.filter(outgoing_session__operational_date__lte=end_date)
+
+        if operator_id:
+            qs = qs.filter(Q(outgoing_operator_id=operator_id) | Q(incoming_operator_id=operator_id))
 
         total_handovers = qs.count()
         draft_count = qs.filter(status=ShiftHandoverStatus.DRAFT).count()

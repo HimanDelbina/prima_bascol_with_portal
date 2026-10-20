@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from django.http import JsonResponse, HttpResponseForbidden
+from django.http import JsonResponse, HttpResponseForbidden, HttpResponseBadRequest
 from django.contrib import messages
 from django.utils import timezone
 from django.core.paginator import Paginator
@@ -672,6 +672,10 @@ def handover_detail(request, pk):
                     status__in=[ShiftAssignmentStatus.ASSIGNED, ShiftAssignmentStatus.CHECKED_IN]
                 ).exists()
 
+    is_participant = is_outgoing or (request.user == handover.incoming_operator)
+    if not (is_supervisor or is_participant or can_accept_or_dispute):
+        raise PermissionDenied("اپراتورها تنها مجاز به مشاهده اسناد تحویل مربوط به خود می‌باشند.")
+
     can_resolve = is_supervisor and not is_outgoing and (handover.status in [ShiftHandoverStatus.DISPUTED, ShiftHandoverStatus.SUBMITTED])
     can_substitute = is_supervisor and not is_outgoing and not handover.is_finalized
 
@@ -899,11 +903,14 @@ def shift_dashboard_export_excel(request):
         raise PermissionDenied("شما مجوز دسترسی به خروجی اکسل عملکرد شیفت را ندارید.")
 
     client_ip = extract_client_ip(request)
-    return ShiftExportService.export_shift_performance_excel(
-        user=request.user,
-        params=request.GET,
-        client_ip=client_ip
-    )
+    try:
+        return ShiftExportService.export_shift_performance_excel(
+            user=request.user,
+            params=request.GET,
+            client_ip=client_ip
+        )
+    except ValidationError as exc:
+        return HttpResponseBadRequest(str(exc.message if hasattr(exc, "message") else exc))
 
 
 @login_required
@@ -916,11 +923,14 @@ def shift_dashboard_export_pdf(request):
         raise PermissionDenied("شما مجوز دریافت گزارش PDF عملکرد شیفت را ندارید.")
 
     client_ip = extract_client_ip(request)
-    return ShiftExportService.export_management_summary_pdf(
-        user=request.user,
-        params=request.GET,
-        client_ip=client_ip
-    )
+    try:
+        return ShiftExportService.export_management_summary_pdf(
+            user=request.user,
+            params=request.GET,
+            client_ip=client_ip
+        )
+    except ValidationError as exc:
+        return HttpResponseBadRequest(str(exc.message if hasattr(exc, "message") else exc))
 
 
 @login_required
@@ -930,9 +940,12 @@ def shift_handover_export_pdf(request, pk):
     with checklist, frozen snapshot items, and signature blocks.
     """
     client_ip = extract_client_ip(request)
-    return ShiftExportService.export_formal_handover_pdf(
-        user=request.user,
-        handover_id=pk,
-        client_ip=client_ip
-    )
+    try:
+        return ShiftExportService.export_formal_handover_pdf(
+            user=request.user,
+            handover_id=pk,
+            client_ip=client_ip
+        )
+    except ValidationError as exc:
+        return HttpResponseBadRequest(str(exc.message if hasattr(exc, "message") else exc))
 

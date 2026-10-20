@@ -62,6 +62,10 @@ from shifts.dashboard_service import ShiftDashboardService
 from weighbridge.models import WeighTicket, TicketStatus
 
 
+import unicodedata
+from reportlab.pdfgen import canvas
+
+
 # -----------------------------------------------------------------------------
 # Security & Helper Utilities
 # -----------------------------------------------------------------------------
@@ -69,14 +73,27 @@ from weighbridge.models import WeighTicket, TicketStatus
 def sanitize_formula_injection(val: Any) -> Any:
     """
     Prevents spreadsheet formula injection (CSV/Excel DDE attacks)
-    by prepending a single quote to strings starting with '=', '+', '-', or '@'.
+    by prepending a single quote to strings starting with '=', '+', '-', '@', '|', or '%'.
+    Strips leading whitespace, tabs, newlines, carriage returns,
+    and Unicode control/format characters (categories C* and Z*)
+    before checking for formula trigger characters.
+    Ensures untrusted values are stored explicitly as text while preserving legitimate numeric values.
     """
     if val is None:
         return ""
+    if isinstance(val, (int, float, Decimal)):
+        return val
     if isinstance(val, str):
-        stripped = val.lstrip()
-        if stripped.startswith(("=", "+", "-", "@")):
+        idx = 0
+        while idx < len(val):
+            ch = val[idx]
+            if ch.isspace() or unicodedata.category(ch).startswith(('C', 'Z')):
+                idx += 1
+            else:
+                break
+        if idx < len(val) and val[idx] in ('=', '+', '-', '@', '|', '%'):
             return "'" + val
+        return val
     return val
 
 
@@ -132,7 +149,41 @@ def get_or_register_vazirmatn_font() -> Tuple[str, str]:
             except Exception:
                 continue
 
-    return "Helvetica", "Helvetica-Bold"
+    raise RuntimeError("فونت‌های محلی وزیرمتن یا فونت‌های فارسی سیستم‌عامل جهت تولید PDF یافت نشدند.")
+
+
+class NumberedCanvas(canvas.Canvas):
+    """
+    Two-pass canvas to dynamically compute total page count and draw
+    consistent Persian RTL footers and page numbers on every PDF page.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        num_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.draw_footer(num_pages)
+            super().showPage()
+        super().save()
+
+    def draw_footer(self, page_count):
+        self.saveState()
+        font_name, _ = get_or_register_vazirmatn_font()
+        self.setFont(font_name, 7)
+        self.setFillColor(colors.HexColor('#64748B'))
+        page_text = shape_persian(f"صفحه {self._pageNumber} از {page_count}")
+        # Draw on the left in Persian RTL document convention
+        self.drawString(25, 12, page_text)
+        confidential_text = shape_persian("سامانه اتوماسیون صنعتی باسکول پریما — سند رسمی")
+        self.drawRightString(self._pagesize[0] - 25, 12, confidential_text)
+        self.restoreState()
 
 
 # -----------------------------------------------------------------------------
@@ -202,7 +253,10 @@ class ShiftExportService:
         ws1.sheet_view.rightToLeft = True
 
         ws1.merge_cells("A1:F1")
-        ws1["A1"] = f"{company_name} — گزارش جامع عملکرد شیفت‌های کاری"
+        if is_supervisor:
+            ws1["A1"] = f"{company_name} — گزارش جامع عملکرد شیفت‌های کاری"
+        else:
+            ws1["A1"] = f"{company_name} — کارنامه اختصاصی عملکرد اپراتور"
         ws1["A1"].font = font_title
         ws1["A1"].alignment = align_center
 
@@ -210,6 +264,7 @@ class ShiftExportService:
         ws1["A2"] = (
             f"بازه عملیاتی: {filters['start_date_jalali']} الی {filters['end_date_jalali']} | "
             f"تاریخ تهیه: {get_today_jalali()} | کاربر: {user.get_full_name() or user.username}"
+            + (" (کارنامه فردی اپراتور)" if not is_supervisor else " (مدیریت/سرپرست)")
         )
         ws1["A2"].font = font_note
         ws1["A2"].alignment = align_center
@@ -224,23 +279,42 @@ class ShiftExportService:
             cell.alignment = align_center
             cell.border = cell_border
 
-        kpi_rows = [
-            (1, "تعداد جلسات شیفت در بازه", data["total_sessions_count"], "جلسه", "جلسات شیفت فعال یا خاتمه‌یافته"),
-            (2, "توزین مرحله اول", summary["first_weighings_count"], "قبض", "ورود و ثبت وزن اولیه ناوگان"),
-            (3, "توزین مرحله دوم", summary["second_weighings_count"], "قبض", "خروج و ثبت وزن نهایی"),
-            (4, "قبوض تکمیل‌شده و معتبر", summary["completed_tickets_count"], "قبض معتبر", "صرفاً قبوض نهایی (COMPLETED) بدون ابطالی"),
-            (5, "توزین‌های مستقیم تک‌مرحله‌ای", summary["direct_weighings_count"], "قبض", "توزین‌های مستقیم و آزاد"),
-            (6, "قبوض لغو شده پس از وزن دوم", summary["cancelled_after_second_weight_count"], "قبض ابطالی", "قبوض ابطال‌شده (کسر از تناژ نهایی)"),
-            (7, "قبوض تک‌اپراتوری (Solo)", summary["solo_completed_count"], "قبض", "هر دو توزین توسط یک اپراتور انجام شده"),
-            (8, "خالص تناژ جاری معتبر", float(summary["completed_net_ton"]), "تُن خالص", "مبنای تناژ: خالص جاری معتبر (Current Effective)"),
-            (9, "تناژ ورودی (خرید و تامین)", float(summary["inbound_net_ton"]), "تُن خالص", "کالاهای ورودی کارخانه"),
-            (10, "تناژ خروجی (فروش و محصول)", float(summary["outbound_net_ton"]), "تُن خالص", "کالاهای ارسالی و فروش"),
-            (11, "میانگین زمان چرخه در محوطه", summary["turnaround"]["avg_minutes"], "دقیقه", "فاصله وزن اول تا وزن دوم"),
-            (12, "میانه زمان چرخه (Median)", summary["turnaround"]["median_minutes"], "دقیقه", "شاخص بدون تاثیر داده‌های پرت (Outliers)"),
-            (13, "خودروهای فیزیکی یکتا", summary["distinct_vehicles_completed"], "پلاک مستقل", "تفکیک تردد فیزیکی ناوگان از صدور قبوض"),
-            (14, "رخدادهای خارج از شیفت", summary["out_of_shift_events_count"], "رخداد", "توزین خارج از شیفت و استثنا"),
-            (15, "تحویل‌های شیفت دارای اختلاف تاریخی", data["handover_kpis"].get("historically_disputed_count", 0), "مورد", "تحویل‌های مورد اختلاف (حتی در صورت حل‌وفصل بعدی)"),
-        ]
+        if is_supervisor:
+            kpi_rows = [
+                (1, "تعداد جلسات شیفت در بازه", data["total_sessions_count"], "جلسه", "جلسات شیفت فعال یا خاتمه‌یافته"),
+                (2, "توزین مرحله اول", summary["first_weighings_count"], "قبض", "ورود و ثبت وزن اولیه ناوگان"),
+                (3, "توزین مرحله دوم", summary["second_weighings_count"], "قبض", "خروج و ثبت وزن نهایی"),
+                (4, "قبوض تکمیل‌شده و معتبر", summary["completed_tickets_count"], "قبض معتبر", "صرفاً قبوض نهایی (COMPLETED) بدون ابطالی"),
+                (5, "توزین‌های مستقیم تک‌مرحله‌ای", summary["direct_weighings_count"], "قبض", "توزین‌های مستقیم و آزاد"),
+                (6, "قبوض لغو شده پس از وزن دوم", summary["cancelled_after_second_weight_count"], "قبض ابطالی", "قبوض ابطال‌شده (کسر از تناژ نهایی)"),
+                (7, "قبوض تک‌اپراتوری (Solo)", summary["solo_completed_count"], "قبض", "هر دو توزین توسط یک اپراتور انجام شده"),
+                (8, "خالص تناژ جاری معتبر", float(summary["completed_net_ton"]), "تُن خالص", "مبنای تناژ: خالص جاری معتبر (Current Effective)"),
+                (9, "تناژ ورودی (خرید و تامین)", float(summary["inbound_net_ton"]), "تُن خالص", "کالاهای ورودی کارخانه"),
+                (10, "تناژ خروجی (فروش و محصول)", float(summary["outbound_net_ton"]), "تُن خالص", "کالاهای ارسالی و فروش"),
+                (11, "میانگین زمان چرخه در محوطه", summary["turnaround"]["avg_minutes"], "دقیقه", "فاصله وزن اول تا وزن دوم"),
+                (12, "میانه زمان چرخه (Median)", summary["turnaround"]["median_minutes"], "دقیقه", "شاخص بدون تاثیر داده‌های پرت (Outliers)"),
+                (13, "خودروهای فیزیکی یکتا", summary["distinct_vehicles_completed"], "پلاک مستقل", "تفکیک تردد فیزیکی ناوگان از صدور قبوض"),
+                (14, "رخدادهای خارج از شیفت", summary["out_of_shift_events_count"], "رخداد", "توزین خارج از شیفت و استثنا"),
+                (15, "تحویل‌های شیفت دارای اختلاف تاریخی", data["handover_kpis"].get("historically_disputed_count", 0), "مورد", "تحویل‌های مورد اختلاف (حتی در صورت حل‌وفصل بعدی)"),
+            ]
+        else:
+            kpi_rows = [
+                (1, "تعداد جلسات شیفت منتسب به اپراتور", data["total_sessions_count"], "جلسه", "جلسات شیفت دارای تخصیص فعال"),
+                (2, "توزین مرحله اول توسط اپراتور", summary["first_weighings_count"], "قبض", "ثبت وزن اولیه توسط این اپراتور"),
+                (3, "توزین مرحله دوم توسط اپراتور", summary["second_weighings_count"], "قبض", "ثبت وزن نهایی توسط این اپراتور"),
+                (4, "قبوض تکمیل‌شده توسط اپراتور", summary["completed_tickets_count"], "قبض معتبر", "قبوض تکمیل‌شده مرحله دوم"),
+                (5, "توزین‌های مستقیم تک‌مرحله‌ای", summary["direct_weighings_count"], "قبض", "توزین مستقیم ثبت‌شده توسط اپراتور"),
+                (6, "قبوض لغو شده توسط اپراتور", summary["cancelled_after_second_weight_count"], "قبض ابطالی", "قبوض لغو شده بعد از ثبت وزن دوم"),
+                (7, "قبوض انفرادی (Solo) اپراتور", summary["solo_completed_count"], "قبض", "ثبت هر دو مرحله توزین توسط خود اپراتور"),
+                (8, "خالص تناژ جاری تکمیل‌شده اپراتور", float(summary["completed_net_ton"]), "تُن خالص", "مجموع تناژ خالص نهایی‌شده توسط اپراتور"),
+                (9, "تناژ ورودی تکمیل‌شده اپراتور", float(summary["inbound_net_ton"]), "تُن خالص", "کالاهای ورودی نهایی‌شده توسط اپراتور"),
+                (10, "تناژ خروجی تکمیل‌شده اپراتور", float(summary["outbound_net_ton"]), "تُن خالص", "کالاهای ارسالی نهایی‌شده توسط اپراتور"),
+                (11, "میانگین زمان چرخه در محوطه", summary["turnaround"]["avg_minutes"], "دقیقه", "میانگین زمان چرخه قبوض اپراتور"),
+                (12, "میانه زمان چرخه (Median)", summary["turnaround"]["median_minutes"], "دقیقه", "میانه زمان چرخه قبوض اپراتور"),
+                (13, "خودروهای فیزیکی یکتا", summary["distinct_vehicles_completed"], "پلاک مستقل", "پلاک‌های تردد ثبت‌شده توسط اپراتور"),
+                (14, "رخدادهای خارج از شیفت اپراتور", summary["out_of_shift_events_count"], "رخداد", "توزین‌های خارج از شیفت منتسب به اپراتور"),
+                (15, "تحویل‌های شیفت مرتبط با اپراتور", data["handover_kpis"].get("total_handovers", 0), "مورد", "تحویل‌های شیفت به عنوان تحویل‌دهنده یا گیرنده"),
+            ]
 
         for r_idx, row in enumerate(kpi_rows, 5):
             for c_idx, val in enumerate(row, 1):
@@ -286,7 +360,10 @@ class ShiftExportService:
             cell.border = cell_border
 
         for s_idx, s in enumerate(sessions, 1):
-            op_names = ", ".join(op["full_name"] for op in s.get("operators", []))
+            if is_supervisor:
+                op_names = ", ".join(op["full_name"] for op in s.get("operators", []))
+            else:
+                op_names = user.get_full_name() or user.username
             row_vals = [
                 s_idx,
                 s["shift_name"],
@@ -737,6 +814,21 @@ class ShiftExportService:
             ]))
             elements.append(disp_table)
             elements.append(Spacer(1, 8))
+        elif not is_supervisor and (handover.dispute_reason or handover.supervisor_resolution_notes):
+            elements.append(Paragraph(escape(shape_persian("سوابق اختلاف و تصمیم سرپرست")), title_style))
+            elements.append(Spacer(1, 3))
+            disp_rows = [
+                [Paragraph(escape(shape_persian(f"علت اختلاف اپراتور: {handover.dispute_reason or 'ثبت نشده'}")), body_cell_style)],
+                [Paragraph(escape(shape_persian("دستورات و تصمیم سرپرست: [محرمانه - فقط سرپرست]")), body_cell_style)],
+            ]
+            disp_table = Table(disp_rows, colWidths=[540])
+            disp_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#FEF3C7')),
+                ('BORDER', (0, 0), (-1, -1), 0.5, colors.HexColor('#F59E0B')),
+                ('PADDING', (0, 0), (-1, -1), 4),
+            ]))
+            elements.append(disp_table)
+            elements.append(Spacer(1, 8))
 
         # Official Legal Notice
         notice_box = [
@@ -785,7 +877,7 @@ class ShiftExportService:
         elements.append(KeepTogether(sig_table))
 
         # Build Document
-        doc.build(elements)
+        doc.build(elements, canvasmaker=NumberedCanvas)
         buffer.seek(0)
 
         # Audit Logging
@@ -877,14 +969,20 @@ class ShiftExportService:
         company_name = SystemSetting.get_settings().company_name or "شرکت فولاد پریما"
 
         # Document Header
-        title_text = f"{company_name} — گزارش مدیریتی و بیلان عملیاتی شیفت‌های کاری"
+        if is_supervisor:
+            title_text = f"{company_name} — گزارش مدیریتی و بیلان عملیاتی شیفت‌های کاری"
+            sub_text = (
+                f"بازه عملیاتی: {filters['start_date_jalali']} الی {filters['end_date_jalali']} | "
+                f"تاریخ تهیه: {get_today_jalali()} | تهیه‌کننده: {user.get_full_name() or user.username} (مدیریت/سرپرست)"
+            )
+        else:
+            title_text = f"{company_name} — کارنامه عملکرد و بیلان کاری اپراتور"
+            sub_text = (
+                f"بازه عملیاتی: {filters['start_date_jalali']} الی {filters['end_date_jalali']} | "
+                f"تاریخ تهیه: {get_today_jalali()} | اپراتور: {user.get_full_name() or user.username} (گزارش فردی)"
+            )
         elements.append(Paragraph(escape(shape_persian(title_text)), title_style))
         elements.append(Spacer(1, 3))
-
-        sub_text = (
-            f"بازه عملیاتی: {filters['start_date_jalali']} الی {filters['end_date_jalali']} | "
-            f"تاریخ تهیه: {get_today_jalali()} | تهیه‌کننده: {user.get_full_name() or user.username}"
-        )
         elements.append(Paragraph(escape(shape_persian(sub_text)), sub_style))
         elements.append(Spacer(1, 8))
 
@@ -1013,7 +1111,7 @@ class ShiftExportService:
         )), note_style))
 
         # Build Document
-        doc.build(elements)
+        doc.build(elements, canvasmaker=NumberedCanvas)
         buffer.seek(0)
 
         # Audit Logging

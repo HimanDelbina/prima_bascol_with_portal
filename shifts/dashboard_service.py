@@ -13,7 +13,8 @@ from typing import Dict, Any, Optional, Tuple, List
 
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Count
+from django.db import models
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from core.jalali import (
@@ -31,7 +32,7 @@ from shifts.models import (
     ShiftHandoverStatus,
 )
 from shifts.kpi_service import ShiftKPIService
-from weighbridge.models import WeighTicket, TicketStatus
+from weighbridge.models import WeighTicket, TicketStatus, WeightMode
 
 
 MAX_DASHBOARD_DATE_RANGE_DAYS = 31
@@ -219,25 +220,70 @@ class ShiftDashboardService:
         if session_id:
             sessions_list = [s for s in sessions_list if s["session_id"] == session_id]
 
-        # 2. Compute Aggregated Turnaround for the filtered sessions
-        all_turnaround_tickets = []
-        for s in sessions_list:
-            # Aggregate turnaround metrics across sessions in scope
-            pass
+        # 2. Scope sessions and tickets for non-supervisors
+        if not is_supervisor:
+            filtered_sessions = []
+            for s in sessions_list:
+                sess_id = s["session_id"]
+                sess_op = next((op for op in s.get("operators", []) if op["operator_id"] == user.id), None)
+                if not sess_op:
+                    continue
+                s_scoped = dict(s)
+                s_scoped["operators"] = [sess_op]
+                s_scoped["first_weighings_count"] = sess_op["first_weights"]
+                s_scoped["second_weighings_count"] = sess_op["second_weights"]
+                s_scoped["completed_net_kg"] = sess_op["completed_net_kg"]
+                s_scoped["completed_net_ton"] = sess_op["completed_net_ton"]
+                op_sess_completed = WeighTicket.objects.filter(
+                    second_weight_shift_session_id=sess_id,
+                    second_weight_operator=user,
+                    status=TicketStatus.COMPLETED
+                )
+                s_scoped["completed_tickets_count"] = op_sess_completed.count()
+                s_scoped["turnaround"] = ShiftKPIService.calculate_turnaround_metrics(
+                    list(op_sess_completed.only("id", "first_weight_date", "first_weight_time", "second_weight_date", "second_weight_time"))
+                )
+                if s_scoped["outgoing_handover"]["exists"]:
+                    ho = ShiftHandover.objects.filter(outgoing_session_id=sess_id).first()
+                    if ho and user not in [ho.outgoing_operator, ho.incoming_operator]:
+                        s_scoped["outgoing_handover"] = {
+                            "exists": False, "id": None, "status": "بدون دسترسی",
+                            "is_disputed": False, "is_historically_disputed": False,
+                            "is_supervisor_resolved": False, "snapshot_yard_vehicles_count": 0,
+                            "snapshot_waiting_second_count": 0, "submission_duration_minutes": None,
+                            "acceptance_delay_minutes": None
+                        }
+                filtered_sessions.append(s_scoped)
+            sessions_list = filtered_sessions
 
         # Calculate period turnaround metrics across all sessions in scope
-        period_completed_tickets = list(
-            WeighTicket.objects.filter(
-                second_weight_shift_session__in=[s["session_id"] for s in sessions_list],
-                status=TicketStatus.COMPLETED
-            ).only(
-                "id",
-                "first_weight_date",
-                "first_weight_time",
-                "second_weight_date",
-                "second_weight_time",
-            )
-        ) if sessions_list else []
+        if is_supervisor:
+            period_completed_tickets = list(
+                WeighTicket.objects.filter(
+                    second_weight_shift_session__in=[s["session_id"] for s in sessions_list],
+                    status=TicketStatus.COMPLETED
+                ).only(
+                    "id",
+                    "first_weight_date",
+                    "first_weight_time",
+                    "second_weight_date",
+                    "second_weight_time",
+                )
+            ) if sessions_list else []
+        else:
+            period_completed_tickets = list(
+                WeighTicket.objects.filter(
+                    second_weight_shift_session__in=[s["session_id"] for s in sessions_list],
+                    second_weight_operator=user,
+                    status=TicketStatus.COMPLETED
+                ).only(
+                    "id",
+                    "first_weight_date",
+                    "first_weight_time",
+                    "second_weight_date",
+                    "second_weight_time",
+                )
+            ) if sessions_list else []
 
         overall_turnaround = ShiftKPIService.calculate_turnaround_metrics(period_completed_tickets)
 
@@ -257,6 +303,9 @@ class ShiftDashboardService:
 
         if handover_status:
             handover_qs = handover_qs.filter(status=handover_status)
+
+        if not is_supervisor:
+            handover_qs = handover_qs.filter(Q(outgoing_operator=user) | Q(incoming_operator=user))
 
         # If operator is non-supervisor, hide confidential supervisor notes
         handovers_formatted = []
@@ -293,8 +342,6 @@ class ShiftDashboardService:
             })
 
         # 4. Operator Activity Table
-        # If user is ordinary operator, period_kpis["operators"] is already filtered to self,
-        # but let's strictly guarantee non-supervisors never see another operator's record:
         raw_operators = period_kpis.get("operators", [])
         if not is_supervisor:
             operators_table = [op for op in raw_operators if op["operator_id"] == user.id]
@@ -302,28 +349,45 @@ class ShiftDashboardService:
             operators_table = raw_operators
 
         # 5. Live Yard Overview & Historical Comparison
-        live_open_tickets_qs = WeighTicket.objects.filter(status=TicketStatus.WAITING_SECOND)
+        if is_supervisor:
+            live_open_tickets_qs = WeighTicket.objects.filter(status=TicketStatus.WAITING_SECOND)
+        else:
+            live_open_tickets_qs = WeighTicket.objects.filter(status=TicketStatus.WAITING_SECOND, first_weight_operator=user)
+
         live_open_count = live_open_tickets_qs.count()
         live_distinct_vehicles = live_open_tickets_qs.values("license_plate_display").distinct().count()
 
-        # Historical handover snapshot comparison (from latest handover in period)
+        # Historical handover snapshot comparison
         latest_handover = handover_qs.first()
         snapshot_yard_count = latest_handover.yard_vehicles_count if latest_handover else 0
         snapshot_waiting_count = latest_handover.waiting_second_count if latest_handover else 0
 
         # Total distinct completed vehicles across all completed tickets in period sessions
-        distinct_vehicles_completed = (
-            WeighTicket.objects.filter(
-                second_weight_shift_session__in=[s["session_id"] for s in sessions_list],
-                status=TicketStatus.COMPLETED
-            ).values("license_plate_display").distinct().count()
-        ) if sessions_list else 0
+        if is_supervisor:
+            distinct_vehicles_completed = (
+                WeighTicket.objects.filter(
+                    second_weight_shift_session__in=[s["session_id"] for s in sessions_list],
+                    status=TicketStatus.COMPLETED
+                ).values("license_plate_display").distinct().count()
+            ) if sessions_list else 0
 
-        # Total out of shift events in period
-        out_of_shift_events_count = sum(
-            s.get("out_of_shift_first", 0) + s.get("out_of_shift_second", 0)
-            for s in sessions_list
-        )
+            out_of_shift_events_count = sum(
+                s.get("out_of_shift_first", 0) + s.get("out_of_shift_second", 0)
+                for s in sessions_list
+            )
+        else:
+            distinct_vehicles_completed = (
+                WeighTicket.objects.filter(
+                    second_weight_shift_session__in=[s["session_id"] for s in sessions_list],
+                    second_weight_operator=user,
+                    status=TicketStatus.COMPLETED
+                ).values("license_plate_display").distinct().count()
+            ) if sessions_list else 0
+
+            out_of_shift_events_count = WeighTicket.objects.filter(
+                Q(first_weight_operator=user, first_weight_out_of_shift=True, first_weight_shift_session__in=[s["session_id"] for s in sessions_list]) |
+                Q(second_weight_operator=user, second_weight_out_of_shift=True, second_weight_shift_session__in=[s["session_id"] for s in sessions_list])
+            ).distinct().count() if sessions_list else 0
 
         # 6. Dropdown Options for Filter Form
         available_shifts = WorkShift.objects.all().order_by("start_time")
@@ -332,14 +396,54 @@ class ShiftDashboardService:
         else:
             available_operators = [user]
 
-        return {
-            "error": None,
-            "filters": filters,
-            "is_supervisor": is_supervisor,
-            "shift_management_enabled": period_kpis.get("shift_management_enabled", True),
+        # 7. Summary construction (scoped vs global)
+        if not is_supervisor:
+            user_op = next((op for op in raw_operators if op["operator_id"] == user.id), None)
+            op_session_ids = [s["session_id"] for s in sessions_list]
+            op_completed_tickets = WeighTicket.objects.filter(
+                second_weight_shift_session__in=op_session_ids,
+                second_weight_operator=user,
+                status=TicketStatus.COMPLETED
+            )
+            op_inbound_kg = op_completed_tickets.filter(operation_type__direction="inbound").aggregate(s=Sum("net_weight"))["s"] or Decimal("0.00")
+            op_outbound_kg = op_completed_tickets.filter(operation_type__direction="outbound").aggregate(s=Sum("net_weight"))["s"] or Decimal("0.00")
+            op_gross_kg = op_completed_tickets.aggregate(s=Sum("gross_weight"))["s"] or Decimal("0.00")
+            op_tare_kg = op_completed_tickets.aggregate(s=Sum("tare_weight"))["s"] or Decimal("0.00")
 
-            # A. KPI Summary
-            "summary": {
+            summary_payload = {
+                "first_weighings_count": user_op["first_weights"] if user_op else 0,
+                "second_weighings_count": user_op["second_weights"] if user_op else 0,
+                "completed_tickets_count": op_completed_tickets.count(),
+                "direct_weighings_count": op_completed_tickets.filter(weight_mode=WeightMode.DIRECT).count(),
+                "cancelled_after_second_weight_count": WeighTicket.objects.filter(
+                    second_weight_shift_session__in=op_session_ids,
+                    second_weight_operator=user,
+                    status=TicketStatus.CANCELLED
+                ).count(),
+                "solo_completed_count": user_op["solo_completed"] if user_op else 0,
+                "completed_net_kg": user_op["completed_net_kg"] if user_op else Decimal("0.00"),
+                "completed_net_ton": user_op["completed_net_ton"] if user_op else Decimal("0.00"),
+                "completed_gross_ton": ShiftKPIService.kg_to_ton(op_gross_kg),
+                "completed_tare_ton": ShiftKPIService.kg_to_ton(op_tare_kg),
+                "inbound_net_ton": ShiftKPIService.kg_to_ton(op_inbound_kg),
+                "outbound_net_ton": ShiftKPIService.kg_to_ton(op_outbound_kg),
+                "out_of_shift_events_count": out_of_shift_events_count,
+                "distinct_vehicles_completed": distinct_vehicles_completed,
+                "turnaround": overall_turnaround,
+            }
+            unattributed_payload = {
+                "first_weighings_count": 0,
+                "second_weighings_count": 0,
+                "completed_tickets_count": 0,
+                "completed_net_kg": Decimal("0.00"),
+                "completed_net_ton": Decimal("0.00"),
+                "description": "عدم دسترسی به سوابق بدون شیفت (مختص مدیریت)",
+            }
+            handover_kpis_payload = ShiftKPIService.calculate_handover_kpis(
+                start_date=start_date, end_date=end_date, operator_id=user.id
+            )
+        else:
+            summary_payload = {
                 "first_weighings_count": period_kpis["summary"]["first_weighings_count"],
                 "second_weighings_count": period_kpis["summary"]["second_weighings_count"],
                 "completed_tickets_count": period_kpis["summary"]["completed_tickets_count"],
@@ -355,7 +459,18 @@ class ShiftDashboardService:
                 "out_of_shift_events_count": out_of_shift_events_count,
                 "distinct_vehicles_completed": distinct_vehicles_completed,
                 "turnaround": overall_turnaround,
-            },
+            }
+            unattributed_payload = period_kpis.get("unattributed_legacy", {})
+            handover_kpis_payload = period_kpis.get("handovers", {})
+
+        return {
+            "error": None,
+            "filters": filters,
+            "is_supervisor": is_supervisor,
+            "shift_management_enabled": period_kpis.get("shift_management_enabled", True),
+
+            # A. KPI Summary
+            "summary": summary_payload,
 
             # B. Shift Comparison Table
             "sessions": sessions_list,
@@ -365,7 +480,7 @@ class ShiftDashboardService:
             "operators": operators_table,
 
             # D. Handover Overview
-            "handover_kpis": period_kpis.get("handovers", {}),
+            "handover_kpis": handover_kpis_payload,
             "handovers_list": handovers_formatted,
 
             # E. Yard Overview
@@ -379,7 +494,7 @@ class ShiftDashboardService:
             },
 
             # Unattributed Legacy Section
-            "unattributed_legacy": period_kpis.get("unattributed_legacy", {}),
+            "unattributed_legacy": unattributed_payload,
 
             # Dropdown Select Options
             "available_shifts": available_shifts,
