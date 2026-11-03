@@ -286,8 +286,3 @@ class VehicleDriverRegistrationService:
 
         return vehicle, driver
 
-
-# Re-export TicketRevisionService for external convenience
-from weighbridge.revision_service import TicketRevisionService  # noqa: E402
-
-

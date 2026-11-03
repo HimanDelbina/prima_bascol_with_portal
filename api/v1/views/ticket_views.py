@@ -15,16 +15,12 @@ from audit.services import log_audit
 from audit.models import AuditAction
 from monitoring.services.anomaly_engine import AnomalyDetectionEngine
 from monitoring.services.discrepancy_service import DiscrepancyApprovalService
-from shifts.services import ShiftResolutionService
-from shifts.models import ShiftExceptionLog
 
 from api.v1.serializers.ticket_serializers import (
     WeighTicketListSerializer, WeighTicketDetailSerializer,
     WeighTicketCreateSerializer, FirstWeightSerializer,
     SecondWeightSerializer, TicketCompleteSerializer,
-    TicketCancelSerializer, TicketCorrectSerializer,
-    TicketRevisionSerializer, TicketRevisionRequestSerializer,
-    TicketRevisionReviewSerializer
+    TicketCancelSerializer, TicketCorrectSerializer
 )
 from api.v1.filters.ticket_filters import WeighTicketFilter
 from api.v1.permissions import (
@@ -36,7 +32,6 @@ from weighbridge.plate_policy import DailyPlatePolicy
 from django.shortcuts import get_object_or_404
 from masterdata.models import Product, Party, Driver, Vehicle
 from rest_framework.exceptions import ValidationError
-from django.core.exceptions import PermissionDenied
 
 
 @extend_schema_view(
@@ -103,9 +98,6 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                 **validated,
                 first_weight_operator=request.user
             )
-            _, is_w1_out, w1_reason, w1_notes = ShiftResolutionService.record_weighing_shift(
-                ticket, is_second_weight=False, operator=request.user
-            )
 
             # Dates and Times
             if not ticket.first_weight_date:
@@ -134,9 +126,6 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             ticket.weight_difference_percent = calc["weight_difference_percent"]
             ticket.is_tolerance_exceeded = calc["is_tolerance_exceeded"]
 
-            w2_reason = ""
-            w2_notes = ""
-
             # Second weight logic if provided during creation
             if ticket.second_weight and ticket.second_weight > 0:
                 val_res = DiscrepancyApprovalService.validate_ticket_finalization(ticket, trial_weights=calc)
@@ -157,31 +146,11 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                 ticket.second_weight_date = get_today_gregorian()
                 ticket.second_weight_time = timezone.localtime().time()
                 ticket.second_weight_operator = request.user
-                _, is_w2_out, w2_reason, w2_notes = ShiftResolutionService.record_weighing_shift(
-                    ticket, is_second_weight=True, operator=request.user
-                )
                 ticket.status = TicketStatus.COMPLETED
             else:
                 ticket.status = TicketStatus.WAITING_SECOND
 
             DailyPlatePolicy.save(ticket, user=request.user, assign_serial=True)
-
-            if ticket.first_weight_out_of_shift:
-                ShiftResolutionService.log_shift_exception(
-                    ticket=ticket,
-                    weighing_phase="FIRST",
-                    operator=request.user,
-                    reason=w1_reason,
-                    notes=w1_notes or "توزین اول بدون شیفت فعال ثبت شد (API)."
-                )
-            if ticket.second_weight and ticket.second_weight_out_of_shift:
-                ShiftResolutionService.log_shift_exception(
-                    ticket=ticket,
-                    weighing_phase="SECOND",
-                    operator=request.user,
-                    reason=w2_reason,
-                    notes=w2_notes or "توزین مستقیم دوم بدون شیفت فعال ثبت شد (API)."
-                )
 
             # Audit log
             log_audit(
@@ -227,13 +196,13 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
 
             if ticket.status == TicketStatus.CANCELLED:
                 raise ValidationError("امکان ثبت وزن برای قبض ابطال‌شده وجود ندارد.")
-            if ticket.status == TicketStatus.COMPLETED:
+            if ticket.status == TicketStatus.COMPLETED and not (request.user.is_superuser or request.user.profile.can_edit_completed_ticket):
                 return Response(
                     {
                         "success": False,
                         "error": {
                             "code": "TICKET_ALREADY_COMPLETED",
-                            "message": "این قبض نهایی شده است و تغییر مستقیم وزن اول مجاز نیست. لطفاً از فرآیند بازنگری (Revision) استفاده فرمایید."
+                            "message": "این قبض تکمیل شده است و فقط مدیر باسکول مجاز به اصلاح اوزان آن می‌باشد."
                         }
                     },
                     status=status.HTTP_400_BAD_REQUEST
@@ -330,13 +299,13 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            if ticket.status == TicketStatus.COMPLETED:
+            if ticket.status == TicketStatus.COMPLETED and not (request.user.is_superuser or request.user.profile.can_edit_completed_ticket):
                 return Response(
                     {
                         "success": False,
                         "error": {
                             "code": "TICKET_ALREADY_COMPLETED",
-                            "message": "این قبض قبلاً تکمیل شده است و تغییر مستقیم وزن دوم مجاز نیست. لطفاً از فرآیند بازنگری (Revision) استفاده فرمایید."
+                            "message": "این قبض قبلاً تکمیل شده است و فقط مدیر باسکول مجاز به تغییر وزن آن می‌باشد."
                         }
                     },
                     status=status.HTTP_400_BAD_REQUEST
@@ -358,9 +327,6 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             ticket.second_weight_date = w_date
             ticket.second_weight_time = w_time
             ticket.second_weight_operator = request.user
-            _, is_w2_out, w2_reason, w2_notes = ShiftResolutionService.record_weighing_shift(
-                ticket, is_second_weight=True, operator=request.user
-            )
 
             if loss_pct is not None:
                 ticket.loss_percent = loss_pct
@@ -417,15 +383,6 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
 
             ticket.status = TicketStatus.COMPLETED
             DailyPlatePolicy.save(ticket, user=request.user)
-
-            if ticket.second_weight_out_of_shift:
-                ShiftResolutionService.log_shift_exception(
-                    ticket=ticket,
-                    weighing_phase="SECOND",
-                    operator=request.user,
-                    reason=w2_reason,
-                    notes=w2_notes or "توزین دوم بدون شیفت فعال ثبت شد (API)."
-                )
 
             log_audit(
                 action=AuditAction.STATUS_CHANGE,
@@ -634,73 +591,6 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                 "final_weight": float(ticket.final_weight),
             }
 
-            if ticket.status == TicketStatus.COMPLETED:
-                from weighbridge.revision_service import TicketRevisionService
-                if field in TicketRevisionService.IMMUTABLE_FIELDS:
-                    return Response(
-                        {
-                            "success": False,
-                            "error": {
-                                "code": "IMMUTABLE_FIELD",
-                                "message": f"فیلد «{field}» از فیلدهای هویتی و ثبتی باسکول بوده و غیرقابل‌تغییر است."
-                            }
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                if field in TicketRevisionService.CONTROLLED_FIELDS:
-                    prop_data = {field: new_val}
-                    try:
-                        revision = TicketRevisionService.request_revision(
-                            ticket=ticket,
-                            requester=request.user,
-                            proposed_data=prop_data,
-                            reason=reason,
-                            client_ip=get_client_ip(request)
-                        )
-                        return Response(
-                            {
-                                "success": True,
-                                "message": f"درخواست بازنگری برای قبض تکمیل‌شده {ticket.serial_number} با موفقیت ثبت شد و در صف بررسی سرپرست قرار گرفت.",
-                                "data": {
-                                    "revision_id": str(revision.id),
-                                    "status": revision.status,
-                                    "changed_fields": revision.changed_fields,
-                                    "ticket_id": ticket.id,
-                                    "current_revision_number": ticket.current_revision_number,
-                                }
-                            },
-                            status=status.HTTP_202_ACCEPTED
-                        )
-                    except ValidationError as exc:
-                        msg = exc.messages[0] if hasattr(exc, "messages") else str(exc)
-                        return Response(
-                            {"success": False, "error": {"code": "REVISION_VALIDATION_ERROR", "message": msg}},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-
-                # Non-material field update
-                setattr(ticket, field, str(new_val))
-                ticket.last_edited_by = request.user
-                ticket.last_edit_reason = reason
-                ticket.save(update_fields=[field, 'last_edited_by', 'last_edit_reason'])
-                log_audit(
-                    action=AuditAction.UPDATE,
-                    model_name="WeighTicket",
-                    record_id=ticket.id,
-                    record_repr=f"قبض شماره {ticket.serial_number}",
-                    old_values=old_values,
-                    new_values={"field": field, "new_value": str(new_val)},
-                    reason=reason,
-                    user=request.user,
-                    ip_address=get_client_ip(request),
-                    source="API"
-                )
-                return api_success_response(
-                    data=WeighTicketDetailSerializer(ticket).data,
-                    message=f"فیلد اداری «{field}» برای قبض {ticket.serial_number} با موفقیت ویرایش شد."
-                )
-
             if field in ['first_weight', 'second_weight', 'sent_weight', 'loss_percent', 'loss_weight']:
                 setattr(ticket, field, Decimal(str(new_val)))
                 if field == 'loss_weight':
@@ -751,9 +641,9 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
                 current_sent_weight=ticket.sent_weight,
             )
 
-            # Re-evaluate discrepancies after material edit (for in-flight tickets)
+            # Re-evaluate discrepancies after material edit
             eval_res = DiscrepancyApprovalService.evaluate_ticket_discrepancies(ticket, trial_weights=calc)
-            if ticket.status != TicketStatus.COMPLETED and not eval_res["can_finalize"]:
+            if ticket.status == TicketStatus.COMPLETED and not eval_res["can_finalize"]:
                 ticket.status = TicketStatus.WAITING_SECOND
 
             DailyPlatePolicy.save(ticket, user=request.user)
@@ -860,144 +750,3 @@ class WeighTicketViewSet(viewsets.ModelViewSet):
             "open_alerts_count": summary["open_alerts_count"],
             "alerts": MonitoringAlertSerializer(summary["all_alerts"], many=True).data
         })
-
-    @extend_schema(
-        tags=['Ticket Revisions'],
-        summary='فهرست بازنگری‌های یک قبض',
-        responses={200: TicketRevisionSerializer(many=True)}
-    )
-    @action(detail=True, methods=['get'], url_path='revisions', permission_classes=[IsAuthenticated])
-    def get_revisions(self, request, pk=None):
-        ticket = get_object_or_404(WeighTicket, pk=pk)
-        from weighbridge.revision_service import TicketRevisionService
-        revisions = TicketRevisionService.get_revision_history(ticket)
-        return Response({
-            "success": True,
-            "data": TicketRevisionSerializer(revisions, many=True).data
-        })
-
-    @extend_schema(
-        tags=['Ticket Revisions'],
-        summary='ثبت درخواست بازنگری برای قبض تکمیل‌شده',
-        request=TicketRevisionRequestSerializer,
-        responses={201: TicketRevisionSerializer}
-    )
-    @action(detail=True, methods=['post'], url_path='revisions/request', permission_classes=[IsAuthenticated, CanEditCompletedTicket])
-    def request_revision(self, request, pk=None):
-        ticket = get_object_or_404(WeighTicket, pk=pk)
-        serializer = TicketRevisionRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        reason = serializer.validated_data['reason']
-        proposed_data = serializer.validated_data['proposed_data']
-
-        from weighbridge.revision_service import TicketRevisionService
-        try:
-            rev = TicketRevisionService.request_revision(
-                ticket=ticket,
-                requester=request.user,
-                proposed_data=proposed_data,
-                reason=reason,
-                client_ip=get_client_ip(request)
-            )
-            return Response({
-                "success": True,
-                "message": "درخواست بازنگری با موفقیت ثبت شد.",
-                "data": TicketRevisionSerializer(rev).data
-            }, status=status.HTTP_201_CREATED)
-        except ValidationError as exc:
-            msg = exc.messages[0] if hasattr(exc, "messages") else str(exc)
-            return Response({"success": False, "error": {"code": "VALIDATION_ERROR", "message": msg}}, status=status.HTTP_400_BAD_REQUEST)
-
-    @extend_schema(
-        tags=['Ticket Revisions'],
-        summary='تأیید و اعمال بازنگری قبض توسط سرپرست',
-        request=TicketRevisionReviewSerializer,
-        responses={200: TicketRevisionSerializer}
-    )
-    @action(detail=False, methods=['post'], url_path='revisions/(?P<revision_id>[^/.]+)/approve', permission_classes=[IsAuthenticated, CanEditCompletedTicket])
-    def approve_revision(self, request, revision_id=None):
-        serializer = TicketRevisionReviewSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        review_reason = serializer.validated_data.get('review_reason', '')
-
-        from weighbridge.revision_service import TicketRevisionService
-        try:
-            rev = TicketRevisionService.approve_revision(
-                revision=revision_id,
-                reviewer=request.user,
-                review_reason=review_reason,
-                auto_apply=True,
-                client_ip=get_client_ip(request)
-            )
-            return Response({
-                "success": True,
-                "message": f"بازنگری ویرایش {rev.revision_number} با موفقیت تأیید و بر قبض اعمال شد.",
-                "data": TicketRevisionSerializer(rev).data
-            })
-        except PermissionDenied as exc:
-            return Response({"success": False, "error": {"code": "PERMISSION_DENIED", "message": str(exc)}}, status=status.HTTP_403_FORBIDDEN)
-        except ValidationError as exc:
-            msg = exc.messages[0] if hasattr(exc, "messages") else str(exc)
-            return Response({"success": False, "error": {"code": "VALIDATION_ERROR", "message": msg}}, status=status.HTTP_400_BAD_REQUEST)
-
-    @extend_schema(
-        tags=['Ticket Revisions'],
-        summary='رد درخواست بازنگری توسط سرپرست',
-        request=TicketRevisionReviewSerializer,
-        responses={200: TicketRevisionSerializer}
-    )
-    @action(detail=False, methods=['post'], url_path='revisions/(?P<revision_id>[^/.]+)/reject', permission_classes=[IsAuthenticated, CanEditCompletedTicket])
-    def reject_revision(self, request, revision_id=None):
-        serializer = TicketRevisionReviewSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        review_reason = serializer.validated_data.get('review_reason', '')
-
-        from weighbridge.revision_service import TicketRevisionService
-        try:
-            rev = TicketRevisionService.reject_revision(
-                revision=revision_id,
-                reviewer=request.user,
-                review_reason=review_reason,
-                client_ip=get_client_ip(request)
-            )
-            return Response({
-                "success": True,
-                "message": "درخواست بازنگری با موفقیت رد شد.",
-                "data": TicketRevisionSerializer(rev).data
-            })
-        except PermissionDenied as exc:
-            return Response({"success": False, "error": {"code": "PERMISSION_DENIED", "message": str(exc)}}, status=status.HTTP_403_FORBIDDEN)
-        except ValidationError as exc:
-            msg = exc.messages[0] if hasattr(exc, "messages") else str(exc)
-            return Response({"success": False, "error": {"code": "VALIDATION_ERROR", "message": msg}}, status=status.HTTP_400_BAD_REQUEST)
-
-    @extend_schema(
-        tags=['Ticket Revisions'],
-        summary='انصراف از درخواست بازنگری توسط متقاضی',
-        request=TicketRevisionReviewSerializer,
-        responses={200: TicketRevisionSerializer}
-    )
-    @action(detail=False, methods=['post'], url_path='revisions/(?P<revision_id>[^/.]+)/withdraw', permission_classes=[IsAuthenticated])
-    def withdraw_revision(self, request, revision_id=None):
-        serializer = TicketRevisionReviewSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        reason = serializer.validated_data.get('review_reason', '')
-
-        from weighbridge.revision_service import TicketRevisionService
-        try:
-            rev = TicketRevisionService.withdraw_revision(
-                revision=revision_id,
-                user=request.user,
-                reason=reason,
-                client_ip=get_client_ip(request)
-            )
-            return Response({
-                "success": True,
-                "message": "درخواست بازنگری با موفقیت پس گرفته شد.",
-                "data": TicketRevisionSerializer(rev).data
-            })
-        except PermissionDenied as exc:
-            return Response({"success": False, "error": {"code": "PERMISSION_DENIED", "message": str(exc)}}, status=status.HTTP_403_FORBIDDEN)
-        except ValidationError as exc:
-            msg = exc.messages[0] if hasattr(exc, "messages") else str(exc)
-            return Response({"success": False, "error": {"code": "VALIDATION_ERROR", "message": msg}}, status=status.HTTP_400_BAD_REQUEST)

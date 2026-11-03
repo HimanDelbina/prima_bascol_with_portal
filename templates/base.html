@@ -228,40 +228,6 @@
             </div>
             {% endif %}
 
-            <!-- Shift & Handover Submenu -->
-            {% if user.is_superuser or user.profile.can_operate_shift or user.profile.can_manage_shifts %}
-            <div class="nav-section-title">مدیریت شیفت و تحویل</div>
-            <a class="nav-link {% if request.resolver_match.app_name == 'shifts' %}active{% endif %}" data-bs-toggle="collapse" href="#menuShifts" role="button" aria-expanded="{% if request.resolver_match.app_name == 'shifts' %}true{% else %}false{% endif %}">
-                <i class="bi bi-clock-history text-info"></i>
-                <span class="flex-grow-1">شیفت و تحویل</span>
-                <i class="bi bi-chevron-down ms-0 me-auto" style="font-size: 0.75rem;"></i>
-            </a>
-            <div class="collapse {% if request.resolver_match.app_name == 'shifts' %}show{% endif %}" id="menuShifts">
-                <a href="{% url 'shifts:dashboard' %}" class="nav-link {% if request.resolver_match.app_name == 'shifts' and request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
-                    <i class="bi bi-speedometer2 text-info"></i>
-                    <span class="fw-bold">داشبورد جامع شیفت</span>
-                </a>
-                <a href="{% url 'shifts:session_list' %}" class="nav-link {% if request.resolver_match.app_name == 'shifts' and request.resolver_match.url_name == 'session_list' %}active{% endif %}">
-                    <i class="bi bi-calendar2-week"></i>
-                    <span>جلسات شیفت</span>
-                </a>
-                <a href="{% url 'shifts:handover_list' %}" class="nav-link {% if request.resolver_match.app_name == 'shifts' and request.resolver_match.url_name == 'handover_list' %}active{% endif %}">
-                    <i class="bi bi-arrow-left-right"></i>
-                    <span>تحویل و تحول شیفت</span>
-                </a>
-                <a href="{% url 'shifts:exception_list' %}" class="nav-link {% if request.resolver_match.app_name == 'shifts' and request.resolver_match.url_name == 'exception_list' %}active{% endif %}">
-                    <i class="bi bi-exclamation-triangle"></i>
-                    <span>استثنائات شیفت</span>
-                </a>
-                {% if user.is_superuser or user.profile.can_manage_shifts %}
-                <a href="{% url 'shifts:shift_list' %}" class="nav-link {% if request.resolver_match.app_name == 'shifts' and request.resolver_match.url_name == 'shift_list' %}active{% endif %}">
-                    <i class="bi bi-sliders"></i>
-                    <span>تعریف الگوهای شیفت</span>
-                </a>
-                {% endif %}
-            </div>
-            {% endif %}
-
             <!-- Reports Submenu -->
             <div class="nav-section-title">گزارشات و بیلان</div>
             <a class="nav-link {% if request.resolver_match.app_name == 'reports' %}active{% endif %}" data-bs-toggle="collapse" href="#menuReports" role="button" aria-expanded="{% if request.resolver_match.app_name == 'reports' %}true{% else %}false{% endif %}">

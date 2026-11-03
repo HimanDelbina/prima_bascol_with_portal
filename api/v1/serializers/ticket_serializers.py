@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.utils import timezone
 from datetime import time
 
-from weighbridge.models import WeighTicket, TicketStatus, WeightMode, TicketRevision
+from weighbridge.models import WeighTicket, TicketStatus, WeightMode
 from masterdata.models import (
     Product, Party, Driver, Vehicle, VehicleType,
     Location, UnloadLocation, OperationType, LossType
@@ -120,7 +120,6 @@ class WeighTicketDetailSerializer(serializers.ModelSerializer):
             'is_loss_overridden', 'loss_override_reason', 'final_weight',
             
             # Metadata & Auditing
-            'current_revision_number', 'original_net_weight', 'has_revisions',
             'notes', 'cancellation_reason', 'cancelled_by', 'cancelled_by_name',
             'cancelled_at', 'cancelled_at_jalali',
             'last_edited_by', 'last_edited_by_name', 'last_edit_reason',
@@ -275,35 +274,3 @@ class TicketCorrectSerializer(serializers.Serializer):
                 min_value=minimum, max_value=100 if field == "loss_percent" else None,
             ).run_validation(value)
         return attrs
-
-
-class TicketRevisionSerializer(serializers.ModelSerializer):
-    requested_by_name = serializers.CharField(source='requested_by.get_full_name', read_only=True)
-    reviewed_by_name = serializers.CharField(source='reviewed_by.get_full_name', read_only=True)
-    applied_by_name = serializers.CharField(source='applied_by.get_full_name', read_only=True)
-    requested_at_jalali = serializers.CharField(source='jalali_requested_at', read_only=True)
-    reviewed_at_jalali = serializers.CharField(source='jalali_reviewed_at', read_only=True)
-    applied_at_jalali = serializers.CharField(source='jalali_applied_at', read_only=True)
-
-    class Meta:
-        model = TicketRevision
-        fields = [
-            'id', 'ticket', 'revision_number', 'status', 'reason',
-            'ticket_current_revision_at_request',
-            'before_snapshot', 'after_snapshot', 'changed_fields',
-            'requested_by', 'requested_by_name', 'requested_at', 'requested_at_jalali',
-            'reviewed_by', 'reviewed_by_name', 'reviewed_at', 'reviewed_at_jalali',
-            'review_notes',
-            'applied_by', 'applied_by_name', 'applied_at', 'applied_at_jalali',
-            'discrepancy_details',
-        ]
-        read_only_fields = fields
-
-
-class TicketRevisionRequestSerializer(serializers.Serializer):
-    reason = serializers.CharField(required=True, min_length=3)
-    proposed_data = serializers.DictField(required=True)
-
-
-class TicketRevisionReviewSerializer(serializers.Serializer):
-    review_reason = serializers.CharField(required=False, allow_blank=True, default="")

@@ -92,8 +92,8 @@
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="togglePosWidth()">
             <span id="btn-width-label">تغییر به عرض ۵۸ میلی‌متر</span>
         </button>
-        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a5{% if requested_rev_param is not None %}&rev={{ revision_number }}{% endif %}" class="btn btn-outline-secondary btn-sm">قالب A5</a>
-        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a4{% if requested_rev_param is not None %}&rev={{ revision_number }}{% endif %}" class="btn btn-outline-secondary btn-sm">قالب A4</a>
+        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a5" class="btn btn-outline-secondary btn-sm">قالب A5</a>
+        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a4" class="btn btn-outline-secondary btn-sm">قالب A4</a>
         <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-outline-dark btn-sm">بازگشت</a>
     </div>
 </div>
@@ -103,19 +103,6 @@
     <div style="border: 2px dashed #000; padding: 4px; text-align: center; font-weight: 900; font-size: 11px; margin: 4px 0; background: #f3f4f6;">
         *** پیشنویس — فاقد اعتبار ترخیص کالا ***
         {% if draft_reason %}<br><span style="font-weight: normal; font-size: 8.5px;">{{ draft_reason }}</span>{% endif %}
-    </div>
-    {% endif %}
-
-    {% if is_superseded %}
-    <div style="border: 2px dashed #dc2626; padding: 4px; text-align: center; font-weight: 900; font-size: 9.5px; margin: 4px 0; background: #fee2e2; color: #991b1b;">
-        ⛔ *** نسخه منسوخ‌شده (Rev. {{ revision_number }}) — فاقد اعتبار قانونی و مالی *** ⛔
-    </div>
-    {% endif %}
-
-    {% if is_revised %}
-    <div style="border: 1px dotted #1e40af; padding: 3px; font-size: 8.5px; margin: 4px 0; background: #eff6ff;">
-        <strong>نسخه اصلاح‌شده (ویرایش {{ revision_number }}):</strong> تأیید: {{ revision_approved_by|default:"سرپرست مجاز" }}
-        {% if revision_reason %}<br>علت: {{ revision_reason }}{% endif %}
     </div>
     {% endif %}
 
@@ -129,21 +116,8 @@
         <div class="fw-bold" style="font-size: 13px;">{{ settings.company_name }}</div>
         <div class="text-muted small" style="font-size: 9.5px;">{{ settings.receipt_header_title }}</div>
         
-        <div class="d-flex justify-content-center align-items-center gap-2 mt-1 flex-wrap">
+        <div class="d-flex justify-content-center align-items-center gap-2 mt-1">
             <span class="fw-bold font-monospace" style="font-size: 13px;">قبض: {{ ticket.serial_number }}</span>
-            {% if is_superseded %}
-                {% if is_revised %}
-                <span class="badge bg-danger text-white font-monospace" style="font-size: 8.5px;">Rev. {{ revision_number }} (منسوخ)</span>
-                {% else %}
-                <span class="badge bg-secondary text-white font-monospace" style="font-size: 8.5px;">Rev. 0 (منسوخ)</span>
-                {% endif %}
-            {% else %}
-                {% if is_revised %}
-                <span class="badge bg-primary text-white font-monospace" style="font-size: 8.5px;">Rev. {{ revision_number }}</span>
-                {% else %}
-                <span class="badge bg-secondary text-white font-monospace" style="font-size: 8.5px;">Rev. 0</span>
-                {% endif %}
-            {% endif %}
             {% if is_reprint %}
             <span class="reprint-badge">چاپ مجدد (درخواست {{ print_number }})</span>
             {% endif %}
@@ -308,7 +282,7 @@ function doPrint(templateType) {
                 "X-CSRFToken": csrftoken,
                 "Content-Type": "application/x-www-form-urlencoded",
             },
-            body: "template=" + encodeURIComponent(templateType) + "{% if requested_rev_param is not None %}&rev={{ revision_number }}{% endif %}"
+            body: "template=" + encodeURIComponent(templateType)
         }).catch(function(e) { console.warn("Print log error:", e); });
     } catch(err) {}
     window.print();

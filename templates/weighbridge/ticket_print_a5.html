@@ -208,10 +208,10 @@
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleOrientation()">
             چرخش (افقی / عمودی)
         </button>
-        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a4{% if requested_rev_param is not None %}&rev={{ revision_number }}{% endif %}" class="btn btn-outline-secondary btn-sm">
+        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=a4" class="btn btn-outline-secondary btn-sm">
             قالب A4
         </a>
-        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=pos{% if requested_rev_param is not None %}&rev={{ revision_number }}{% endif %}" class="btn btn-outline-secondary btn-sm">
+        <a href="{% url 'weighbridge:ticket_print' ticket.id %}?template=pos" class="btn btn-outline-secondary btn-sm">
             فیش POS
         </a>
         <a href="{% url 'weighbridge:ticket_detail' ticket.id %}" class="btn btn-outline-dark btn-sm">
@@ -231,15 +231,6 @@
     </div>
     {% endif %}
 
-    {% if is_superseded %}
-    <div class="draft-watermark" style="color: rgba(185, 28, 28, 0.28); border-color: rgba(185, 28, 28, 0.38); font-size: 20px;">
-        نسخه منسوخ‌شده — فاقد اعتبار قانونی و مالی (SUPERSEDED)
-    </div>
-    <div class="draft-banner" style="background-color: #fef2f2; border-color: #dc2626; color: #991b1b;">
-        ⛔ توجه: این برگه نسخه منسوخ‌شده (Rev. {{ revision_number }}) است. برای این قبض نسخه جدیدتری (Rev. {{ ticket_current_rev }}) صادر گردیده و نسخه حاضر از نظر مالی، حقوقی و خروج کالا فاقد اعتبار می‌باشد.
-    </div>
-    {% endif %}
-
     <!-- Header -->
     <div class="header-box">
         <div class="d-flex justify-content-between align-items-center">
@@ -256,21 +247,6 @@
                 <span class="badge {% if ticket.status == 'completed' %}bg-success{% elif ticket.status == 'cancelled' %}bg-danger{% else %}bg-warning text-dark{% endif %} px-2 py-1" style="font-size: 8.5px;">
                     {{ ticket.get_status_display }}
                 </span>
-                <div class="mt-1">
-                    {% if is_superseded %}
-                        {% if is_revised %}
-                        <span class="badge bg-danger text-white font-monospace" style="font-size: 8.5px;">نسخه اصلاح‌شده (Rev. {{ revision_number }}) [منسوخ‌شده]</span>
-                        {% else %}
-                        <span class="badge bg-secondary text-white font-monospace" style="font-size: 8.5px;">نسخه اصلی اولیه (Rev. 0) [منسوخ‌شده]</span>
-                        {% endif %}
-                    {% else %}
-                        {% if is_revised %}
-                        <span class="badge bg-primary text-white font-monospace" style="font-size: 8.5px;">نسخه اصلاح‌شده (Rev. {{ revision_number }})</span>
-                        {% else %}
-                        <span class="badge bg-secondary text-white font-monospace" style="font-size: 8.5px;">نسخه اصلی (Rev. 0)</span>
-                        {% endif %}
-                    {% endif %}
-                </div>
                 {% if is_reprint %}
                 <div class="mt-1">
                     <span class="reprint-badge">چاپ مجدد (درخواست {{ print_number }})</span>
@@ -286,25 +262,6 @@
             </div>
         </div>
     </div>
-
-    {% if is_revised %}
-    <div class="approval-badge-box" style="background-color: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; padding: 4px 8px; margin-bottom: 6px; font-size: 8.5px; border-radius: 4px;">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <strong>قبض اصلاح‌شده (ویرایش {{ revision_number }}):</strong>
-                <span>تأییدکننده: <strong>{{ revision_approved_by|default:"سرپرست مجاز" }}</strong></span>
-                {% if revision_approved_at %}
-                <span class="ms-1 font-monospace">({{ revision_approved_at }})</span>
-                {% endif %}
-            </div>
-            {% if revision_reason %}
-            <div>
-                <span>علت: {{ revision_reason }}</span>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
 
     <!-- Meta Information Table -->
     <table class="meta-table">
@@ -476,7 +433,7 @@ function doPrint(templateType) {
                 "X-CSRFToken": csrftoken,
                 "Content-Type": "application/x-www-form-urlencoded",
             },
-            body: "template=" + encodeURIComponent(templateType) + "{% if requested_rev_param is not None %}&rev={{ revision_number }}{% endif %}"
+            body: "template=" + encodeURIComponent(templateType)
         }).catch(function(e) { console.warn("Print log error:", e); });
     } catch(err) {}
     window.print();

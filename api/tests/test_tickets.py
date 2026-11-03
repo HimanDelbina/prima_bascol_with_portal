@@ -134,7 +134,7 @@ class TicketAPITests(TestCase):
             tare_weight=Decimal("14000.00"),
             net_weight=Decimal("20000.00"),
             final_weight=Decimal("20000.00"),
-            status=TicketStatus.WAITING_SECOND
+            status=TicketStatus.COMPLETED
         )
 
         self.authenticate(self.manager)
