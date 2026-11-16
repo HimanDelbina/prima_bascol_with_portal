@@ -262,7 +262,12 @@ def user_edit_view(request, user_id):
             )
             messages.success(request, f"مشخصات کاربر {user.username} بروزرسانی شد.")
             return redirect("accounts:user_list")
-    return render(request, "accounts/user_form.html", {"form": form, "title": f"ویرایش کاربر {target_user.username}", "target_user": target_user})
+    return render(request, "accounts/user_form.html", {
+        "form": form,
+        "title": f"ویرایش کاربر {target_user.username}",
+        "target_user": target_user,
+        "oidc_issuer": issuer,
+    })
 
 @login_required
 @admin_only_required

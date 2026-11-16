@@ -23,6 +23,18 @@
                     {% if form.sso_subject %}
                     <fieldset id="organization-link" class="border rounded p-3 mb-4">
                         <legend class="float-none w-auto px-2 fs-6 fw-bold">ورود سازمانی فریون</legend>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="organization-link-user">کاربر محلی (User)</label>
+                                <input class="form-control" id="organization-link-user"
+                                       value="{{ target_user.username }}" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="organization-link-issuer">صادرکننده (Issuer)</label>
+                                <input class="form-control" id="organization-link-issuer"
+                                       dir="ltr" value="{{ oidc_issuer }}" readonly>
+                            </div>
+                        </div>
                         <label class="form-label" for="{{ form.sso_subject.id_for_label }}">{{ form.sso_subject.label }}</label>
                         {{ form.sso_subject }}
                         <div class="form-text">شناسه (ID) را از صفحه کاربر در Keycloak کپی کنید.</div>
