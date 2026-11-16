@@ -168,11 +168,24 @@ def profile_view(request):
         
     return render(request, "accounts/profile.html", {"user": user, "profile": profile})
 
+def can_manage_identity_links(request):
+    return (
+        settings.BASCOL_SSO_ENABLED and request.user.is_superuser
+        and not request.session.get("bascol_identity_id")
+    )
+
+
 @login_required
 @admin_only_required
 def user_list_view(request):
     users = User.objects.select_related("profile").order_by("-id")
-    return render(request, "accounts/user_list.html", {"users": users})
+    show_identity_links = can_manage_identity_links(request)
+    if show_identity_links:
+        users = users.select_related("bascol_identity")
+    return render(request, "accounts/user_list.html", {
+        "users": users, "show_identity_links": show_identity_links,
+        "oidc_issuer": settings.BASCOL_OIDC_ISSUER,
+    })
 
 @login_required
 @admin_only_required
@@ -211,8 +224,7 @@ def user_edit_view(request, user_id):
     identity = None
     issuer = ""
     if (
-        settings.BASCOL_SSO_ENABLED and request.user.is_superuser
-        and not request.session.get("bascol_identity_id")
+        can_manage_identity_links(request)
         and not (target_user.is_superuser or target_user.is_staff)
         and getattr(getattr(target_user, "profile", None), "role", None) not in ("super_admin", "system_admin")
     ):

@@ -21,7 +21,7 @@
                         {{ form.profile_active }} {{ form.profile_active.label_tag }}
                     </div>
                     {% if form.sso_subject %}
-                    <fieldset class="border rounded p-3 mb-4">
+                    <fieldset id="organization-link" class="border rounded p-3 mb-4">
                         <legend class="float-none w-auto px-2 fs-6 fw-bold">ورود سازمانی فریون</legend>
                         <label class="form-label" for="{{ form.sso_subject.id_for_label }}">{{ form.sso_subject.label }}</label>
                         {{ form.sso_subject }}

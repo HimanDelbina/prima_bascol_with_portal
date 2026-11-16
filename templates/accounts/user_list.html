@@ -25,6 +25,7 @@
                         <th>شماره موبایل</th>
                         <th>وضعیت</th>
                         <th>آخرین ورود</th>
+                        {% if show_identity_links %}<th>پیوند حساب سازمانی</th>{% endif %}
                         <th class="text-center">عملیات</th>
                     </tr>
                 </thead>
@@ -48,6 +49,25 @@
                             {% endif %}
                         </td>
                         <td class="small text-muted">{{ u.last_login|date:"Y/m/d H:i"|default:"هرگز" }}</td>
+                        {% if show_identity_links %}
+                        <td>
+                            {% if u.is_superuser or u.is_staff or u.profile.role == 'super_admin' or u.profile.role == 'system_admin' %}
+                                <span class="text-muted small">حساب مدیریتی</span>
+                            {% elif u.bascol_identity and u.bascol_identity.issuer != oidc_issuer %}
+                                <span class="text-muted small">صادرکننده متفاوت</span>
+                            {% else %}
+                                {% if u.bascol_identity.enabled %}
+                                    <span class="badge bg-success-subtle text-success">فعال</span>
+                                {% elif u.bascol_identity %}
+                                    <span class="badge bg-secondary-subtle text-secondary">غیرفعال</span>
+                                {% else %}
+                                    <span class="text-muted small">بدون پیوند</span>
+                                {% endif %}
+                                <a href="{% url 'accounts:user_edit' u.id %}#organization-link"
+                                   class="btn btn-sm btn-outline-primary ms-1">تنظیم پیوند</a>
+                            {% endif %}
+                        </td>
+                        {% endif %}
                         <td class="text-center">
                             <a href="{% url 'accounts:user_edit' u.id %}" class="btn btn-sm btn-outline-primary me-1" title="ویرایش">
                                 <i class="bi bi-pencil"></i>
@@ -61,7 +81,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="text-center py-4 text-muted">هیچ کاربری یافت نشد.</td>
+                        <td colspan="{% if show_identity_links %}9{% else %}8{% endif %}" class="text-center py-4 text-muted">هیچ کاربری یافت نشد.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
