@@ -1,9 +1,11 @@
 from django.urls import path
-from accounts import views
+from accounts import sso, views
 
 app_name = "accounts"
 
 urlpatterns = [
+    path('oidc/login/', sso.start, name='oidc_login'),
+    path('oidc/callback/', sso.callback, name='oidc_callback'),
     path("login/", views.login_view, name="login"),
     path("logout/", views.logout_view, name="logout"),
     path("password-change/", views.password_change_view, name="password_change"),

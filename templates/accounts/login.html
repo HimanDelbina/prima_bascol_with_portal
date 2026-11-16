@@ -19,6 +19,9 @@
                 </div>
 
                 <!-- Login Form -->
+                {% if sso_enabled %}
+                <a class="btn btn-outline-primary w-100 mb-3" href="{% url 'accounts:oidc_login' %}">ورود با حساب سازمانی فریون</a>
+                {% endif %}
                 <form method="post" action="{% url 'accounts:login' %}" autocomplete="on">
                     {% csrf_token %}
 

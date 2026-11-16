@@ -403,3 +403,21 @@ LOGGING = {
     },
 }
 
+
+
+BASCOL_SSO_ENABLED = os.environ.get("BASCOL_SSO_ENABLED", "").lower() in ("1", "true")
+BASCOL_OIDC_ISSUER = os.environ.get("BASCOL_OIDC_ISSUER", "https://auth.ferion.ir/realms/ferion").rstrip("/")
+BASCOL_OIDC_CLIENT_ID = os.environ.get("BASCOL_OIDC_CLIENT_ID", "ferion-bascol")
+BASCOL_OIDC_CLIENT_SECRET = os.environ.get("BASCOL_OIDC_CLIENT_SECRET", "")
+BASCOL_OIDC_REDIRECT_URI = os.environ.get("BASCOL_OIDC_REDIRECT_URI", "")
+if BASCOL_SSO_ENABLED:
+    from django.core.exceptions import ImproperlyConfigured
+
+    if not BASCOL_OIDC_CLIENT_SECRET or not all(
+        value.startswith("https://") for value in (BASCOL_OIDC_ISSUER, BASCOL_OIDC_REDIRECT_URI)
+    ):
+        raise ImproperlyConfigured("Bascol SSO requires a client secret and HTTPS issuer and callback.")
+MIDDLEWARE.insert(
+    MIDDLEWARE.index("django.contrib.auth.middleware.AuthenticationMiddleware") + 1,
+    "accounts.sso.BascolSSOMiddleware",
+)

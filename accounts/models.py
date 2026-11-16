@@ -162,3 +162,17 @@ def create_or_update_user_profile(sender, instance, created, **kwargs):
         else:
             role = RoleChoices.SUPER_ADMIN if instance.is_superuser else RoleChoices.WEIGHBRIDGE_OPERATOR
             UserProfile.objects.create(user=instance, role=role)
+
+
+class BascolIdentity(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="bascol_identity")
+    issuer = models.URLField(max_length=255)
+    subject = models.CharField(max_length=255)
+    enabled = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["issuer", "subject"], name="bascol_oidc_identity_unique")
+        ]
+        verbose_name = "پیوند حساب سازمانی"
+        verbose_name_plural = "پیوندهای حساب سازمانی"

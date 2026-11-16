@@ -1,4 +1,5 @@
 from django.views.decorators.http import require_POST
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, authenticate, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -53,6 +54,7 @@ def login_view(request):
     reset_form = PasswordResetVerifyForm()
     
     return render(request, "accounts/login.html", {
+        "sso_enabled": settings.BASCOL_SSO_ENABLED,
         "form": form,
         "change_form": change_form,
         "reset_form": reset_form,
