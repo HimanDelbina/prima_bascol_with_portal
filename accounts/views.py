@@ -5,13 +5,15 @@ from django.contrib.auth import login, logout, authenticate, update_session_auth
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
+from django.db import IntegrityError, transaction
 from accounts.forms import (
     PersianAuthenticationForm, 
     UserForm, 
     PasswordChangeDirectForm, 
     PasswordResetVerifyForm
 )
-from accounts.models import UserProfile, RoleChoices
+from accounts.models import BascolIdentity, UserProfile, RoleChoices
 from accounts.decorators import admin_only_required, role_required
 from audit.services import log_audit
 from audit.models import AuditAction
@@ -176,7 +178,7 @@ def user_list_view(request):
 @admin_only_required
 def user_create_view(request):
     if request.method == "POST":
-        form = UserForm(request.POST)
+        form = UserForm(request.POST, actor=request.user)
         if form.is_valid():
             user = form.save()
             log_audit(
@@ -190,17 +192,54 @@ def user_create_view(request):
             messages.success(request, f"کاربر {user.username} با موفقیت ایجاد شد.")
             return redirect("accounts:user_list")
     else:
-        form = UserForm()
+        form = UserForm(actor=request.user)
     return render(request, "accounts/user_form.html", {"form": form, "title": "افزودن کاربر جدید"})
+
+def require_editable_user(actor, target):
+    privileged = target.is_superuser or target.is_staff or (
+        getattr(getattr(target, "profile", None), "role", None) in ("super_admin", "system_admin")
+    )
+    if privileged and not actor.is_superuser:
+        raise PermissionDenied()
+
 
 @login_required
 @admin_only_required
 def user_edit_view(request, user_id):
     target_user = get_object_or_404(User, id=user_id)
-    if request.method == "POST":
-        form = UserForm(request.POST, instance=target_user)
-        if form.is_valid():
-            user = form.save()
+    require_editable_user(request.user, target_user)
+    identity = None
+    issuer = ""
+    if (
+        settings.BASCOL_SSO_ENABLED and request.user.is_superuser
+        and not request.session.get("bascol_identity_id")
+        and not (target_user.is_superuser or target_user.is_staff)
+        and getattr(getattr(target_user, "profile", None), "role", None) not in ("super_admin", "system_admin")
+    ):
+        identity = BascolIdentity.objects.filter(user=target_user).first()
+        if identity is None or identity.issuer == settings.BASCOL_OIDC_ISSUER:
+            issuer = settings.BASCOL_OIDC_ISSUER
+    form = UserForm(
+        request.POST if request.method == "POST" else None,
+        instance=target_user, actor=request.user, identity=identity, issuer=issuer,
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            with transaction.atomic():
+                user = form.save()
+                if issuer and form.cleaned_data.get("sso_subject"):
+                    BascolIdentity.objects.update_or_create(
+                        user=user, defaults={
+                            "issuer": issuer, "subject": form.cleaned_data["sso_subject"],
+                            "enabled": form.cleaned_data["sso_enabled"],
+                        },
+                    )
+                elif issuer and identity is not None:
+                    identity.enabled = False
+                    identity.save(update_fields=["enabled"])
+        except IntegrityError:
+            form.add_error(None, "ذخیره انجام نشد. نام کاربری یا شناسه سازمانی تکراری است.")
+        else:
             log_audit(
                 action=AuditAction.UPDATE,
                 model_name="User",
@@ -211,8 +250,6 @@ def user_edit_view(request, user_id):
             )
             messages.success(request, f"مشخصات کاربر {user.username} بروزرسانی شد.")
             return redirect("accounts:user_list")
-    else:
-        form = UserForm(instance=target_user)
     return render(request, "accounts/user_form.html", {"form": form, "title": f"ویرایش کاربر {target_user.username}", "target_user": target_user})
 
 @login_required
@@ -220,6 +257,7 @@ def user_edit_view(request, user_id):
 @require_POST
 def user_toggle_status_view(request, user_id):
     target_user = get_object_or_404(User, id=user_id)
+    require_editable_user(request.user, target_user)
     if target_user == request.user:
         messages.error(request, "شما نمی‌توانید حساب کاربری خود را غیرفعال کنید.")
         return redirect("accounts:user_list")

@@ -14,6 +14,23 @@
             <div class="card-body p-4">
                 <form method="post">
                     {% csrf_token %}
+                    {% if form.errors %}
+                    <div class="alert alert-danger" role="alert">{{ form.errors }}</div>
+                    {% endif %}
+                    <div class="form-check mb-3">
+                        {{ form.profile_active }} {{ form.profile_active.label_tag }}
+                    </div>
+                    {% if form.sso_subject %}
+                    <fieldset class="border rounded p-3 mb-4">
+                        <legend class="float-none w-auto px-2 fs-6 fw-bold">ورود سازمانی فریون</legend>
+                        <label class="form-label" for="{{ form.sso_subject.id_for_label }}">{{ form.sso_subject.label }}</label>
+                        {{ form.sso_subject }}
+                        <div class="form-text">شناسه (ID) را از صفحه کاربر در Keycloak کپی کنید.</div>
+                        <div class="form-check mt-3">
+                            {{ form.sso_enabled }} {{ form.sso_enabled.label_tag }}
+                        </div>
+                    </fieldset>
+                    {% endif %}
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label fw-bold">نام کاربری <span class="text-danger">*</span></label>
