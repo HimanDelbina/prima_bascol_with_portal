@@ -3,7 +3,10 @@ from accounts import sso, views
 
 app_name = "accounts"
 
+from .offboarding import offboard
+
 urlpatterns = [
+    path('internal/offboard/', offboard, name='portal_offboard'),
     path('oidc/login/', sso.start, name='oidc_login'),
     path('oidc/callback/', sso.callback, name='oidc_callback'),
     path("login/", views.login_view, name="login"),
